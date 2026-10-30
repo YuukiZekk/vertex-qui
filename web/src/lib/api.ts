@@ -135,7 +135,7 @@ import type {
   WarningResponse,
   WebSeed
 } from "@/types"
-import type { BrushStatus } from "@/types/brush"
+import type { BrushEntry, BrushFeed, BrushFeedInput, BrushSite, BrushSiteInput, BrushStatus, BrushTestItem } from "@/types/brush"
 import type {
   ArrInstance,
   ArrInstanceFormData,
@@ -2931,6 +2931,52 @@ class ApiClient {
 
   async getBrushStatus(): Promise<BrushStatus> {
     return this.request<BrushStatus>("/brush/status")
+  }
+
+  async setBrushEnabled(enabled: boolean): Promise<void> {
+    return this.request<void>("/brush/settings", { method: "PUT", body: JSON.stringify({ enabled }) })
+  }
+
+  async setBrushFloor(instanceId: number, floorBytes: number): Promise<void> {
+    return this.request<void>(`/brush/instances/${instanceId}/floor`, { method: "PUT", body: JSON.stringify({ floorBytes }) })
+  }
+
+  async getBrushSites(): Promise<BrushSite[]> {
+    return this.request<BrushSite[]>("/brush/sites")
+  }
+
+  async saveBrushSite(id: number | null, data: BrushSiteInput): Promise<{ id: number }> {
+    return this.request<{ id: number }>(id === null ? "/brush/sites" : `/brush/sites/${id}`, {
+      method: id === null ? "POST" : "PUT",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteBrushSite(id: number): Promise<void> {
+    return this.request<void>(`/brush/sites/${id}`, { method: "DELETE" })
+  }
+
+  async getBrushFeeds(): Promise<BrushFeed[]> {
+    return this.request<BrushFeed[]>("/brush/feeds")
+  }
+
+  async saveBrushFeed(id: number | null, data: BrushFeedInput): Promise<{ id: number }> {
+    return this.request<{ id: number }>(id === null ? "/brush/feeds" : `/brush/feeds/${id}`, {
+      method: id === null ? "POST" : "PUT",
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteBrushFeed(id: number): Promise<void> {
+    return this.request<void>(`/brush/feeds/${id}`, { method: "DELETE" })
+  }
+
+  async testBrushFeed(id: number): Promise<BrushTestItem[]> {
+    return this.request<BrushTestItem[]>(`/brush/feeds/${id}/test`, { method: "POST" })
+  }
+
+  async getBrushEntries(): Promise<BrushEntry[]> {
+    return this.request<BrushEntry[]>("/brush/entries")
   }
 }
 

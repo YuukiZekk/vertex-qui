@@ -50,3 +50,20 @@ func (a *Adapter) Torrents(ctx context.Context, instanceID int) ([]qbt.Torrent, 
 func (a *Adapter) FreeSpace(ctx context.Context, instanceID int) (int64, error) {
 	return a.sync.GetFreeSpace(ctx, instanceID)
 }
+
+func (a *Adapter) HasTorrent(ctx context.Context, instanceID int, infoHash string) (bool, error) {
+	_, found, err := a.sync.HasTorrentByAnyHash(ctx, instanceID, []string{infoHash})
+	return found, err
+}
+
+// AddTorrent adds a started torrent with the given tag. Both pause flags are sent
+// because qBittorrent renamed "paused" to "stopped" in WebAPI 2.11 and ignores the
+// one it does not know, so the instance's "add stopped" default never applies.
+func (a *Adapter) AddTorrent(ctx context.Context, instanceID int, file []byte, tag string) error {
+	_, err := a.sync.AddTorrent(ctx, instanceID, file, map[string]string{
+		"tags":    tag,
+		"paused":  "false",
+		"stopped": "false",
+	})
+	return err
+}

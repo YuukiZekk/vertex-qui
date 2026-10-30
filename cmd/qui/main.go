@@ -767,7 +767,11 @@ func (app *Application) runServer() {
 	automationService := automations.NewService(automations.DefaultConfig(), instanceStore, automationStore, automationActivityStore, trackerCustomizationStore, syncManager, notificationService, externalProgramService, crossSeedService, backendPool)
 	automationService.SetActivityPublisher(activityHub)
 
-	brushService, err := brush.New(context.Background(), db, quiadapter.New(instanceStore, syncManager))
+	brushCipher, err := models.NewCredentialCipher(encryptionKey, legacyEncryptionKey)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize brush credential cipher")
+	}
+	brushService, err := brush.New(context.Background(), db, brushCipher, quiadapter.New(instanceStore, syncManager))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize brush service")
 	}
@@ -812,6 +816,12 @@ func (app *Application) runServer() {
 	automationsCtx, automationsCancel := context.WithCancel(context.Background())
 	defer automationsCancel()
 	automationService.Start(automationsCtx)
+
+	brushCtx, brushCancel := context.WithCancel(context.Background())
+	defer brushCancel()
+	if err := brushService.Start(brushCtx); err != nil {
+		log.Error().Err(err).Msg("failed to start brush service")
+	}
 
 	orphanScanCtx, orphanScanCancel := context.WithCancel(context.Background())
 	defer orphanScanCancel()

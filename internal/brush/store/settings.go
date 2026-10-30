@@ -10,16 +10,25 @@ import (
 	"fmt"
 
 	"github.com/autobrr/qui/internal/dbinterface"
+	"github.com/autobrr/qui/internal/models"
 )
 
 const keyEnabled = "enabled"
 
+// AAD values bind each sealed column to its purpose, so a cookie cannot be
+// copied into the feed URL column and still decrypt.
+var (
+	aadSiteCookie = []byte("brush_sites.cookie")
+	aadFeedURL    = []byte("brush_feeds.url")
+)
+
 type Store struct {
-	db dbinterface.Querier
+	db     dbinterface.Querier
+	cipher *models.CredentialCipher
 }
 
-func New(db dbinterface.Querier) *Store {
-	return &Store{db: db}
+func New(db dbinterface.Querier, cipher *models.CredentialCipher) *Store {
+	return &Store{db: db, cipher: cipher}
 }
 
 // Enabled reports the brush master switch. A fresh install has no row, so brushing
@@ -34,4 +43,25 @@ func (s *Store) Enabled(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("read brush enabled setting: %w", err)
 	}
 	return value == "true", nil
+}
+
+func (s *Store) SetEnabled(ctx context.Context, enabled bool) error {
+	value := "false"
+	if enabled {
+		value = "true"
+	}
+	_, err := s.db.ExecContext(ctx,
+		"INSERT INTO brush_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+		keyEnabled, value)
+	if err != nil {
+		return fmt.Errorf("write brush enabled setting: %w", err)
+	}
+	return nil
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
