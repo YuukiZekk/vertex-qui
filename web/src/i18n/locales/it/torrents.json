@@ -1582,6 +1582,7 @@
     "peers": "Peer",
     "downSpeed": "Vel. download",
     "upSpeed": "Vel. upload",
+    "averageUpSpeed": "Vel. upload media",
     "eta": "ETA",
     "ratio": "Rapporto",
     "popularity": "Popolarità",

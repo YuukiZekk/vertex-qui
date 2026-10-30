@@ -621,6 +621,7 @@
     "peers": "Parells",
     "downSpeed": "Vel. baixada",
     "upSpeed": "Vel. pujada",
+    "averageUpSpeed": "Vel. pujada mitjana",
     "eta": "ETA",
     "ratio": "Ràtio",
     "popularity": "Popularitat",

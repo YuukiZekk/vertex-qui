@@ -22,6 +22,7 @@ const DEFAULT_COLUMNS: ReadonlyArray<{ id: string; visible: boolean }> = [
   { id: "num_leechs", visible: true },
   { id: "dlspeed", visible: true },
   { id: "upspeed", visible: true },
+  { id: "up_speed_avg", visible: true },
   { id: "eta", visible: true },
   { id: "ratio", visible: true },
   { id: "popularity", visible: true },

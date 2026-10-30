@@ -102,6 +102,12 @@ function formatReannounce(seconds: number, t: TFunction): string {
 }
 
 // Calculate minimum column width based on header text
+// averageUpSpeed is bytes per second over the torrent's active time, or undefined
+// before it has been active.
+function averageUpSpeed(torrent: Torrent): number | undefined {
+  return torrent.time_active > 0 ? Math.floor(torrent.uploaded / torrent.time_active) : undefined
+}
+
 function calculateMinWidth(text: string, padding: number = 48): number {
   const charWidth = 7.5
   const extraPadding = 20
@@ -781,6 +787,19 @@ export const createColumns = ({
         return <span className="text-sm overflow-hidden whitespace-nowrap">{speed === 0 ? "-" : formatSpeedWithUnit(speed, speedUnit)}</span>
       },
       size: calculateMinWidth("Up Speed"),
+    },
+    {
+      // Lifetime average: everything uploaded over the time the torrent was active.
+      // The server sorts by the same value; see torrent_sort.go.
+      id: "up_speed_avg",
+      accessorFn: torrent => averageUpSpeed(torrent),
+      header: t("tableColumns.averageUpSpeed"),
+      cell: ({ row }) => {
+        const average = averageUpSpeed(row.original)
+        return <span className="text-sm overflow-hidden whitespace-nowrap">{average ? formatSpeedWithUnit(average, speedUnit) : "-"}</span>
+      },
+      enableColumnFilter: false,
+      size: calculateMinWidth("Avg Up Speed"),
     },
     {
       accessorKey: "eta",

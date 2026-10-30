@@ -1648,6 +1648,7 @@
     "peers": "Peerů",
     "downSpeed": "Rychlost stahování",
     "upSpeed": "Rychlost odesílání",
+    "averageUpSpeed": "Prům. rychlost odesílání",
     "eta": "Očekávaná doba do dokončení",
     "ratio": "Poměr",
     "popularity": "Popularita",

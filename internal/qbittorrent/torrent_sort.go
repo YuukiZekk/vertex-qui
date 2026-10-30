@@ -171,6 +171,25 @@ func (sm *SyncManager) torrentOrder(rows []*qbt.Torrent, health func(int) Tracke
 		return timestampOrder(rows, desc, tie, func(t *qbt.Torrent) int64 { return NormalizeCompletionTimestamp(t.CompletionOn) })
 	case "seen_complete":
 		return timestampOrder(rows, desc, tie, func(t *qbt.Torrent) int64 { return NormalizeCompletionTimestamp(t.SeenComplete) })
+	case "up_speed_avg":
+		// The lifetime upload average is not a qBittorrent field: uploaded bytes over
+		// active seconds. A torrent that has never been active comes last in each
+		// direction.
+		return func(a, b int) int {
+			ta, tb := rows[a].TimeActive, rows[b].TimeActive
+			switch {
+			case ta <= 0 && tb <= 0:
+			case ta <= 0:
+				return 1
+			case tb <= 0:
+				return -1
+			default:
+				if result := cmp.Compare(rows[a].Uploaded/ta, rows[b].Uploaded/tb); result != 0 {
+					return flipIf(desc, result)
+				}
+			}
+			return compareHashThenTie(rows, a, b, tie)
+		}
 	}
 
 	index, ok := torrentSortFields[column]

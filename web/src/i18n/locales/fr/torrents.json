@@ -1582,6 +1582,7 @@
     "peers": "Pairs",
     "downSpeed": "Vit. Réc.",
     "upSpeed": "Vit. Émis.",
+    "averageUpSpeed": "Vit. émis. moy.",
     "eta": "ETA",
     "ratio": "Ratio",
     "popularity": "Popularité",

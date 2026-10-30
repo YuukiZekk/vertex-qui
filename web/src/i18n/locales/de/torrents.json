@@ -1582,6 +1582,7 @@
     "peers": "Peers",
     "downSpeed": "Down-Speed",
     "upSpeed": "Up-Speed",
+    "averageUpSpeed": "Ø Up-Speed",
     "eta": "ETA",
     "ratio": "Ratio",
     "popularity": "Beliebtheit",

@@ -19,6 +19,7 @@ export const TORRENT_SORT_OPTIONS = [
   { value: "num_leechs", labelKey: "detailsPanel.labels.leechers" },
   { value: "dlspeed", labelKey: "detailsPanel.labels.downloadSpeed" },
   { value: "upspeed", labelKey: "detailsPanel.labels.uploadSpeed" },
+  { value: "up_speed_avg", labelKey: "tableColumns.averageUpSpeed" },
   { value: "eta", labelKey: "tableColumns.eta" },
   { value: "ratio", labelKey: "tableColumns.ratio" },
   { value: "popularity", labelKey: "tableColumns.popularity" },
@@ -50,6 +51,7 @@ export const TORRENT_SORT_OPTIONS = [
 export type TorrentSortOptionValue = typeof TORRENT_SORT_OPTIONS[number]["value"]
 
 export function getDefaultSortOrder(field: TorrentSortOptionValue): "asc" | "desc" {
+  if (field === "up_speed_avg") return "desc"
   const columnType = getColumnType(field)
   return columnType === "string" || columnType === "enum" ? "asc" : "desc"
 }
