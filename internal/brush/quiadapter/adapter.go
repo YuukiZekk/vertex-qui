@@ -7,6 +7,7 @@ package quiadapter
 
 import (
 	"context"
+	"strconv"
 
 	qbt "github.com/autobrr/go-qbittorrent"
 
@@ -59,11 +60,16 @@ func (a *Adapter) HasTorrent(ctx context.Context, instanceID int, infoHash strin
 // AddTorrent adds a started torrent with the given tag. Both pause flags are sent
 // because qBittorrent renamed "paused" to "stopped" in WebAPI 2.11 and ignores the
 // one it does not know, so the instance's "add stopped" default never applies.
-func (a *Adapter) AddTorrent(ctx context.Context, instanceID int, file []byte, tag string) error {
-	_, err := a.sync.AddTorrent(ctx, instanceID, file, map[string]string{
+// upLimit is the torrent's upload limit in bytes per second; zero leaves it unlimited.
+func (a *Adapter) AddTorrent(ctx context.Context, instanceID int, file []byte, tag string, upLimit int64) error {
+	options := map[string]string{
 		"tags":    tag,
 		"paused":  "false",
 		"stopped": "false",
-	})
+	}
+	if upLimit > 0 {
+		options["upLimit"] = strconv.FormatInt(upLimit, 10)
+	}
+	_, err := a.sync.AddTorrent(ctx, instanceID, file, options)
 	return err
 }

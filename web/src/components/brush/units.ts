@@ -14,6 +14,17 @@ export function gbToBytes(gb: string): number {
   return Math.round(Number(gb) * BYTES_PER_GB)
 }
 
+// Site speed limits are entered in MB/s as sites state them, 1 MB = 1024^2 bytes like qBittorrent.
+const BYTES_PER_MB = 1024 ** 2
+
+export function bytesPerSecondToMBs(bytes: number): string {
+  return String(Math.round((bytes / BYTES_PER_MB) * 100) / 100)
+}
+
+export function mbsToBytesPerSecond(mbs: string): number {
+  return Math.round(Number(mbs) * BYTES_PER_MB)
+}
+
 // Upload capacity is entered in Mbps as hosting providers sell it: 1 Mbps = 125,000 bytes/s.
 const BYTES_PER_SECOND_PER_MBPS = 125_000
 

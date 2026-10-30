@@ -19,7 +19,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { bytesToGB, gbToBytes } from "./units"
+import { bytesPerSecondToMBs, bytesToGB, gbToBytes, mbsToBytesPerSecond } from "./units"
 
 export function BrushFeedsCard() {
   const { t } = useTranslation("brush")
@@ -29,12 +29,16 @@ export function BrushFeedsCard() {
   const { data: status } = useQuery({ queryKey: ["brush", "status"], queryFn: () => api.getBrushStatus() })
   const [editing, setEditing] = useState<BrushFeed | "new" | null>(null)
   const [testing, setTesting] = useState<BrushFeed | null>(null)
+  // A site with no other feed goes with its last feed, so the list never keeps a site nobody uses.
   const remove = useMutation({
-    mutationFn: (id: number) => api.deleteBrushFeed(id),
+    mutationFn: (feed: BrushFeed) => feeds?.some((f) => f.id !== feed.id && f.siteId === feed.siteId)
+      ? api.deleteBrushFeed(feed.id)
+      : api.deleteBrushSite(feed.siteId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["brush"] }),
     onError: (err: Error) => toast.error(t("feeds.deleteFailed"), { description: err.message }),
   })
   const instanceName = (id: number) => id === 0 ? t("feeds.autoInstance") : status?.instances.find((i) => i.id === id)?.name ?? `#${id}`
+  const siteOf = (feed: BrushFeed) => sites?.find((s) => s.id === feed.siteId)
 
   return (
     <Card>
@@ -44,7 +48,7 @@ export function BrushFeedsCard() {
             <CardTitle>{t("feeds.title")}</CardTitle>
             <CardDescription>{t("feeds.description")}</CardDescription>
           </div>
-          <Button size="sm" className="shrink-0" disabled={!sites?.length} onClick={() => setEditing("new")}>{t("feeds.add")}</Button>
+          <Button size="sm" className="shrink-0" onClick={() => setEditing("new")}>{t("feeds.add")}</Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -52,6 +56,7 @@ export function BrushFeedsCard() {
           <TableHeader>
             <TableRow>
               <TableHead>{t("feeds.name")}</TableHead>
+              <TableHead>{t("sites.baseUrl")}</TableHead>
               <TableHead>{t("feeds.instance")}</TableHead>
               <TableHead>{t("feeds.sizeRange")}</TableHead>
               <TableHead>{t("feeds.filters")}</TableHead>
@@ -62,44 +67,54 @@ export function BrushFeedsCard() {
           <TableBody>
             {feeds?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">{t("feeds.empty")}</TableCell>
+                <TableCell colSpan={7} className="text-muted-foreground">{t("feeds.empty")}</TableCell>
               </TableRow>
             )}
-            {feeds?.map((feed) => (
-              <TableRow key={feed.id}>
-                <TableCell>
-                  {feed.name}
-                  {!feed.enabled && <span className="ml-2 text-xs text-muted-foreground">{t("feeds.off")}</span>}
-                </TableCell>
-                <TableCell>{instanceName(feed.instanceId)}</TableCell>
-                <TableCell>{t("feeds.sizeRangeValue", { min: bytesToGB(feed.minSizeBytes), max: bytesToGB(feed.maxSizeBytes) })}</TableCell>
-                <TableCell>
-                  {[feed.freeOnly && t("feeds.freeOnly"), feed.skipHr && t("feeds.skipHr"), t("feeds.windowValue", { minutes: feed.windowSeconds / 60 })]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </TableCell>
-                <TableCell className={feed.lastError ? "text-destructive" : undefined}>
-                  {feed.lastError
-                    ? t("feeds.fetchError", { message: feed.lastError })
-                    : feed.lastFetchAt
-                      ? new Date(feed.lastFetchAt * 1000).toLocaleTimeString()
-                      : t("feeds.neverFetched")}
-                </TableCell>
-                <TableCell className="text-right space-x-2 whitespace-nowrap">
-                  <Button size="sm" variant="outline" onClick={() => setTesting(feed)}>{t("feeds.test")}</Button>
-                  <Button size="sm" variant="outline" onClick={() => setEditing(feed)}>{t("actions.edit")}</Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (window.confirm(t("feeds.confirmDelete", { name: feed.name }))) remove.mutate(feed.id)
-                    }}
-                  >
-                    {t("actions.delete")}
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {feeds?.map((feed) => {
+              const site = siteOf(feed)
+              return (
+                <TableRow key={feed.id}>
+                  <TableCell>
+                    {feed.name}
+                    {!feed.enabled && <span className="ml-2 text-xs text-muted-foreground">{t("feeds.off")}</span>}
+                    {site && !site.hasCookie && <span className="ml-2 text-xs text-destructive">{t("sites.cookieMissing")}</span>}
+                  </TableCell>
+                  <TableCell>{site?.baseUrl ?? "-"}</TableCell>
+                  <TableCell>{instanceName(feed.instanceId)}</TableCell>
+                  <TableCell>{t("feeds.sizeRangeValue", { min: bytesToGB(feed.minSizeBytes), max: bytesToGB(feed.maxSizeBytes) })}</TableCell>
+                  <TableCell>
+                    {[
+                      feed.freeOnly && t("feeds.freeOnly"),
+                      feed.skipHr && t("feeds.skipHr"),
+                      t("feeds.windowValue", { minutes: feed.windowSeconds / 60 }),
+                      site?.torrentUploadLimit ? t("sites.uploadLimitValue", { value: bytesPerSecondToMBs(site.torrentUploadLimit) }) : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </TableCell>
+                  <TableCell className={feed.lastError ? "text-destructive" : undefined}>
+                    {feed.lastError
+                      ? t("feeds.fetchError", { message: feed.lastError })
+                      : feed.lastFetchAt
+                        ? new Date(feed.lastFetchAt * 1000).toLocaleTimeString()
+                        : t("feeds.neverFetched")}
+                  </TableCell>
+                  <TableCell className="text-right space-x-2 whitespace-nowrap">
+                    <Button size="sm" variant="outline" onClick={() => setTesting(feed)}>{t("feeds.test")}</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditing(feed)}>{t("actions.edit")}</Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (window.confirm(t("feeds.confirmDelete", { name: feed.name }))) remove.mutate(feed)
+                      }}
+                    >
+                      {t("actions.delete")}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       </CardContent>
@@ -114,10 +129,15 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
   const queryClient = useQueryClient()
   const { data: sites } = useQuery({ queryKey: ["brush", "sites"], queryFn: () => api.getBrushSites() })
   const { data: status } = useQuery({ queryKey: ["brush", "status"], queryFn: () => api.getBrushStatus() })
+  const initialSite = feed ? sites?.find((s) => s.id === feed.siteId) : undefined
   const [form, setForm] = useState({
     name: feed?.name ?? "",
     url: "",
-    siteId: String(feed?.siteId ?? sites?.[0]?.id ?? ""),
+    // "new" creates a site from the fields below; usually each site has one feed.
+    siteId: feed ? String(feed.siteId) : "new",
+    baseUrl: initialSite?.baseUrl ?? "",
+    cookie: "",
+    uploadLimitMBs: initialSite?.torrentUploadLimit ? bytesPerSecondToMBs(initialSite.torrentUploadLimit) : "",
     // 0 lets brush pick the least busy instance for each torrent.
     instanceId: String(feed?.instanceId ?? 0),
     // NexusPHP sites generally allow one RSS request a minute.
@@ -130,23 +150,51 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
     enabled: feed?.enabled ?? true,
   })
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((prev) => ({ ...prev, [key]: value }))
+  const selectedSite = sites?.find((s) => String(s.id) === form.siteId)
+  const pickSite = (siteId: string) => {
+    const site = sites?.find((s) => String(s.id) === siteId)
+    setForm((prev) => ({
+      ...prev,
+      siteId,
+      baseUrl: site?.baseUrl ?? "",
+      cookie: "",
+      uploadLimitMBs: site?.torrentUploadLimit ? bytesPerSecondToMBs(site.torrentUploadLimit) : "",
+    }))
+  }
   const save = useMutation({
-    mutationFn: () => api.saveBrushFeed(feed?.id ?? null, {
-      name: form.name,
-      url: form.url,
-      siteId: Number(form.siteId),
-      instanceId: Number(form.instanceId),
-      intervalSeconds: Number(form.intervalSeconds),
-      minSizeBytes: gbToBytes(form.minGB),
-      maxSizeBytes: gbToBytes(form.maxGB),
-      windowSeconds: Math.round(Number(form.windowMinutes) * 60),
-      freeOnly: form.freeOnly,
-      skipHr: form.skipHr,
-      enabled: form.enabled,
-    }),
+    mutationFn: async () => {
+      const siteInput = {
+        name: selectedSite?.name ?? form.name,
+        baseUrl: form.baseUrl,
+        cookie: form.cookie,
+        torrentUploadLimit: form.uploadLimitMBs ? mbsToBytesPerSecond(form.uploadLimitMBs) : 0,
+      }
+      const created = selectedSite === undefined
+      const siteId = created ? (await api.saveBrushSite(null, siteInput)).id : selectedSite.id
+      if (!created) await api.saveBrushSite(siteId, siteInput)
+      try {
+        await api.saveBrushFeed(feed?.id ?? null, {
+          name: form.name,
+          url: form.url,
+          siteId,
+          instanceId: Number(form.instanceId),
+          intervalSeconds: Number(form.intervalSeconds),
+          minSizeBytes: gbToBytes(form.minGB),
+          maxSizeBytes: gbToBytes(form.maxGB),
+          windowSeconds: Math.round(Number(form.windowMinutes) * 60),
+          freeOnly: form.freeOnly,
+          skipHr: form.skipHr,
+          enabled: form.enabled,
+        })
+      } catch (err) {
+        // Do not leave behind a site created for a feed that was refused.
+        if (created) await api.deleteBrushSite(siteId).catch(() => undefined)
+        throw err
+      }
+    },
     onSuccess: () => {
       onClose()
-      return queryClient.invalidateQueries({ queryKey: ["brush", "feeds"] })
+      return queryClient.invalidateQueries({ queryKey: ["brush"] })
     },
     onError: (err: Error) => toast.error(t("feeds.saveFailed"), { description: err.message }),
   })
@@ -174,14 +222,48 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
             />
             <p className="text-xs text-muted-foreground">{t("feeds.urlHelp")}</p>
           </div>
-          <div className="space-y-2">
-            <Label>{t("feeds.site")}</Label>
-            <Select value={form.siteId} onValueChange={(v) => set("siteId", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {sites?.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          {(sites?.length ?? 0) > 0 && (
+            <div className="col-span-2 space-y-2">
+              <Label>{t("feeds.site")}</Label>
+              <Select value={form.siteId} onValueChange={pickSite}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">{t("feeds.newSite")}</SelectItem>
+                  {sites?.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {selectedSite && <p className="text-xs text-muted-foreground">{t("feeds.sharedSiteHelp")}</p>}
+            </div>
+          )}
+          <div className="col-span-2 space-y-2">
+            <Label htmlFor="site-url">{t("sites.baseUrl")}</Label>
+            <Input id="site-url" value={form.baseUrl} placeholder={t("sites.baseUrlPlaceholder")} onChange={(e) => set("baseUrl", e.target.value)} />
+          </div>
+          <div className="col-span-2 space-y-2">
+            <Label htmlFor="site-cookie">{t("sites.cookie")}</Label>
+            <Input
+              id="site-cookie"
+              type="password"
+              autoComplete="off"
+              value={form.cookie}
+              placeholder={selectedSite?.hasCookie ? t("sites.cookieKeep") : ""}
+              onChange={(e) => set("cookie", e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">{t("sites.cookieHelp")}</p>
+          </div>
+          <div className="col-span-2 space-y-2">
+            <Label htmlFor="site-limit">{t("sites.uploadLimit")}</Label>
+            <Input
+              id="site-limit"
+              className="w-40"
+              type="number"
+              min="0"
+              step="any"
+              value={form.uploadLimitMBs}
+              placeholder={t("sites.uploadLimitPlaceholder")}
+              onChange={(e) => set("uploadLimitMBs", e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">{t("sites.uploadLimitHelp")}</p>
           </div>
           <div className="space-y-2">
             <Label>{t("feeds.instance")}</Label>

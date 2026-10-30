@@ -110,13 +110,16 @@ func (s *Store) SetPlacement(ctx context.Context, id int64, placement []byte) er
 type Reservation struct {
 	InfoHash  string
 	SizeBytes int64
+	// UploadLimit is the per-torrent upload limit of the torrent's site, zero for none.
+	UploadLimit int64
 }
 
 // Reservations lists torrents brush sent to the instance since the given time. The
 // admission check counts the ones qBittorrent does not show yet.
 func (s *Store) Reservations(ctx context.Context, instanceID int, since time.Time) ([]Reservation, error) {
-	rows, err := s.db.QueryContext(ctx,
-		"SELECT info_hash, size_bytes FROM brush_entries WHERE instance_id = ? AND status IN (?, ?) AND decided_at >= ?",
+	rows, err := s.db.QueryContext(ctx, `SELECT e.info_hash, e.size_bytes, s.torrent_upload_limit_bytes
+		FROM brush_entries e JOIN brush_feeds f ON f.id = e.feed_id JOIN brush_sites s ON s.id = f.site_id
+		WHERE e.instance_id = ? AND e.status IN (?, ?) AND e.decided_at >= ?`,
 		instanceID, StatusAdding, StatusAdded, since.Unix())
 	if err != nil {
 		return nil, fmt.Errorf("list brush reservations: %w", err)
@@ -126,7 +129,7 @@ func (s *Store) Reservations(ctx context.Context, instanceID int, since time.Tim
 	var out []Reservation
 	for rows.Next() {
 		var r Reservation
-		if err := rows.Scan(&r.InfoHash, &r.SizeBytes); err != nil {
+		if err := rows.Scan(&r.InfoHash, &r.SizeBytes, &r.UploadLimit); err != nil {
 			return nil, fmt.Errorf("scan brush reservation: %w", err)
 		}
 		out = append(out, r)

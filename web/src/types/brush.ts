@@ -30,6 +30,8 @@ export interface BrushSite {
   name: string
   baseUrl: string
   hasCookie: boolean
+  // Per-torrent upload limit in bytes per second, 0 for none.
+  torrentUploadLimit: number
 }
 
 export interface BrushSiteInput {
@@ -37,6 +39,7 @@ export interface BrushSiteInput {
   baseUrl: string
   // Empty keeps the stored cookie on update.
   cookie: string
+  torrentUploadLimit: number
 }
 
 export interface BrushFeed {

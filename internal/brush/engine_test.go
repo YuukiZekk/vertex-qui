@@ -30,9 +30,10 @@ const gib = int64(1) << 30
 
 // fakeQB serves one active instance per entry in free, named vps-<id>.
 type fakeQB struct {
-	mu    sync.Mutex
-	free  map[int]int64
-	added map[int]int
+	mu       sync.Mutex
+	free     map[int]int64
+	added    map[int]int
+	upLimits []int64
 }
 
 func (f *fakeQB) Instances(context.Context) ([]quiadapter.Instance, error) {
@@ -50,12 +51,13 @@ func (f *fakeQB) FreeSpace(_ context.Context, id int) (int64, error) { return f.
 
 func (f *fakeQB) HasTorrent(context.Context, int, string) (bool, error) { return false, nil }
 
-func (f *fakeQB) AddTorrent(_ context.Context, id int, _ []byte, tag string) error {
+func (f *fakeQB) AddTorrent(_ context.Context, id int, _ []byte, tag string, upLimit int64) error {
 	if tag != Tag {
 		return fmt.Errorf("unexpected tag %q", tag)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.upLimits = append(f.upLimits, upLimit)
 	if f.added == nil {
 		f.added = make(map[int]int)
 	}

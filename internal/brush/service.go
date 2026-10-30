@@ -27,7 +27,7 @@ type qbittorrent interface {
 	Torrents(ctx context.Context, instanceID int) ([]qbt.Torrent, error)
 	FreeSpace(ctx context.Context, instanceID int) (int64, error)
 	HasTorrent(ctx context.Context, instanceID int, infoHash string) (bool, error)
-	AddTorrent(ctx context.Context, instanceID int, file []byte, tag string) error
+	AddTorrent(ctx context.Context, instanceID int, file []byte, tag string, upLimit int64) error
 }
 
 type siteClientEntry struct {

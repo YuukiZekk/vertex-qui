@@ -14,10 +14,13 @@ type Site struct {
 	Name    string `json:"name"`
 	BaseURL string `json:"baseUrl"`
 	Cookie  string `json:"-"`
+	// TorrentUploadLimit is the site's per-torrent upload speed limit in bytes per
+	// second, zero when the site has none. Brush sets it on every torrent it adds.
+	TorrentUploadLimit int64 `json:"torrentUploadLimit"`
 }
 
 func (s *Store) ListSites(ctx context.Context) ([]Site, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, name, base_url, cookie_encrypted FROM brush_sites ORDER BY id")
+	rows, err := s.db.QueryContext(ctx, "SELECT id, name, base_url, cookie_encrypted, torrent_upload_limit_bytes FROM brush_sites ORDER BY id")
 	if err != nil {
 		return nil, fmt.Errorf("list brush sites: %w", err)
 	}
@@ -27,7 +30,7 @@ func (s *Store) ListSites(ctx context.Context) ([]Site, error) {
 	for rows.Next() {
 		var site Site
 		var sealed string
-		if err := rows.Scan(&site.ID, &site.Name, &site.BaseURL, &sealed); err != nil {
+		if err := rows.Scan(&site.ID, &site.Name, &site.BaseURL, &sealed, &site.TorrentUploadLimit); err != nil {
 			return nil, fmt.Errorf("scan brush site: %w", err)
 		}
 		if site.Cookie, err = s.open(sealed, aadSiteCookie); err != nil {
@@ -58,8 +61,8 @@ func (s *Store) CreateSite(ctx context.Context, site Site) (int64, error) {
 	}
 	var id int64
 	err = s.db.QueryRowContext(ctx,
-		"INSERT INTO brush_sites (name, base_url, cookie_encrypted, created_at) VALUES (?, ?, ?, ?) RETURNING id",
-		site.Name, site.BaseURL, sealed, time.Now().Unix()).Scan(&id)
+		"INSERT INTO brush_sites (name, base_url, cookie_encrypted, torrent_upload_limit_bytes, created_at) VALUES (?, ?, ?, ?, ?) RETURNING id",
+		site.Name, site.BaseURL, sealed, site.TorrentUploadLimit, time.Now().Unix()).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create brush site: %w", err)
 	}
@@ -69,15 +72,15 @@ func (s *Store) CreateSite(ctx context.Context, site Site) (int64, error) {
 // UpdateSite keeps the stored cookie when site.Cookie is empty, because the API
 // never sends the cookie back to the browser.
 func (s *Store) UpdateSite(ctx context.Context, site Site) error {
-	query := "UPDATE brush_sites SET name = ?, base_url = ? WHERE id = ?"
-	args := []any{site.Name, site.BaseURL, site.ID}
+	query := "UPDATE brush_sites SET name = ?, base_url = ?, torrent_upload_limit_bytes = ? WHERE id = ?"
+	args := []any{site.Name, site.BaseURL, site.TorrentUploadLimit, site.ID}
 	if site.Cookie != "" {
 		sealed, err := s.seal(site.Cookie, aadSiteCookie)
 		if err != nil {
 			return err
 		}
-		query = "UPDATE brush_sites SET name = ?, base_url = ?, cookie_encrypted = ? WHERE id = ?"
-		args = []any{site.Name, site.BaseURL, sealed, site.ID}
+		query = "UPDATE brush_sites SET name = ?, base_url = ?, torrent_upload_limit_bytes = ?, cookie_encrypted = ? WHERE id = ?"
+		args = []any{site.Name, site.BaseURL, site.TorrentUploadLimit, sealed, site.ID}
 	}
 	return s.execOne(ctx, "update brush site", query, args...)
 }

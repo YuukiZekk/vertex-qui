@@ -5,7 +5,6 @@
 
 import { BrushFeedsCard } from "@/components/brush/BrushFeedsCard"
 import { BrushHistoryCard } from "@/components/brush/BrushHistoryCard"
-import { BrushSitesCard } from "@/components/brush/BrushSitesCard"
 import { BrushStatusCard } from "@/components/brush/BrushStatusCard"
 import { useTranslation } from "react-i18next"
 
@@ -19,7 +18,6 @@ export function Brush() {
         <p className="text-sm text-muted-foreground">{t("page.description")}</p>
       </div>
       <BrushStatusCard />
-      <BrushSitesCard />
       <BrushFeedsCard />
       <BrushHistoryCard />
     </div>

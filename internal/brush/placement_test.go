@@ -20,7 +20,7 @@ import (
 
 // racePoll runs a baseline poll, then a poll that lists the given torrents as new,
 // and waits until every new entry is decided.
-func racePoll(t *testing.T, qb *fakeQB, floors map[int]int64, capacity int64, feedInstance int, torrents ...fakeTorrent) []store.Entry {
+func racePoll(t *testing.T, qb *fakeQB, floors map[int]int64, capacity, siteLimit int64, feedInstance int, torrents ...fakeTorrent) []store.Entry {
 	t.Helper()
 	ctx := t.Context()
 	db := testdb.NewMigratedSQLite(t, t.Name())
@@ -33,7 +33,7 @@ func racePoll(t *testing.T, qb *fakeQB, floors map[int]int64, capacity int64, fe
 	srv := httptest.NewServer(fs)
 	t.Cleanup(srv.Close)
 
-	siteID, err := svc.store.CreateSite(ctx, store.Site{Name: "pt", BaseURL: srv.URL, Cookie: "c=1"})
+	siteID, err := svc.store.CreateSite(ctx, store.Site{Name: "pt", BaseURL: srv.URL, Cookie: "c=1", TorrentUploadLimit: siteLimit})
 	require.NoError(t, err)
 	feedID, err := svc.store.CreateFeed(ctx, store.Feed{SiteID: siteID, Name: "all", URL: srv.URL + "/rss.php",
 		IntervalSeconds: 60, MinSizeBytes: gib, MaxSizeBytes: 100 * gib, FreeOnly: true, WindowSeconds: 600,
@@ -77,7 +77,7 @@ func freshTorrents(n int, size int64) []fakeTorrent {
 // space: each torrent sent counts as expected upload on its instance for the next one.
 func TestAutoPlacementSpreadsBurstAcrossInstances(t *testing.T) {
 	qb := &fakeQB{free: map[int]int64{1: 1000 * gib, 2: 500 * gib}}
-	entries := racePoll(t, qb, map[int]int64{1: 50 * gib, 2: 50 * gib}, 250<<20, 0, freshTorrents(4, 10*gib)...)
+	entries := racePoll(t, qb, map[int]int64{1: 50 * gib, 2: 50 * gib}, 250<<20, 0, 0, freshTorrents(4, 10*gib)...)
 
 	for _, e := range entries {
 		require.Equal(t, store.StatusAdded, e.Status, e.Reason)
@@ -89,17 +89,37 @@ func TestAutoPlacementSpreadsBurstAcrossInstances(t *testing.T) {
 	require.Equal(t, map[int]int{1: 2, 2: 2}, qb.addedTo())
 }
 
+// A site's per-torrent upload limit goes on every torrent, and caps how much upload
+// a fresh torrent is expected to take: with a low limit the burst no longer looks
+// like it fills the roomier instance, so it all goes there.
+func TestSiteUploadLimitCapsFreshPullAndIsApplied(t *testing.T) {
+	qb := &fakeQB{free: map[int]int64{1: 1000 * gib, 2: 500 * gib}}
+	entries := racePoll(t, qb, map[int]int64{1: 50 * gib, 2: 50 * gib}, 250<<20, 512<<10, 0, freshTorrents(4, 10*gib)...)
+
+	for _, e := range entries {
+		require.Equal(t, store.StatusAdded, e.Status, e.Reason)
+	}
+	require.Equal(t, map[int]int{1: 4}, qb.addedTo())
+	require.Equal(t, []int64{512 << 10, 512 << 10, 512 << 10, 512 << 10}, qb.upLimits)
+}
+
+func TestFreshPull(t *testing.T) {
+	fresh := []store.Reservation{{UploadLimit: 0}, {UploadLimit: 10 << 20}, {UploadLimit: 1 << 30}}
+	// 25% of 400 MiB/s is 100 MiB/s: unlimited and 1 GiB/s take the share, 10 MiB/s its limit.
+	require.Equal(t, int64(210<<20), freshPull(fresh, 400<<20))
+}
+
 // Without an upload capacity the instance with more spare space above its floor wins,
 // and a torrent that fits nowhere is refused for low space.
 func TestAutoPlacementFollowsSpareSpace(t *testing.T) {
 	qb := &fakeQB{free: map[int]int64{1: 100 * gib, 2: 300 * gib}}
-	entries := racePoll(t, qb, map[int]int64{1: 50 * gib, 2: 50 * gib}, 0, 0,
+	entries := racePoll(t, qb, map[int]int64{1: 50 * gib, 2: 50 * gib}, 0, 0, 0,
 		fakeTorrent{id: 1, published: time.Now().Add(-time.Second), size: 40 * gib, free: true})
 	require.Equal(t, store.StatusAdded, entries[0].Status, entries[0].Reason)
 	require.Equal(t, 2, entries[0].InstanceID)
 
 	qb = &fakeQB{free: map[int]int64{1: 60 * gib, 2: 70 * gib}}
-	entries = racePoll(t, qb, map[int]int64{1: 50 * gib, 2: 50 * gib}, 0, 0,
+	entries = racePoll(t, qb, map[int]int64{1: 50 * gib, 2: 50 * gib}, 0, 0, 0,
 		fakeTorrent{id: 1, published: time.Now().Add(-time.Second), size: 40 * gib, free: true})
 	require.Equal(t, store.StatusRejected, entries[0].Status)
 	require.True(t, strings.HasPrefix(entries[0].Reason, reasonLowSpace), entries[0].Reason)
@@ -110,7 +130,7 @@ func TestAutoPlacementFollowsSpareSpace(t *testing.T) {
 // another one with room.
 func TestFixedInstanceIsNotRerouted(t *testing.T) {
 	qb := &fakeQB{free: map[int]int64{1: 60 * gib, 2: 500 * gib}}
-	entries := racePoll(t, qb, map[int]int64{1: 50 * gib, 2: 50 * gib}, 0, 1,
+	entries := racePoll(t, qb, map[int]int64{1: 50 * gib, 2: 50 * gib}, 0, 0, 1,
 		fakeTorrent{id: 1, published: time.Now().Add(-time.Second), size: 20 * gib, free: true})
 	require.Equal(t, store.StatusRejected, entries[0].Status)
 	require.True(t, strings.HasPrefix(entries[0].Reason, reasonLowSpace), entries[0].Reason)

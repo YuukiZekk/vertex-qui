@@ -193,16 +193,22 @@ func (s *Service) handleListSites(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) handleSaveSite(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name    string `json:"name"`
-		BaseURL string `json:"baseUrl"`
-		Cookie  string `json:"cookie"`
+		Name               string `json:"name"`
+		BaseURL            string `json:"baseUrl"`
+		Cookie             string `json:"cookie"`
+		TorrentUploadLimit int64  `json:"torrentUploadLimit"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	st := store.Site{Name: strings.TrimSpace(body.Name), BaseURL: strings.TrimRight(strings.TrimSpace(body.BaseURL), "/"), Cookie: strings.TrimSpace(body.Cookie)}
+	st := store.Site{Name: strings.TrimSpace(body.Name), BaseURL: strings.TrimRight(strings.TrimSpace(body.BaseURL), "/"),
+		Cookie: strings.TrimSpace(body.Cookie), TorrentUploadLimit: body.TorrentUploadLimit}
 	if st.Name == "" || !isHTTPURL(st.BaseURL) {
 		writeError(w, http.StatusBadRequest, errors.New("name and an http(s) baseUrl are required"))
+		return
+	}
+	if st.TorrentUploadLimit < 0 {
+		writeError(w, http.StatusBadRequest, errors.New("torrentUploadLimit must not be negative"))
 		return
 	}
 	s.saveAndRespond(w, r, func(id int64, create bool) (int64, error) {

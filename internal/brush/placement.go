@@ -38,6 +38,7 @@ type candidate struct {
 	Upload      int64   `json:"upload"`
 	UploadKnown bool    `json:"uploadKnown"`
 	Fresh       int     `json:"fresh"`
+	FreshUpload int64   `json:"freshUpload"`
 	Capacity    int64   `json:"capacity"`
 	SpaceCost   float64 `json:"spaceCost"`
 	UploadCost  float64 `json:"uploadCost"`
@@ -56,7 +57,8 @@ type placement struct {
 //
 // The cost of an instance is the share of its spare space above the floor the
 // torrent would take, plus how busy its upload is: the measured average plus the
-// expected pull of torrents brush sent in the last freshPeriod, over its capacity.
+// expected pull of torrents brush sent in the last freshPeriod (capped by their
+// sites' per-torrent limits), over its capacity.
 // The lowest cost wins. Freeing space by deleting torrents is not part of the cost
 // until brush can delete.
 func (s *Service) admit(ctx context.Context, f store.Feed, entryID int64, tf site.TorrentFile) (int, string, string) {
@@ -168,10 +170,26 @@ func (s *Service) evaluate(ctx context.Context, id int, cfg store.InstanceConfig
 	c.Fresh = len(fresh)
 	c.Upload, c.UploadKnown = s.meter.rate(id, now)
 	if c.Capacity > 0 {
-		c.UploadCost = (float64(c.Upload) + float64(c.Fresh)*freshShare*float64(c.Capacity)) / float64(c.Capacity)
+		c.FreshUpload = freshPull(fresh, c.Capacity)
+		c.UploadCost = float64(c.Upload+c.FreshUpload) / float64(c.Capacity)
 	}
 	c.Cost = c.SpaceCost + c.UploadCost
 	return c
+}
+
+// freshPull is the upload the fresh torrents are expected to take: freshShare of the
+// capacity each, but never more than their site lets a single torrent upload.
+func freshPull(fresh []store.Reservation, capacity int64) int64 {
+	share := int64(freshShare * float64(capacity))
+	var total int64
+	for _, r := range fresh {
+		if r.UploadLimit > 0 {
+			total += min(share, r.UploadLimit)
+		} else {
+			total += share
+		}
+	}
+	return total
 }
 
 // refusal turns the candidates' reasons into the entry's reason. A single candidate

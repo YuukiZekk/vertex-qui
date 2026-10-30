@@ -35,6 +35,7 @@ const (
 	reasonDuplicate  = "duplicate"
 	reasonSpaceCheck = "space_check_failed"
 	reasonAdd        = "add_failed"
+	reasonSite       = "site_unavailable"
 )
 
 func (s *Service) run(ctx context.Context) {
@@ -223,12 +224,19 @@ func (s *Service) process(ctx context.Context, f store.Feed, client *site.NexusP
 		return
 	}
 
+	// The site's per-torrent limit goes on the torrent itself, so a fast instance never
+	// uploads it faster than the site allows. Without it the torrent is not added.
+	st, err := s.store.GetSite(ctx, f.SiteID)
+	if err != nil {
+		reject(reasonSite, err.Error())
+		return
+	}
 	instanceID, code, detail := s.admit(raceCtx, f, entryID, tf)
 	if code != "" {
 		reject(code, detail)
 		return
 	}
-	if err := s.qui.AddTorrent(raceCtx, instanceID, data, Tag); err != nil {
+	if err := s.qui.AddTorrent(raceCtx, instanceID, data, Tag, st.TorrentUploadLimit); err != nil {
 		if failErr := s.store.Fail(ctx, entryID, reasonAdd+": "+err.Error()); failErr != nil {
 			s.log.Error().Err(failErr).Int64("entry", entryID).Msg("fail entry")
 		}
