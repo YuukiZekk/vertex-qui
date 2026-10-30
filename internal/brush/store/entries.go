@@ -6,6 +6,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -41,6 +42,9 @@ type Entry struct {
 	InfoHash    string `json:"infoHash"`
 	InstanceID  int    `json:"instanceId"`
 	DecidedAt   int64  `json:"decidedAt"`
+	// Placement is the JSON record of how each candidate instance was scored, empty
+	// when the entry never reached placement.
+	Placement json.RawMessage `json:"placement,omitempty"`
 }
 
 // InsertEntry records a newly seen RSS item. It returns false when the feed has
@@ -98,6 +102,11 @@ func (s *Store) Claim(ctx context.Context, id int64, hash string, size int64, in
 		StatusAdding, hash, size, instanceID, time.Now().Unix(), id)
 }
 
+// SetPlacement stores the placement record, for an admitted and a refused entry alike.
+func (s *Store) SetPlacement(ctx context.Context, id int64, placement []byte) error {
+	return s.execOne(ctx, "record brush placement", "UPDATE brush_entries SET placement = ? WHERE id = ?", string(placement), id)
+}
+
 type Reservation struct {
 	InfoHash  string
 	SizeBytes int64
@@ -139,7 +148,7 @@ func (s *Store) MarkInterruptedAdds(ctx context.Context) error {
 // baseline rows a first poll writes.
 func (s *Store) RecentEntries(ctx context.Context, limit int) ([]Entry, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT e.id, e.feed_id, f.name, e.title, e.size_bytes, e.link, e.published_at,
-		e.first_seen_at, e.status, e.reason, e.info_hash, e.instance_id, e.decided_at
+		e.first_seen_at, e.status, e.reason, e.info_hash, e.instance_id, e.decided_at, e.placement
 		FROM brush_entries e JOIN brush_feeds f ON f.id = e.feed_id
 		WHERE e.status <> ? ORDER BY e.id DESC LIMIT ?`, StatusBaseline, limit)
 	if err != nil {
@@ -150,9 +159,13 @@ func (s *Store) RecentEntries(ctx context.Context, limit int) ([]Entry, error) {
 	var out []Entry
 	for rows.Next() {
 		var e Entry
+		var placement string
 		if err := rows.Scan(&e.ID, &e.FeedID, &e.FeedName, &e.Title, &e.SizeBytes, &e.Link, &e.PublishedAt,
-			&e.FirstSeenAt, &e.Status, &e.Reason, &e.InfoHash, &e.InstanceID, &e.DecidedAt); err != nil {
+			&e.FirstSeenAt, &e.Status, &e.Reason, &e.InfoHash, &e.InstanceID, &e.DecidedAt, &placement); err != nil {
 			return nil, fmt.Errorf("scan brush entry: %w", err)
+		}
+		if placement != "" {
+			e.Placement = json.RawMessage(placement)
 		}
 		out = append(out, e)
 	}

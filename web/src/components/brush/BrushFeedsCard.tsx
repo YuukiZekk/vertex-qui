@@ -34,7 +34,7 @@ export function BrushFeedsCard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["brush"] }),
     onError: (err: Error) => toast.error(t("feeds.deleteFailed"), { description: err.message }),
   })
-  const instanceName = (id: number) => status?.instances.find((i) => i.id === id)?.name ?? `#${id}`
+  const instanceName = (id: number) => id === 0 ? t("feeds.autoInstance") : status?.instances.find((i) => i.id === id)?.name ?? `#${id}`
 
   return (
     <Card>
@@ -118,8 +118,10 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
     name: feed?.name ?? "",
     url: "",
     siteId: String(feed?.siteId ?? sites?.[0]?.id ?? ""),
-    instanceId: String(feed?.instanceId ?? status?.instances[0]?.id ?? ""),
-    intervalSeconds: String(feed?.intervalSeconds ?? 15),
+    // 0 lets brush pick the least busy instance for each torrent.
+    instanceId: String(feed?.instanceId ?? 0),
+    // NexusPHP sites generally allow one RSS request a minute.
+    intervalSeconds: String(feed?.intervalSeconds ?? 60),
     minGB: feed ? bytesToGB(feed.minSizeBytes) : "5",
     maxGB: feed ? bytesToGB(feed.maxSizeBytes) : "50",
     windowMinutes: String((feed?.windowSeconds ?? 300) / 60),
@@ -186,9 +188,13 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
             <Select value={form.instanceId} onValueChange={(v) => set("instanceId", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="0">{t("feeds.autoInstance")}</SelectItem>
                 {status?.instances.map((i) => <SelectItem key={i.id} value={String(i.id)}>{i.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              {form.instanceId === "0" ? t("feeds.autoInstanceHelp") : t("feeds.fixedInstanceHelp")}
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="feed-min">{t("feeds.minSize")}</Label>

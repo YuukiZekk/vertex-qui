@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { bytesToGB, gbToBytes } from "./units"
+import { bytesPerSecondToMbps, bytesToGB, gbToBytes, mbpsToBytesPerSecond } from "./units"
 
 export function BrushStatusCard() {
   const { t } = useTranslation("brush")
@@ -60,13 +60,15 @@ export function BrushStatusCard() {
                 <TableHead>{t("instances.freeSpace")}</TableHead>
                 <TableHead>{t("instances.committed")}</TableHead>
                 <TableHead>{t("instances.floor")}</TableHead>
+                <TableHead>{t("instances.upload")}</TableHead>
+                <TableHead>{t("instances.capacity")}</TableHead>
                 <TableHead>{t("instances.state")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.instances.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">{t("instances.empty")}</TableCell>
+                  <TableCell colSpan={8} className="text-muted-foreground">{t("instances.empty")}</TableCell>
                 </TableRow>
               )}
               {data.instances.map((inst) => <InstanceRow key={inst.id} inst={inst} />)}
@@ -89,6 +91,15 @@ function InstanceRow({ inst }: { inst: BrushInstanceStatus }) {
       return queryClient.invalidateQueries({ queryKey: ["brush", "status"] })
     },
     onError: (err: Error) => toast.error(t("instances.floorSaveFailed"), { description: err.message }),
+  })
+  const [capacityMbps, setCapacityMbps] = useState(inst.uploadCapacity ? bytesPerSecondToMbps(inst.uploadCapacity) : "")
+  const saveCapacity = useMutation({
+    mutationFn: () => api.setBrushCapacity(inst.id, mbpsToBytesPerSecond(capacityMbps || "0")),
+    onSuccess: () => {
+      toast.success(t("instances.capacitySaved"))
+      return queryClient.invalidateQueries({ queryKey: ["brush", "status"] })
+    },
+    onError: (err: Error) => toast.error(t("instances.capacitySaveFailed"), { description: err.message }),
   })
   const healthy = inst.active && !inst.error
   const belowFloor = healthy && inst.floorBytes !== null && inst.committed < inst.floorBytes
@@ -113,6 +124,30 @@ function InstanceRow({ inst }: { inst: BrushInstanceStatus }) {
             onChange={(e) => setFloorGB(e.target.value)}
           />
           <Button size="sm" variant="outline" disabled={!(Number(floorGB) > 0) || save.isPending} onClick={() => save.mutate()}>
+            {t("actions.save")}
+          </Button>
+        </div>
+      </TableCell>
+      <TableCell className="whitespace-nowrap">
+        {inst.uploadRate === null ? "-" : t("instances.mbpsValue", { value: bytesPerSecondToMbps(inst.uploadRate) })}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <Input
+            className="h-8 w-24"
+            type="number"
+            min="0"
+            value={capacityMbps}
+            placeholder={t("instances.capacityPlaceholder")}
+            disabled={inst.floorBytes === null}
+            onChange={(e) => setCapacityMbps(e.target.value)}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={inst.floorBytes === null || Number(capacityMbps) < 0 || saveCapacity.isPending}
+            onClick={() => saveCapacity.mutate()}
+          >
             {t("actions.save")}
           </Button>
         </div>

@@ -2941,6 +2941,10 @@ class ApiClient {
     return this.request<void>(`/brush/instances/${instanceId}/floor`, { method: "PUT", body: JSON.stringify({ floorBytes }) })
   }
 
+  async setBrushCapacity(instanceId: number, uploadCapacity: number): Promise<void> {
+    return this.request<void>(`/brush/instances/${instanceId}/capacity`, { method: "PUT", body: JSON.stringify({ uploadCapacity }) })
+  }
+
   async getBrushSites(): Promise<BrushSite[]> {
     return this.request<BrushSite[]>("/brush/sites")
   }

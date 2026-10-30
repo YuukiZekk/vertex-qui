@@ -1,0 +1,1 @@
+ALTER TABLE brush_entries ADD COLUMN placement TEXT NOT NULL DEFAULT ''

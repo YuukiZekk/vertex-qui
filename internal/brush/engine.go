@@ -6,7 +6,6 @@ package brush
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"time"
 
@@ -224,11 +223,12 @@ func (s *Service) process(ctx context.Context, f store.Feed, client *site.NexusP
 		return
 	}
 
-	if code, detail := s.admit(raceCtx, f.InstanceID, entryID, tf); code != "" {
+	instanceID, code, detail := s.admit(raceCtx, f, entryID, tf)
+	if code != "" {
 		reject(code, detail)
 		return
 	}
-	if err := s.qui.AddTorrent(raceCtx, f.InstanceID, data, Tag); err != nil {
+	if err := s.qui.AddTorrent(raceCtx, instanceID, data, Tag); err != nil {
 		if failErr := s.store.Fail(ctx, entryID, reasonAdd+": "+err.Error()); failErr != nil {
 			s.log.Error().Err(failErr).Int64("entry", entryID).Msg("fail entry")
 		}
@@ -237,64 +237,7 @@ func (s *Service) process(ctx context.Context, f store.Feed, client *site.NexusP
 	if err := s.store.MarkAdded(ctx, entryID); err != nil {
 		s.log.Error().Err(err).Int64("entry", entryID).Msg("mark entry added")
 	}
-	s.log.Info().Int64("feed", f.ID).Int("instance", f.InstanceID).Str("hash", tf.InfoHash).Msg("added torrent")
-}
-
-// admit decides under one lock whether the torrent fits, and claims the entry before
-// releasing it. The claim is what later admissions count as reserved space, so two
-// torrents that arrive together cannot both pass against the same free space.
-func (s *Service) admit(ctx context.Context, instanceID int, entryID int64, tf site.TorrentFile) (string, string) {
-	s.admitMu.Lock()
-	defer s.admitMu.Unlock()
-
-	floors, err := s.store.Floors(ctx)
-	if err != nil {
-		return reasonSpaceCheck, err.Error()
-	}
-	floor, ok := floors[instanceID]
-	if !ok {
-		return reasonNoFloor, ""
-	}
-	if active, err := s.instanceActive(ctx, instanceID); err != nil || !active {
-		return reasonInstance, ""
-	}
-	if taken, err := s.store.HashTaken(ctx, tf.InfoHash, instanceID); err != nil {
-		return reasonSpaceCheck, err.Error()
-	} else if taken {
-		return reasonDuplicate, ""
-	}
-	if has, err := s.qui.HasTorrent(ctx, instanceID, tf.InfoHash); err != nil {
-		return reasonInstance, err.Error()
-	} else if has {
-		return reasonDuplicate, ""
-	}
-
-	space, err := s.instanceSpace(ctx, instanceID)
-	if err != nil {
-		return reasonSpaceCheck, err.Error()
-	}
-	if after := space.Committed - tf.Size; after < floor {
-		s.log.Warn().Int("instance", instanceID).Int64("committedAfter", after).Int64("floor", floor).
-			Msg("refused torrent: committed space would fall below the safety floor")
-		return reasonLowSpace, fmt.Sprintf("%d < %d", after, floor)
-	}
-	if err := s.store.Claim(ctx, entryID, tf.InfoHash, tf.Size, instanceID); err != nil {
-		return reasonSpaceCheck, err.Error()
-	}
-	return "", ""
-}
-
-func (s *Service) instanceActive(ctx context.Context, instanceID int) (bool, error) {
-	instances, err := s.qui.Instances(ctx)
-	if err != nil {
-		return false, err
-	}
-	for _, inst := range instances {
-		if inst.ID == instanceID {
-			return inst.Active, nil
-		}
-	}
-	return false, nil
+	s.log.Info().Int64("feed", f.ID).Int("instance", instanceID).Str("hash", tf.InfoHash).Msg("added torrent")
 }
 
 func sizeAllowed(f store.Feed, size int64) bool {

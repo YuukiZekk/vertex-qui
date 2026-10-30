@@ -40,6 +40,7 @@ type Service struct {
 	qui   qbittorrent
 	log   zerolog.Logger
 	now   func() time.Time
+	meter *uploadMeter
 
 	// admitMu serialises admission across all feeds and instances.
 	admitMu sync.Mutex
@@ -59,6 +60,7 @@ func New(ctx context.Context, db dbinterface.Querier, cipher *models.CredentialC
 		qui:       qui,
 		log:       log.With().Str("module", "brush").Logger(),
 		now:       time.Now,
+		meter:     newUploadMeter(),
 		baselined: make(map[int64]bool),
 		polling:   make(map[int64]bool),
 		clients:   make(map[int64]siteClientEntry),
@@ -71,5 +73,6 @@ func (s *Service) Start(ctx context.Context) error {
 		return err
 	}
 	go s.run(ctx)
+	go s.runSampler(ctx)
 	return nil
 }

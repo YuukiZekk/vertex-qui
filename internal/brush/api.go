@@ -30,6 +30,7 @@ func (s *Service) Routes(r chi.Router) {
 	r.Get("/status", s.handleStatus)
 	r.Put("/settings", s.handleSettings)
 	r.Put("/instances/{instanceID}/floor", s.handleFloor)
+	r.Put("/instances/{instanceID}/capacity", s.handleCapacity)
 
 	r.Get("/sites", s.handleListSites)
 	r.Post("/sites", s.handleSaveSite)
@@ -55,7 +56,11 @@ type instanceStatus struct {
 	Reserved   int64  `json:"reserved"`
 	Committed  int64  `json:"committed"`
 	FloorBytes *int64 `json:"floorBytes"`
-	Error      string `json:"error,omitempty"`
+	// UploadCapacity is in bytes per second, zero when not set. UploadRate is the
+	// meter's average, null until it has samples.
+	UploadCapacity int64  `json:"uploadCapacity"`
+	UploadRate     *int64 `json:"uploadRate"`
+	Error          string `json:"error,omitempty"`
 }
 
 type statusResponse struct {
@@ -70,7 +75,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	floors, err := s.store.Floors(ctx)
+	configs, err := s.store.InstanceConfigs(ctx)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -84,8 +89,12 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	resp := statusResponse{Enabled: enabled, Instances: make([]instanceStatus, 0, len(instances))}
 	for _, inst := range instances {
 		st := instanceStatus{ID: inst.ID, Name: inst.Name, Active: inst.Active}
-		if floor, ok := floors[inst.ID]; ok {
-			st.FloorBytes = &floor
+		if cfg, ok := configs[inst.ID]; ok {
+			st.FloorBytes = &cfg.FloorBytes
+			st.UploadCapacity = cfg.UploadCapacity
+		}
+		if rate, ok := s.meter.rate(inst.ID, s.now()); ok {
+			st.UploadRate = &rate
 		}
 		if inst.Active {
 			// A disabled or unreachable instance shows its error instead of failing the response.
@@ -131,6 +140,33 @@ func (s *Service) handleFloor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.SetFloor(r.Context(), instanceID, body.FloorBytes); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Service) handleCapacity(w http.ResponseWriter, r *http.Request) {
+	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("invalid instance id"))
+		return
+	}
+	var body struct {
+		UploadCapacity int64 `json:"uploadCapacity"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if body.UploadCapacity < 0 {
+		writeError(w, http.StatusBadRequest, errors.New("uploadCapacity must not be negative"))
+		return
+	}
+	if err := s.store.SetUploadCapacity(r.Context(), instanceID, body.UploadCapacity); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusBadRequest, errors.New("set the safety floor first"))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -235,8 +271,9 @@ func (s *Service) handleSaveFeed(w http.ResponseWriter, r *http.Request) {
 
 func validateFeed(f store.Feed, create bool) string {
 	switch {
-	case f.Name == "" || f.SiteID == 0 || f.InstanceID == 0:
-		return "name, siteId and instanceId are required"
+	// instanceId 0 lets placement choose among every instance with a floor.
+	case f.Name == "" || f.SiteID == 0 || f.InstanceID < 0:
+		return "name and siteId are required"
 	case create && !isHTTPURL(f.URL), !create && f.URL != "" && !isHTTPURL(f.URL):
 		return "url must be an http(s) URL"
 	case f.IntervalSeconds < minInterval:

@@ -13,3 +13,14 @@ export function bytesToGB(bytes: number): string {
 export function gbToBytes(gb: string): number {
   return Math.round(Number(gb) * BYTES_PER_GB)
 }
+
+// Upload capacity is entered in Mbps as hosting providers sell it: 1 Mbps = 125,000 bytes/s.
+const BYTES_PER_SECOND_PER_MBPS = 125_000
+
+export function bytesPerSecondToMbps(bytes: number): string {
+  return String(Math.round(bytes / BYTES_PER_SECOND_PER_MBPS))
+}
+
+export function mbpsToBytesPerSecond(mbps: string): number {
+  return Math.round(Number(mbps) * BYTES_PER_SECOND_PER_MBPS)
+}

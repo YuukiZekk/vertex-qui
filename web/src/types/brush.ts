@@ -13,6 +13,10 @@ export interface BrushInstanceStatus {
   reserved: number
   committed: number
   floorBytes: number | null
+  // Bytes per second; 0 when not set.
+  uploadCapacity: number
+  // Average upload over the last minute in bytes per second, null until measured.
+  uploadRate: number | null
   error?: string
 }
 
@@ -45,6 +49,7 @@ export interface BrushFeed {
   freeOnly: boolean
   skipHr: boolean
   windowSeconds: number
+  // 0 lets brush pick the least busy instance for each torrent.
   instanceId: number
   enabled: boolean
   lastFetchAt: number
@@ -70,6 +75,29 @@ export interface BrushEntry {
   infoHash: string
   instanceId: number
   decidedAt: number
+  placement?: BrushPlacement
+}
+
+// How each candidate instance scored for one torrent; chosen is 0 when none could take it.
+export interface BrushPlacement {
+  chosen: number
+  candidates: BrushPlacementCandidate[]
+}
+
+export interface BrushPlacementCandidate {
+  instanceId: number
+  name: string
+  reason?: string
+  detail?: string
+  committed: number
+  floor: number
+  upload: number
+  uploadKnown: boolean
+  fresh: number
+  capacity: number
+  spaceCost: number
+  uploadCost: number
+  cost: number
 }
 
 export interface BrushTestItem {

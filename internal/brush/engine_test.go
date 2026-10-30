@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -27,37 +28,55 @@ import (
 
 const gib = int64(1) << 30
 
+// fakeQB serves one active instance per entry in free, named vps-<id>.
 type fakeQB struct {
 	mu    sync.Mutex
-	free  int64
-	added [][]byte
+	free  map[int]int64
+	added map[int]int
 }
 
 func (f *fakeQB) Instances(context.Context) ([]quiadapter.Instance, error) {
-	return []quiadapter.Instance{{ID: 1, Name: "vps-a", Active: true}}, nil
+	out := make([]quiadapter.Instance, 0, len(f.free))
+	for id := range f.free {
+		out = append(out, quiadapter.Instance{ID: id, Name: fmt.Sprintf("vps-%d", id), Active: true})
+	}
+	return out, nil
 }
 
 // Torrents never lists what brush added, so admission has to rely on its reservations.
 func (f *fakeQB) Torrents(context.Context, int) ([]qbt.Torrent, error) { return nil, nil }
 
-func (f *fakeQB) FreeSpace(context.Context, int) (int64, error) { return f.free, nil }
+func (f *fakeQB) FreeSpace(_ context.Context, id int) (int64, error) { return f.free[id], nil }
 
 func (f *fakeQB) HasTorrent(context.Context, int, string) (bool, error) { return false, nil }
 
-func (f *fakeQB) AddTorrent(_ context.Context, _ int, file []byte, tag string) error {
+func (f *fakeQB) AddTorrent(_ context.Context, id int, _ []byte, tag string) error {
 	if tag != Tag {
 		return fmt.Errorf("unexpected tag %q", tag)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.added = append(f.added, file)
+	if f.added == nil {
+		f.added = make(map[int]int)
+	}
+	f.added[id]++
 	return nil
 }
 
 func (f *fakeQB) addCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return len(f.added)
+	n := 0
+	for _, c := range f.added {
+		n += c
+	}
+	return n
+}
+
+func (f *fakeQB) addedTo() map[int]int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return maps.Clone(f.added)
 }
 
 func torrentBytes(t *testing.T, name string, size int64) []byte {
@@ -135,7 +154,7 @@ func TestPipelineRacesOnlyFreshFreeTorrentsWithinCommittedSpace(t *testing.T) {
 	db := testdb.NewMigratedSQLite(t, t.Name())
 	cipher, err := models.NewCredentialCipher(make([]byte, 32))
 	require.NoError(t, err)
-	qb := &fakeQB{free: 100 * gib}
+	qb := &fakeQB{free: map[int]int64{1: 100 * gib}}
 	svc, err := New(ctx, db, cipher, qb)
 	require.NoError(t, err)
 
