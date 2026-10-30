@@ -26,6 +26,7 @@ type qbittorrent interface {
 	Instances(ctx context.Context) ([]quiadapter.Instance, error)
 	Torrents(ctx context.Context, instanceID int) ([]qbt.Torrent, error)
 	FreeSpace(ctx context.Context, instanceID int) (int64, error)
+	AlltimeTransfer(ctx context.Context, instanceID int) (dl, ul int64, ok bool, err error)
 	HasTorrent(ctx context.Context, instanceID int, infoHash string) (bool, error)
 	AddTorrent(ctx context.Context, instanceID int, file []byte, tag string, upLimit int64) error
 }
@@ -74,5 +75,6 @@ func (s *Service) Start(ctx context.Context) error {
 	}
 	go s.run(ctx)
 	go s.runSampler(ctx)
+	go s.runTransferSampler(ctx)
 	return nil
 }

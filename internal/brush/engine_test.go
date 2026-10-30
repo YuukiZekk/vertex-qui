@@ -49,6 +49,10 @@ func (f *fakeQB) Torrents(context.Context, int) ([]qbt.Torrent, error) { return 
 
 func (f *fakeQB) FreeSpace(_ context.Context, id int) (int64, error) { return f.free[id], nil }
 
+func (f *fakeQB) AlltimeTransfer(context.Context, int) (int64, int64, bool, error) {
+	return 0, 0, false, nil
+}
+
 func (f *fakeQB) HasTorrent(context.Context, int, string) (bool, error) { return false, nil }
 
 func (f *fakeQB) AddTorrent(_ context.Context, id int, _ []byte, tag string, upLimit int64) error {

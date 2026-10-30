@@ -4,6 +4,7 @@
  */
 
 import { isStreamUsable } from "@/lib/sync-stream-state"
+import { TodayTransferCard } from "@/components/brush/TodayTransferCard"
 import { InstanceErrorDisplay } from "@/components/instances/InstanceErrorDisplay"
 import { InstanceSettingsButton } from "@/components/instances/InstanceSettingsButton"
 import { MigrationHint } from "@/components/instances/MigrationHint"
@@ -3211,6 +3212,7 @@ export function Dashboard() {
         <div className="space-y-6">
           {hasActiveInstances ? (
             <>
+              <TodayTransferCard />
               {visibleSections.map((sectionId) => {
                 switch (sectionId) {
                   case "server-stats":

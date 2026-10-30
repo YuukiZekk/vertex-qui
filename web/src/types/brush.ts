@@ -103,6 +103,13 @@ export interface BrushPlacementCandidate {
   cost: number
 }
 
+export interface BrushTransferToday {
+  day: string
+  // Seconds of the day that have passed, on the server's clock.
+  elapsed: number
+  instances: { id: number, name: string, uploaded: number, downloaded: number }[]
+}
+
 export interface BrushTestItem {
   title: string
   sizeBytes: number

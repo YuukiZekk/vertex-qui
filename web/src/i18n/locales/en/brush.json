@@ -123,6 +123,15 @@
     "next": "Next",
     "empty": "Nothing yet. The first poll of a feed only records what it lists."
   },
+  "today": {
+    "title": "Today's transfer",
+    "description": "Upload and download of each instance since midnight on {{day}}, in the server's time zone, updated every minute.",
+    "uploaded": "Uploaded",
+    "downloaded": "Downloaded",
+    "averageUpload": "Average upload today",
+    "mbps": "{{value}} Mbps",
+    "instance": "Instance"
+  },
   "entryStatus": {
     "pending": "Checking",
     "rejected": "Skipped",

@@ -48,6 +48,20 @@ func (a *Adapter) Torrents(ctx context.Context, instanceID int) ([]qbt.Torrent, 
 	return a.sync.GetAllTorrents(ctx, instanceID)
 }
 
+// AlltimeTransfer returns qBittorrent's all-time download and upload counters from
+// the server state qui cached at its last sync. ok is false before the first sync.
+func (a *Adapter) AlltimeTransfer(ctx context.Context, instanceID int) (dl, ul int64, ok bool, err error) {
+	client, err := a.sync.GetClient(ctx, instanceID)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	state := client.GetCachedServerState()
+	if state == nil {
+		return 0, 0, false, nil
+	}
+	return state.AlltimeDl, state.AlltimeUl, true, nil
+}
+
 func (a *Adapter) FreeSpace(ctx context.Context, instanceID int) (int64, error) {
 	return a.sync.GetFreeSpace(ctx, instanceID)
 }

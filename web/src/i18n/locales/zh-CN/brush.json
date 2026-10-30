@@ -123,6 +123,15 @@
     "next": "下一页",
     "empty": "暂无记录。订阅的第一次拉取只记录当前列表，不会添加。"
   },
+  "today": {
+    "title": "今日流量",
+    "description": "{{day}} 零点起各实例的上传和下载，按服务器时区计算，每分钟更新。",
+    "uploaded": "上传",
+    "downloaded": "下载",
+    "averageUpload": "今日平均上传",
+    "mbps": "{{value}} Mbps",
+    "instance": "实例"
+  },
   "entryStatus": {
     "pending": "检查中",
     "rejected": "已跳过",
