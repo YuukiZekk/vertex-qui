@@ -123,6 +123,26 @@
     "next": "下一页",
     "empty": "暂无记录。订阅的第一次拉取只记录当前列表，不会添加。"
   },
+  "values": {
+    "title": "种子价值",
+    "description": "预测每个刷流种子接下来 {{minutes}} 分钟能上传多少：按最近 10 分钟的速度，按种龄打折，下载者多的上调。每 10 分钟保存一次预测，到时和实际上传量对比。",
+    "accuracy": "近 24 小时：校验了 {{count}} 次预测，预测 {{predicted}}，实际上传 {{actual}}，按上传量加权误差 {{error}}%。另有 {{gone}} 个种子在校验前被删除。",
+    "noChecks": "还没有校验过的预测；种子测满 10 分钟后开始预测，{{minutes}} 分钟后出第一批校验结果。",
+    "instance": "实例",
+    "torrent": "种子",
+    "age": "种龄",
+    "leechers": "下载者",
+    "rate": "近 10 分钟",
+    "predicted": "未来 {{minutes}} 分钟",
+    "predictedShort": "预测",
+    "density": "每 GiB",
+    "measuring": "测量中",
+    "mbs": "{{value}} MB/s",
+    "empty": "设置了安全底线的实例上还没有刷流种子。",
+    "recentTitle": "最近校验",
+    "checkedAt": "校验时间",
+    "actual": "实际上传"
+  },
   "today": {
     "title": "今日流量",
     "description": "{{day}} 零点起各实例的上传和下载，按服务器时区计算，总量每分钟更新。",

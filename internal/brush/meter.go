@@ -105,7 +105,8 @@ func (s *Service) runSampler(ctx context.Context) {
 	}
 }
 
-// sample reads every instance brush has a floor for.
+// sample reads every instance brush has a floor for, then stores and checks
+// predictions against what it read.
 func (s *Service) sample(ctx context.Context) {
 	configs, err := s.store.InstanceConfigs(ctx)
 	if err != nil {
@@ -117,6 +118,11 @@ func (s *Service) sample(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		s.meter.observe(id, s.now(), torrents)
+		now := s.now()
+		s.meter.observe(id, now, torrents)
+		s.values.observe(id, now, torrents)
 	}
+	now := s.now()
+	s.resolvePredictions(ctx, now)
+	s.recordPredictions(ctx, now)
 }

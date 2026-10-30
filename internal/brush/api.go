@@ -46,6 +46,7 @@ func (s *Service) Routes(r chi.Router) {
 
 	r.Get("/entries", s.handleEntries)
 	r.Get("/transfer/today", s.handleTransferToday)
+	r.Get("/values", s.handleValues)
 }
 
 type instanceStatus struct {

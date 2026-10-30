@@ -1,0 +1,18 @@
+CREATE TABLE brush_predictions (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	instance_id INTEGER NOT NULL,
+	info_hash TEXT NOT NULL,
+	made_at BIGINT NOT NULL,
+	age_seconds BIGINT NOT NULL,
+	size_bytes BIGINT NOT NULL,
+	uploaded BIGINT NOT NULL,
+	rate BIGINT NOT NULL,
+	leechers INTEGER NOT NULL,
+	decay DOUBLE PRECISION NOT NULL,
+	horizon_seconds BIGINT NOT NULL,
+	predicted BIGINT NOT NULL,
+	resolved_at BIGINT NOT NULL DEFAULT 0,
+	actual BIGINT NOT NULL DEFAULT 0,
+	actual_seconds BIGINT NOT NULL DEFAULT 0,
+	outcome TEXT NOT NULL DEFAULT ''
+)

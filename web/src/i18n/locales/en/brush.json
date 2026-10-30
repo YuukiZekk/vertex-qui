@@ -123,6 +123,26 @@
     "next": "Next",
     "empty": "Nothing yet. The first poll of a feed only records what it lists."
   },
+  "values": {
+    "title": "Torrent value",
+    "description": "What each brush torrent is predicted to upload in the next {{minutes}} minutes: its speed over the last 10 minutes, slowed for its age and raised for its leechers. Every 10 minutes the predictions are stored and checked against what the torrents really uploaded.",
+    "accuracy": "Last 24 hours: {{count}} predictions checked, {{predicted}} predicted against {{actual}} uploaded, off by {{error}}% weighted by upload. {{gone}} torrents were removed before their check.",
+    "noChecks": "No prediction has been checked yet; the first checks come {{minutes}} minutes after a torrent has 10 minutes of readings.",
+    "instance": "Instance",
+    "torrent": "Torrent",
+    "age": "Age",
+    "leechers": "Leechers",
+    "rate": "Last 10 min",
+    "predicted": "Next {{minutes}} min",
+    "predictedShort": "Predicted",
+    "density": "Per GiB",
+    "measuring": "Measuring",
+    "mbs": "{{value}} MB/s",
+    "empty": "No brush torrents on instances with a safety floor.",
+    "recentTitle": "Latest checks",
+    "checkedAt": "Checked",
+    "actual": "Uploaded"
+  },
   "today": {
     "title": "Today's transfer",
     "description": "Upload and download of each instance since midnight on {{day}}, in the server's time zone. Totals update every minute.",

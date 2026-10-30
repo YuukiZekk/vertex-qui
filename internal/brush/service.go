@@ -37,11 +37,14 @@ type siteClientEntry struct {
 }
 
 type Service struct {
-	store *store.Store
-	qui   qbittorrent
-	log   zerolog.Logger
-	now   func() time.Time
-	meter *uploadMeter
+	store  *store.Store
+	qui    qbittorrent
+	log    zerolog.Logger
+	now    func() time.Time
+	meter  *uploadMeter
+	values *valueTracker
+	// lastPrediction is only touched by the sampler goroutine.
+	lastPrediction time.Time
 
 	// admitMu serialises admission across all feeds and instances.
 	admitMu sync.Mutex
@@ -62,6 +65,7 @@ func New(ctx context.Context, db dbinterface.Querier, cipher *models.CredentialC
 		log:       log.With().Str("module", "brush").Logger(),
 		now:       time.Now,
 		meter:     newUploadMeter(),
+		values:    newValueTracker(),
 		baselined: make(map[int64]bool),
 		polling:   make(map[int64]bool),
 		clients:   make(map[int64]siteClientEntry),
