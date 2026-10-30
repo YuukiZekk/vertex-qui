@@ -103,6 +103,7 @@ type Server struct {
 	arrInstanceStore                 *models.ArrInstanceStore
 	arrService                       *arr.Service
 	activityHub                      *activity.Hub
+	brushRoutes                      func(chi.Router)
 	// shuttingDown ends the log and RSS streams: http.Server.Shutdown does not cancel request contexts.
 	shuttingDown <-chan struct{}
 }
@@ -156,6 +157,8 @@ type Dependencies struct {
 	ArrInstanceStore                 *models.ArrInstanceStore
 	ArrService                       *arr.Service
 	ActivityHub                      *activity.Hub
+	// BrushRoutes mounts the vertex-qui brush API under /api/brush; a func keeps api from importing brush.
+	BrushRoutes func(chi.Router)
 }
 
 func NewServer(deps *Dependencies) *Server {
@@ -233,6 +236,7 @@ func NewServer(deps *Dependencies) *Server {
 		arrInstanceStore:                 deps.ArrInstanceStore,
 		arrService:                       deps.ArrService,
 		activityHub:                      deps.ActivityHub,
+		brushRoutes:                      deps.BrushRoutes,
 		shuttingDown:                     streamsCtx.Done(),
 	}
 	// Shutdown runs this callback on every call; a CancelFunc tolerates repeats where close would panic.
@@ -480,6 +484,10 @@ func (s *Server) Handler() (*chi.Mux, error) {
 			r.Use(authMiddleware)
 
 			r.Get("/tracker-icons", trackerIconHandler.GetTrackerIcons)
+
+			if s.brushRoutes != nil {
+				r.Route("/brush", s.brushRoutes)
+			}
 
 			// Auth routes
 			r.Post("/auth/logout", authHandler.Logout)

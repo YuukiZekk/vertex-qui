@@ -1,0 +1,25 @@
+{
+  "nav": "刷流",
+  "page": {
+    "title": "刷流",
+    "description": "从 RSS 抢新种，放进最空闲的服务器，并删除产出最低的种子。"
+  },
+  "status": {
+    "title": "状态",
+    "description": "刷流可以投放种子的服务器，数据来自 qui 的缓存。",
+    "enabled": "已开启",
+    "disabled": "未开启",
+    "loading": "加载中…",
+    "loadFailed": "无法加载刷流状态：{{message}}"
+  },
+  "instances": {
+    "name": "实例",
+    "torrents": "种子数",
+    "freeSpace": "剩余空间",
+    "state": "状态",
+    "ok": "已连接",
+    "inactive": "已在 qui 中停用",
+    "error": "错误：{{message}}",
+    "empty": "还没有 qBittorrent 实例，请先在设置里添加。"
+  }
+}

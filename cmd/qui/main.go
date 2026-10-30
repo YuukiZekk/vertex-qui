@@ -25,6 +25,8 @@ import (
 	"github.com/autobrr/qui/internal/api"
 	"github.com/autobrr/qui/internal/auth"
 	"github.com/autobrr/qui/internal/backups"
+	"github.com/autobrr/qui/internal/brush"
+	"github.com/autobrr/qui/internal/brush/quiadapter"
 	"github.com/autobrr/qui/internal/buildinfo"
 	"github.com/autobrr/qui/internal/clientmigrate"
 	"github.com/autobrr/qui/internal/config"
@@ -765,6 +767,11 @@ func (app *Application) runServer() {
 	automationService := automations.NewService(automations.DefaultConfig(), instanceStore, automationStore, automationActivityStore, trackerCustomizationStore, syncManager, notificationService, externalProgramService, crossSeedService, backendPool)
 	automationService.SetActivityPublisher(activityHub)
 
+	brushService, err := brush.New(context.Background(), db, quiadapter.New(instanceStore, syncManager))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize brush service")
+	}
+
 	orphanScanStore := models.NewOrphanScanStore(db)
 	orphanScanService := orphanscan.NewService(orphanscan.DefaultConfig(), instanceStore, orphanScanStore, syncManager, notificationService, backendPool)
 	orphanScanService.SetActivityPublisher(activityHub)
@@ -937,6 +944,7 @@ func (app *Application) runServer() {
 		ArrInstanceStore:                 arrInstanceStore,
 		ArrService:                       arrService,
 		ActivityHub:                      activityHub,
+		BrushRoutes:                      brushService.Routes,
 	})
 
 	// Reconcile any cross-seed runs left in 'running' status from a previous crash/restart.

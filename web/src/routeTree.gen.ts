@@ -20,6 +20,7 @@ import { Route as AuthenticatedRssRouteImport } from './routes/_authenticated/rs
 import { Route as AuthenticatedInstancesRouteImport } from './routes/_authenticated/instances'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCrossSeedRouteImport } from './routes/_authenticated/cross-seed'
+import { Route as AuthenticatedBrushRouteImport } from './routes/_authenticated/brush'
 import { Route as AuthenticatedBackupsRouteImport } from './routes/_authenticated/backups'
 import { Route as AuthenticatedAutomationsRouteImport } from './routes/_authenticated/automations'
 import { Route as AuthenticatedInstancesIndexRouteImport } from './routes/_authenticated/instances.index'
@@ -79,6 +80,11 @@ const AuthenticatedCrossSeedRoute = AuthenticatedCrossSeedRouteImport.update({
   path: '/cross-seed',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedBrushRoute = AuthenticatedBrushRouteImport.update({
+  id: '/brush',
+  path: '/brush',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedBackupsRoute = AuthenticatedBackupsRouteImport.update({
   id: '/backups',
   path: '/backups',
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/automations': typeof AuthenticatedAutomationsRoute
   '/backups': typeof AuthenticatedBackupsRoute
+  '/brush': typeof AuthenticatedBrushRoute
   '/cross-seed': typeof AuthenticatedCrossSeedRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/instances': typeof AuthenticatedInstancesRouteWithChildren
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/automations': typeof AuthenticatedAutomationsRoute
   '/backups': typeof AuthenticatedBackupsRoute
+  '/brush': typeof AuthenticatedBrushRoute
   '/cross-seed': typeof AuthenticatedCrossSeedRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/rss': typeof AuthenticatedRssRoute
@@ -143,6 +151,7 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/_authenticated/automations': typeof AuthenticatedAutomationsRoute
   '/_authenticated/backups': typeof AuthenticatedBackupsRoute
+  '/_authenticated/brush': typeof AuthenticatedBrushRoute
   '/_authenticated/cross-seed': typeof AuthenticatedCrossSeedRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/instances': typeof AuthenticatedInstancesRouteWithChildren
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/automations'
     | '/backups'
+    | '/brush'
     | '/cross-seed'
     | '/dashboard'
     | '/instances'
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/automations'
     | '/backups'
+    | '/brush'
     | '/cross-seed'
     | '/dashboard'
     | '/rss'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/_authenticated/automations'
     | '/_authenticated/backups'
+    | '/_authenticated/brush'
     | '/_authenticated/cross-seed'
     | '/_authenticated/dashboard'
     | '/_authenticated/instances'
@@ -290,6 +302,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCrossSeedRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/brush': {
+      id: '/_authenticated/brush'
+      path: '/brush'
+      fullPath: '/brush'
+      preLoaderRoute: typeof AuthenticatedBrushRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/backups': {
       id: '/_authenticated/backups'
       path: '/backups'
@@ -341,6 +360,7 @@ const AuthenticatedInstancesRouteWithChildren =
 interface AuthenticatedRouteChildren {
   AuthenticatedAutomationsRoute: typeof AuthenticatedAutomationsRoute
   AuthenticatedBackupsRoute: typeof AuthenticatedBackupsRoute
+  AuthenticatedBrushRoute: typeof AuthenticatedBrushRoute
   AuthenticatedCrossSeedRoute: typeof AuthenticatedCrossSeedRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedInstancesRoute: typeof AuthenticatedInstancesRouteWithChildren
@@ -352,6 +372,7 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAutomationsRoute: AuthenticatedAutomationsRoute,
   AuthenticatedBackupsRoute: AuthenticatedBackupsRoute,
+  AuthenticatedBrushRoute: AuthenticatedBrushRoute,
   AuthenticatedCrossSeedRoute: AuthenticatedCrossSeedRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedInstancesRoute: AuthenticatedInstancesRouteWithChildren,

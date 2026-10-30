@@ -135,6 +135,7 @@ import type {
   WarningResponse,
   WebSeed
 } from "@/types"
+import type { BrushStatus } from "@/types/brush"
 import type {
   ArrInstance,
   ArrInstanceFormData,
@@ -2924,6 +2925,12 @@ class ApiClient {
     return this.request<void>(`/instances/${instanceId}/rss/rules/reprocess`, {
       method: "POST",
     })
+  }
+
+  // vertex-qui brush module
+
+  async getBrushStatus(): Promise<BrushStatus> {
+    return this.request<BrushStatus>("/brush/status")
   }
 }
 

@@ -36,6 +36,7 @@ import {
   Code,
   Copyright,
   FileText,
+  Gauge,
   GitBranch,
   Globe,
   HardDrive,
@@ -98,6 +99,12 @@ const navigation: NavItem[] = [
     titleKey: "nav.rss",
     href: "/rss",
     icon: Rss,
+  },
+  {
+    id: "brush",
+    titleKey: "brush:nav",
+    href: "/brush",
+    icon: Gauge,
   },
   {
     id: "settings",

@@ -1,0 +1,25 @@
+{
+  "nav": "Brush",
+  "page": {
+    "title": "Brush",
+    "description": "Race new torrents from RSS onto the least busy server and remove the torrents that earn the least."
+  },
+  "status": {
+    "title": "Status",
+    "description": "Servers that brushing can place torrents on, read from qui's cache.",
+    "enabled": "On",
+    "disabled": "Off",
+    "loading": "Loading…",
+    "loadFailed": "Could not load the brush status: {{message}}"
+  },
+  "instances": {
+    "name": "Instance",
+    "torrents": "Torrents",
+    "freeSpace": "Free space",
+    "state": "State",
+    "ok": "Connected",
+    "inactive": "Disabled in qui",
+    "error": "Error: {{message}}",
+    "empty": "No qBittorrent instances. Add one under Settings first."
+  }
+}
