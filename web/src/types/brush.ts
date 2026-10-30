@@ -52,8 +52,9 @@ export interface BrushFeed {
   freeOnly: boolean
   skipHr: boolean
   windowSeconds: number
-  // 0 lets brush pick the least busy instance for each torrent.
-  instanceId: number
+  // Brush puts each torrent on the least busy of these. Empty, only on feeds saved
+  // before instances could be picked one by one, means every instance with a floor.
+  instanceIds: number[]
   enabled: boolean
   lastFetchAt: number
   lastError: string
@@ -103,11 +104,19 @@ export interface BrushPlacementCandidate {
   cost: number
 }
 
+export interface BrushTransferInstance {
+  id: number
+  name: string
+  uploaded: number
+  downloaded: number
+  // Current speeds in bytes per second; null when the instance cannot be read now.
+  uploadSpeed: number | null
+  downloadSpeed: number | null
+}
+
 export interface BrushTransferToday {
   day: string
-  // Seconds of the day that have passed, on the server's clock.
-  elapsed: number
-  instances: { id: number, name: string, uploaded: number, downloaded: number }[]
+  instances: BrushTransferInstance[]
 }
 
 export interface BrushTestItem {

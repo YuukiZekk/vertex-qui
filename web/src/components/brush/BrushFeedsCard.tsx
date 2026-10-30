@@ -37,7 +37,9 @@ export function BrushFeedsCard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["brush"] }),
     onError: (err: Error) => toast.error(t("feeds.deleteFailed"), { description: err.message }),
   })
-  const instanceName = (id: number) => id === 0 ? t("feeds.autoInstance") : status?.instances.find((i) => i.id === id)?.name ?? `#${id}`
+  const instanceNames = (ids: number[]) => ids.length === 0
+    ? t("feeds.allInstances")
+    : ids.map((id) => status?.instances.find((i) => i.id === id)?.name ?? `#${id}`).join(", ")
   const siteOf = (feed: BrushFeed) => sites?.find((s) => s.id === feed.siteId)
 
   return (
@@ -80,7 +82,7 @@ export function BrushFeedsCard() {
                     {site && !site.hasCookie && <span className="ml-2 text-xs text-destructive">{t("sites.cookieMissing")}</span>}
                   </TableCell>
                   <TableCell>{site?.baseUrl ?? "-"}</TableCell>
-                  <TableCell>{instanceName(feed.instanceId)}</TableCell>
+                  <TableCell>{instanceNames(feed.instanceIds)}</TableCell>
                   <TableCell>{t("feeds.sizeRangeValue", { min: bytesToGB(feed.minSizeBytes), max: bytesToGB(feed.maxSizeBytes) })}</TableCell>
                   <TableCell>
                     {[
@@ -138,8 +140,11 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
     baseUrl: initialSite?.baseUrl ?? "",
     cookie: "",
     uploadLimitMBs: initialSite?.torrentUploadLimit ? bytesPerSecondToMBs(initialSite.torrentUploadLimit) : "",
-    // 0 lets brush pick the least busy instance for each torrent.
-    instanceId: String(feed?.instanceId ?? 0),
+    // A new feed, or one saved when it meant every instance, starts with every
+    // instance that has a floor checked.
+    instanceIds: feed?.instanceIds.length
+      ? feed.instanceIds
+      : status?.instances.filter((i) => i.floorBytes !== null).map((i) => i.id) ?? [],
     // NexusPHP sites generally allow one RSS request a minute.
     intervalSeconds: String(feed?.intervalSeconds ?? 60),
     minGB: feed ? bytesToGB(feed.minSizeBytes) : "5",
@@ -177,7 +182,7 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
           name: form.name,
           url: form.url,
           siteId,
-          instanceId: Number(form.instanceId),
+          instanceIds: form.instanceIds,
           intervalSeconds: Number(form.intervalSeconds),
           minSizeBytes: gbToBytes(form.minGB),
           maxSizeBytes: gbToBytes(form.maxGB),
@@ -265,18 +270,26 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
             />
             <p className="text-xs text-muted-foreground">{t("sites.uploadLimitHelp")}</p>
           </div>
-          <div className="space-y-2">
-            <Label>{t("feeds.instance")}</Label>
-            <Select value={form.instanceId} onValueChange={(v) => set("instanceId", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">{t("feeds.autoInstance")}</SelectItem>
-                {status?.instances.map((i) => <SelectItem key={i.id} value={String(i.id)}>{i.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {form.instanceId === "0" ? t("feeds.autoInstanceHelp") : t("feeds.fixedInstanceHelp")}
-            </p>
+          <div className="col-span-2 space-y-2">
+            <Label>{t("feeds.instances")}</Label>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {status?.instances.map((i) => (
+                <div key={i.id} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`feed-instance-${i.id}`}
+                    checked={form.instanceIds.includes(i.id)}
+                    onCheckedChange={(v) => set("instanceIds", v === true
+                      ? [...form.instanceIds, i.id].sort((a, b) => a - b)
+                      : form.instanceIds.filter((id) => id !== i.id))}
+                  />
+                  <Label htmlFor={`feed-instance-${i.id}`}>
+                    {i.name}
+                    {i.floorBytes === null && <span className="ml-1 text-xs text-muted-foreground">({t("instances.noFloor")})</span>}
+                  </Label>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">{t("feeds.instancesHelp")}</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="feed-min">{t("feeds.minSize")}</Label>
@@ -309,7 +322,7 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>{t("actions.cancel")}</Button>
-          <Button disabled={save.isPending} onClick={() => save.mutate()}>{t("actions.save")}</Button>
+          <Button disabled={save.isPending || form.instanceIds.length === 0} onClick={() => save.mutate()}>{t("actions.save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -235,7 +236,7 @@ type feedBody struct {
 	FreeOnly        bool   `json:"freeOnly"`
 	SkipHR          bool   `json:"skipHr"`
 	WindowSeconds   int    `json:"windowSeconds"`
-	InstanceID      int    `json:"instanceId"`
+	InstanceIDs     []int  `json:"instanceIds"`
 	Enabled         bool   `json:"enabled"`
 }
 
@@ -260,7 +261,7 @@ func (s *Service) handleSaveFeed(w http.ResponseWriter, r *http.Request) {
 		SiteID: body.SiteID, Name: strings.TrimSpace(body.Name), URL: strings.TrimSpace(body.URL),
 		IntervalSeconds: body.IntervalSeconds, MinSizeBytes: body.MinSizeBytes, MaxSizeBytes: body.MaxSizeBytes,
 		FreeOnly: body.FreeOnly, SkipHR: body.SkipHR, WindowSeconds: body.WindowSeconds,
-		InstanceID: body.InstanceID, Enabled: body.Enabled,
+		InstanceIDs: normalizeIDs(body.InstanceIDs), Enabled: body.Enabled,
 	}
 	create := chi.URLParam(r, "id") == ""
 	if msg := validateFeed(f, create); msg != "" {
@@ -276,11 +277,19 @@ func (s *Service) handleSaveFeed(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// normalizeIDs sorts the ids and drops duplicates.
+func normalizeIDs(ids []int) []int {
+	out := slices.Clone(ids)
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
 func validateFeed(f store.Feed, create bool) string {
 	switch {
-	// instanceId 0 lets placement choose among every instance with a floor.
-	case f.Name == "" || f.SiteID == 0 || f.InstanceID < 0:
+	case f.Name == "" || f.SiteID == 0:
 		return "name and siteId are required"
+	case len(f.InstanceIDs) == 0 || f.InstanceIDs[0] <= 0:
+		return "instanceIds must list at least one instance"
 	case create && !isHTTPURL(f.URL), !create && f.URL != "" && !isHTTPURL(f.URL):
 		return "url must be an http(s) URL"
 	case f.IntervalSeconds < minInterval:

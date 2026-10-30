@@ -85,7 +85,7 @@ func TestSecretsAreSealedAndKeptOnBlankUpdate(t *testing.T) {
 			siteID, err := s.CreateSite(ctx, Site{Name: "pt", BaseURL: "https://pt.example", Cookie: "c_secure_pass=abc"})
 			require.NoError(t, err)
 			feedID, err := s.CreateFeed(ctx, Feed{SiteID: siteID, Name: "all", URL: "https://pt.example/rss?passkey=secret",
-				IntervalSeconds: 15, WindowSeconds: 300, InstanceID: 1, Enabled: true})
+				IntervalSeconds: 15, WindowSeconds: 300, InstanceIDs: []int{1}, Enabled: true})
 			require.NoError(t, err)
 
 			var cookie, feedURL string
@@ -96,7 +96,7 @@ func TestSecretsAreSealedAndKeptOnBlankUpdate(t *testing.T) {
 
 			require.NoError(t, s.UpdateSite(ctx, Site{ID: siteID, Name: "pt2", BaseURL: "https://pt.example"}))
 			require.NoError(t, s.UpdateFeed(ctx, Feed{ID: feedID, SiteID: siteID, Name: "all2", IntervalSeconds: 20,
-				WindowSeconds: 300, InstanceID: 1}))
+				WindowSeconds: 300, InstanceIDs: []int{1, 3}}))
 
 			site, err := s.GetSite(ctx, siteID)
 			require.NoError(t, err)
@@ -106,6 +106,35 @@ func TestSecretsAreSealedAndKeptOnBlankUpdate(t *testing.T) {
 			require.Equal(t, "https://pt.example/rss?passkey=secret", feed.URL)
 			require.Equal(t, "all2", feed.Name)
 			require.False(t, feed.Enabled)
+			require.Equal(t, []int{1, 3}, feed.InstanceIDs)
+		})
+	}
+}
+
+// Feeds saved before instance_ids keep their single instance, and 0 there still means
+// every instance.
+func TestLegacyFeedInstance(t *testing.T) {
+	for name, open := range dialects() {
+		t.Run(name, func(t *testing.T) {
+			db := open(t)
+			ctx := t.Context()
+			s := newTestStore(t, db)
+
+			siteID, err := s.CreateSite(ctx, Site{Name: "pt", BaseURL: "https://pt.example", Cookie: "c=1"})
+			require.NoError(t, err)
+			fixed, err := s.CreateFeed(ctx, Feed{SiteID: siteID, Name: "fixed", URL: "https://pt.example/a", IntervalSeconds: 15, WindowSeconds: 300})
+			require.NoError(t, err)
+			auto, err := s.CreateFeed(ctx, Feed{SiteID: siteID, Name: "auto", URL: "https://pt.example/b", IntervalSeconds: 15, WindowSeconds: 300})
+			require.NoError(t, err)
+			_, err = db.ExecContext(ctx, "UPDATE brush_feeds SET instance_id = 2, instance_ids = '' WHERE id = ?", fixed)
+			require.NoError(t, err)
+
+			f, err := s.GetFeed(ctx, fixed)
+			require.NoError(t, err)
+			require.Equal(t, []int{2}, f.InstanceIDs)
+			f, err = s.GetFeed(ctx, auto)
+			require.NoError(t, err)
+			require.Empty(t, f.InstanceIDs)
 		})
 	}
 }
@@ -119,9 +148,9 @@ func TestEntriesDedupeAndReservations(t *testing.T) {
 
 			siteID, err := s.CreateSite(ctx, Site{Name: "pt", BaseURL: "https://pt.example"})
 			require.NoError(t, err)
-			feedA, err := s.CreateFeed(ctx, Feed{SiteID: siteID, Name: "a", URL: "https://pt.example/a", IntervalSeconds: 15, WindowSeconds: 300, InstanceID: 1})
+			feedA, err := s.CreateFeed(ctx, Feed{SiteID: siteID, Name: "a", URL: "https://pt.example/a", IntervalSeconds: 15, WindowSeconds: 300, InstanceIDs: []int{1}})
 			require.NoError(t, err)
-			feedB, err := s.CreateFeed(ctx, Feed{SiteID: siteID, Name: "b", URL: "https://pt.example/b", IntervalSeconds: 15, WindowSeconds: 300, InstanceID: 1})
+			feedB, err := s.CreateFeed(ctx, Feed{SiteID: siteID, Name: "b", URL: "https://pt.example/b", IntervalSeconds: 15, WindowSeconds: 300, InstanceIDs: []int{1}})
 			require.NoError(t, err)
 
 			idA, inserted, err := s.InsertEntry(ctx, Entry{FeedID: feedA, GUID: "g1", Title: "t", Status: StatusPending})

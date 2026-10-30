@@ -49,8 +49,8 @@ func (f *fakeQB) Torrents(context.Context, int) ([]qbt.Torrent, error) { return 
 
 func (f *fakeQB) FreeSpace(_ context.Context, id int) (int64, error) { return f.free[id], nil }
 
-func (f *fakeQB) AlltimeTransfer(context.Context, int) (int64, int64, bool, error) {
-	return 0, 0, false, nil
+func (f *fakeQB) Transfer(context.Context, int) (quiadapter.Transfer, bool, error) {
+	return quiadapter.Transfer{}, false, nil
 }
 
 func (f *fakeQB) HasTorrent(context.Context, int, string) (bool, error) { return false, nil }
@@ -172,7 +172,7 @@ func TestPipelineRacesOnlyFreshFreeTorrentsWithinCommittedSpace(t *testing.T) {
 	require.NoError(t, err)
 	feedID, err := svc.store.CreateFeed(ctx, store.Feed{SiteID: siteID, Name: "all", URL: srv.URL + "/rss.php",
 		IntervalSeconds: 15, MinSizeBytes: 5 * gib, MaxSizeBytes: 50 * gib, FreeOnly: true, WindowSeconds: 300,
-		InstanceID: 1, Enabled: true})
+		InstanceIDs: []int{1}, Enabled: true})
 	require.NoError(t, err)
 	require.NoError(t, svc.store.SetFloor(ctx, 1, 50*gib))
 

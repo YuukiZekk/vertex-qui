@@ -52,8 +52,8 @@ type placement struct {
 
 // admit picks the instance for a torrent and claims the entry on it under one lock,
 // so torrents that arrive together are each scored against the reservations of the
-// ones before them. A feed with a fixed instance is scored the same way and is
-// refused rather than sent elsewhere when that instance cannot take the torrent.
+// ones before them. Only the feed's instances are candidates: a torrent none of them
+// can take is refused rather than sent elsewhere.
 //
 // The cost of an instance is the share of its spare space above the floor the
 // torrent would take, plus how busy its upload is: the measured average plus the
@@ -78,9 +78,8 @@ func (s *Service) admit(ctx context.Context, f store.Feed, entryID int64, tf sit
 		byID[inst.ID] = inst
 	}
 
-	ids := []int{f.InstanceID}
-	if f.InstanceID == 0 {
-		ids = ids[:0]
+	ids := f.InstanceIDs
+	if len(ids) == 0 {
 		for id := range configs {
 			ids = append(ids, id)
 		}

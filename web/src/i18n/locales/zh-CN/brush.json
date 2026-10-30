@@ -68,9 +68,9 @@
     "newSite": "新站点",
     "sharedSiteHelp": "和这个站点的其他订阅共用站点地址、Cookie 和上传上限，这里修改会一起生效。",
     "instance": "实例",
-    "autoInstance": "自动（选最空闲的）",
-    "autoInstanceHelp": "每个种子都放进当前最空闲的实例：比较各实例底线以上的剩余空间和上传繁忙程度。",
-    "fixedInstanceHelp": "只放进这个实例；它放不下时跳过这个种子，不会改投其他实例。",
+    "instances": "下载器",
+    "instancesHelp": "每个种子放进勾选的下载器里当前最空闲的一台：比较底线以上的剩余空间和上传繁忙程度。勾选的都放不下时跳过这个种子，不会放进没勾选的下载器。",
+    "allInstances": "全部",
     "minSize": "最小大小（GB）",
     "maxSize": "最大大小（GB）",
     "interval": "拉取间隔（秒）",
@@ -125,11 +125,12 @@
   },
   "today": {
     "title": "今日流量",
-    "description": "{{day}} 零点起各实例的上传和下载，按服务器时区计算，每分钟更新。",
+    "description": "{{day}} 零点起各实例的上传和下载，按服务器时区计算，总量每分钟更新。",
     "uploaded": "上传",
     "downloaded": "下载",
-    "averageUpload": "今日平均上传",
-    "mbps": "{{value}} Mbps",
+    "uploadSpeed": "当前上传速度",
+    "downloadSpeed": "当前下载速度",
+    "mbs": "{{value}} MB/s",
     "instance": "实例"
   },
   "entryStatus": {

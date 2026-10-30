@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -23,16 +25,49 @@ type Feed struct {
 	FreeOnly        bool   `json:"freeOnly"`
 	SkipHR          bool   `json:"skipHr"`
 	WindowSeconds   int    `json:"windowSeconds"`
-	InstanceID      int    `json:"instanceId"`
-	Enabled         bool   `json:"enabled"`
-	ETag            string `json:"-"`
-	LastModified    string `json:"-"`
-	LastFetchAt     int64  `json:"lastFetchAt"`
-	LastError       string `json:"lastError"`
+	// InstanceIDs are the instances placement may choose from, in ascending order.
+	// Empty means every instance with a floor, which only feeds saved before
+	// instances could be picked one by one still have.
+	InstanceIDs  []int  `json:"instanceIds"`
+	Enabled      bool   `json:"enabled"`
+	ETag         string `json:"-"`
+	LastModified string `json:"-"`
+	LastFetchAt  int64  `json:"lastFetchAt"`
+	LastError    string `json:"lastError"`
 }
 
 const feedColumns = `id, site_id, name, url_encrypted, interval_seconds, min_size_bytes, max_size_bytes,
-	free_only, skip_hr, window_seconds, instance_id, enabled, etag, last_modified, last_fetch_at, last_error`
+	free_only, skip_hr, window_seconds, instance_id, instance_ids, enabled, etag, last_modified, last_fetch_at, last_error`
+
+// formatInstanceIDs stores a feed's instances as a comma-separated list.
+func formatInstanceIDs(ids []int) string {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = strconv.Itoa(id)
+	}
+	return strings.Join(parts, ",")
+}
+
+// parseInstanceIDs reads instance_ids, falling back to the single instance_id
+// column feeds used before; 0 there meant every instance.
+func parseInstanceIDs(list string, legacy int) ([]int, error) {
+	if list == "" {
+		if legacy > 0 {
+			return []int{legacy}, nil
+		}
+		return []int{}, nil
+	}
+	parts := strings.Split(list, ",")
+	ids := make([]int, 0, len(parts))
+	for _, p := range parts {
+		id, err := strconv.Atoi(p)
+		if err != nil {
+			return nil, fmt.Errorf("instance ids %q: %w", list, err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
 
 func (s *Store) ListFeeds(ctx context.Context) ([]Feed, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT "+feedColumns+" FROM brush_feeds ORDER BY id")
@@ -44,13 +79,17 @@ func (s *Store) ListFeeds(ctx context.Context) ([]Feed, error) {
 	var feeds []Feed
 	for rows.Next() {
 		var f Feed
-		var sealed string
-		var freeOnly, skipHR, enabled int
+		var sealed, instanceIDs string
+		var freeOnly, skipHR, enabled, legacyInstance int
 		if err := rows.Scan(&f.ID, &f.SiteID, &f.Name, &sealed, &f.IntervalSeconds, &f.MinSizeBytes, &f.MaxSizeBytes,
-			&freeOnly, &skipHR, &f.WindowSeconds, &f.InstanceID, &enabled, &f.ETag, &f.LastModified, &f.LastFetchAt, &f.LastError); err != nil {
+			&freeOnly, &skipHR, &f.WindowSeconds, &legacyInstance, &instanceIDs, &enabled, &f.ETag, &f.LastModified,
+			&f.LastFetchAt, &f.LastError); err != nil {
 			return nil, fmt.Errorf("scan brush feed: %w", err)
 		}
 		f.FreeOnly, f.SkipHR, f.Enabled = freeOnly == 1, skipHR == 1, enabled == 1
+		if f.InstanceIDs, err = parseInstanceIDs(instanceIDs, legacyInstance); err != nil {
+			return nil, fmt.Errorf("brush feed %d: %w", f.ID, err)
+		}
 		if f.URL, err = s.open(sealed, aadFeedURL); err != nil {
 			return nil, fmt.Errorf("decrypt url of brush feed %d: %w", f.ID, err)
 		}
@@ -79,10 +118,10 @@ func (s *Store) CreateFeed(ctx context.Context, f Feed) (int64, error) {
 	}
 	var id int64
 	err = s.db.QueryRowContext(ctx, `INSERT INTO brush_feeds (site_id, name, url_encrypted, interval_seconds, min_size_bytes,
-		max_size_bytes, free_only, skip_hr, window_seconds, instance_id, enabled, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		max_size_bytes, free_only, skip_hr, window_seconds, instance_id, instance_ids, enabled, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?) RETURNING id`,
 		f.SiteID, f.Name, sealed, f.IntervalSeconds, f.MinSizeBytes, f.MaxSizeBytes, boolInt(f.FreeOnly), boolInt(f.SkipHR),
-		f.WindowSeconds, f.InstanceID, boolInt(f.Enabled), time.Now().Unix()).Scan(&id)
+		f.WindowSeconds, formatInstanceIDs(f.InstanceIDs), boolInt(f.Enabled), time.Now().Unix()).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create brush feed: %w", err)
 	}
@@ -93,9 +132,9 @@ func (s *Store) CreateFeed(ctx context.Context, f Feed) (int64, error) {
 // so the API never sends it back to the browser.
 func (s *Store) UpdateFeed(ctx context.Context, f Feed) error {
 	set := `site_id = ?, name = ?, interval_seconds = ?, min_size_bytes = ?, max_size_bytes = ?, free_only = ?,
-		skip_hr = ?, window_seconds = ?, instance_id = ?, enabled = ?`
+		skip_hr = ?, window_seconds = ?, instance_id = 0, instance_ids = ?, enabled = ?`
 	args := []any{f.SiteID, f.Name, f.IntervalSeconds, f.MinSizeBytes, f.MaxSizeBytes, boolInt(f.FreeOnly),
-		boolInt(f.SkipHR), f.WindowSeconds, f.InstanceID, boolInt(f.Enabled)}
+		boolInt(f.SkipHR), f.WindowSeconds, formatInstanceIDs(f.InstanceIDs), boolInt(f.Enabled)}
 	if f.URL != "" {
 		sealed, err := s.seal(f.URL, aadFeedURL)
 		if err != nil {

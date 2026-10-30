@@ -45,11 +45,11 @@ func (s *Service) sampleTransfers(ctx context.Context) {
 		if _, err := s.qui.Torrents(ctx, inst.ID); err != nil {
 			continue
 		}
-		dl, ul, ok, err := s.qui.AlltimeTransfer(ctx, inst.ID)
+		tr, ok, err := s.qui.Transfer(ctx, inst.ID)
 		if err != nil || !ok {
 			continue
 		}
-		if err := s.store.RecordTransfer(ctx, inst.ID, s.now().Local(), dl, ul); err != nil {
+		if err := s.store.RecordTransfer(ctx, inst.ID, s.now().Local(), tr.AlltimeDL, tr.AlltimeUL); err != nil {
 			s.log.Error().Err(err).Int("instance", inst.ID).Msg("record daily transfer")
 		}
 	}
@@ -60,16 +60,19 @@ type transferInstance struct {
 	Name       string `json:"name"`
 	Uploaded   int64  `json:"uploaded"`
 	Downloaded int64  `json:"downloaded"`
+	// UploadSpeed and DownloadSpeed are qBittorrent's current speeds; nil when the
+	// instance cannot be read now.
+	UploadSpeed   *int64 `json:"uploadSpeed"`
+	DownloadSpeed *int64 `json:"downloadSpeed"`
 }
 
 type transferResponse struct {
-	Day string `json:"day"`
-	// Elapsed is how many seconds of the day have passed, for the day's average speed.
-	Elapsed   int64              `json:"elapsed"`
+	Day       string             `json:"day"`
 	Instances []transferInstance `json:"instances"`
 }
 
-// handleTransferToday returns today's totals for every instance that has them.
+// handleTransferToday returns today's totals for every instance that has them,
+// with each instance's current speeds.
 func (s *Service) handleTransferToday(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	now := s.now().Local()
@@ -89,14 +92,20 @@ func (s *Service) handleTransferToday(w http.ResponseWriter, r *http.Request) {
 		names[inst.ID] = inst.Name
 	}
 
-	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	resp := transferResponse{Day: day, Elapsed: int64(now.Sub(midnight) / time.Second), Instances: []transferInstance{}}
+	resp := transferResponse{Day: day, Instances: []transferInstance{}}
 	for _, t := range totals {
 		name, ok := names[t.InstanceID]
 		if !ok {
 			continue
 		}
-		resp.Instances = append(resp.Instances, transferInstance{ID: t.InstanceID, Name: name, Uploaded: t.Uploaded, Downloaded: t.Downloaded})
+		inst := transferInstance{ID: t.InstanceID, Name: name, Uploaded: t.Uploaded, Downloaded: t.Downloaded}
+		// Reading the torrents refreshes a server state older than qui's 2 second cache.
+		if _, err := s.qui.Torrents(ctx, t.InstanceID); err == nil {
+			if tr, ok, err := s.qui.Transfer(ctx, t.InstanceID); err == nil && ok {
+				inst.UploadSpeed, inst.DownloadSpeed = &tr.ULSpeed, &tr.DLSpeed
+			}
+		}
+		resp.Instances = append(resp.Instances, inst)
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

@@ -68,9 +68,9 @@
     "sharedSiteHelp": "Shares the address, cookie and upload limit with the site's other feeds; changes here apply to all of them.",
     "site": "Site",
     "instance": "Instance",
-    "autoInstance": "Automatic (least busy)",
-    "autoInstanceHelp": "Each torrent goes to the least busy instance, comparing spare space above the floor and how busy the upload is.",
-    "fixedInstanceHelp": "Only this instance. When it cannot take a torrent, the torrent is skipped, never sent elsewhere.",
+    "instances": "Downloaders",
+    "instancesHelp": "Each torrent goes to the least busy checked downloader, comparing spare space above the floor and how busy the upload is. When none of them can take it, the torrent is skipped, never sent to an unchecked one.",
+    "allInstances": "All",
     "minSize": "Minimum size (GB)",
     "maxSize": "Maximum size (GB)",
     "interval": "Poll every (seconds)",
@@ -125,11 +125,12 @@
   },
   "today": {
     "title": "Today's transfer",
-    "description": "Upload and download of each instance since midnight on {{day}}, in the server's time zone, updated every minute.",
+    "description": "Upload and download of each instance since midnight on {{day}}, in the server's time zone. Totals update every minute.",
     "uploaded": "Uploaded",
     "downloaded": "Downloaded",
-    "averageUpload": "Average upload today",
-    "mbps": "{{value}} Mbps",
+    "uploadSpeed": "Upload speed",
+    "downloadSpeed": "Download speed",
+    "mbs": "{{value}} MB/s",
     "instance": "Instance"
   },
   "entryStatus": {
