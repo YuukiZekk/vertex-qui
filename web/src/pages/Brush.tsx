@@ -5,6 +5,7 @@
 
 import { BrushFeedsCard } from "@/components/brush/BrushFeedsCard"
 import { BrushHistoryCard } from "@/components/brush/BrushHistoryCard"
+import { BrushReaperCard } from "@/components/brush/BrushReaperCard"
 import { BrushStatusCard } from "@/components/brush/BrushStatusCard"
 import { BrushValuesCard } from "@/components/brush/BrushValuesCard"
 import { useTranslation } from "react-i18next"
@@ -21,6 +22,7 @@ export function Brush() {
       <BrushStatusCard />
       <BrushFeedsCard />
       <BrushValuesCard />
+      <BrushReaperCard />
       <BrushHistoryCard />
     </div>
   )

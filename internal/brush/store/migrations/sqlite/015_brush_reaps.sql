@@ -1,0 +1,23 @@
+CREATE TABLE brush_reaps (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	instance_id INTEGER NOT NULL,
+	info_hash TEXT NOT NULL,
+	name TEXT NOT NULL,
+	size_bytes BIGINT NOT NULL,
+	reason TEXT NOT NULL,
+	executed INTEGER NOT NULL DEFAULT 0,
+	first_at BIGINT NOT NULL,
+	last_at BIGINT NOT NULL,
+	rounds INTEGER NOT NULL,
+	age_seconds BIGINT NOT NULL,
+	predicted BIGINT,
+	density DOUBLE PRECISION,
+	replacement DOUBLE PRECISION,
+	committed BIGINT NOT NULL,
+	need BIGINT NOT NULL,
+	floor_bytes BIGINT NOT NULL,
+	uploaded_first BIGINT NOT NULL,
+	uploaded_last BIGINT NOT NULL,
+	measured_at BIGINT NOT NULL,
+	gone INTEGER NOT NULL DEFAULT 0
+)

@@ -156,6 +156,14 @@ func (v *valueTracker) values(now time.Time) []torrentValue {
 	return out
 }
 
+// fresh reports whether the instance was read recently enough to describe it now.
+func (v *valueTracker) fresh(instanceID int, now time.Time) bool {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	at, read := v.readAt[instanceID]
+	return read && now.Sub(at) <= snapshotFresh
+}
+
 // lookup reports whether the instance's last read is fresh, and the torrent in it.
 func (v *valueTracker) lookup(instanceID int, hash string, now time.Time) (qbt.Torrent, bool, bool) {
 	v.mu.Lock()

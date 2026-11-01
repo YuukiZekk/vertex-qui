@@ -47,6 +47,7 @@ func (s *Service) Routes(r chi.Router) {
 	r.Get("/entries", s.handleEntries)
 	r.Get("/transfer/today", s.handleTransferToday)
 	r.Get("/values", s.handleValues)
+	r.Get("/reaper", s.handleReaper)
 }
 
 type instanceStatus struct {

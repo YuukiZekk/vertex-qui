@@ -43,6 +43,7 @@ type Service struct {
 	now    func() time.Time
 	meter  *uploadMeter
 	values *valueTracker
+	reaper *reaper
 	// lastPrediction is only touched by the sampler goroutine.
 	lastPrediction time.Time
 
@@ -66,6 +67,7 @@ func New(ctx context.Context, db dbinterface.Querier, cipher *models.CredentialC
 		now:       time.Now,
 		meter:     newUploadMeter(),
 		values:    newValueTracker(),
+		reaper:    newReaper(),
 		baselined: make(map[int64]bool),
 		polling:   make(map[int64]bool),
 		clients:   make(map[int64]siteClientEntry),
@@ -80,5 +82,6 @@ func (s *Service) Start(ctx context.Context) error {
 	go s.run(ctx)
 	go s.runSampler(ctx)
 	go s.runTransferSampler(ctx)
+	go s.runReaper(ctx)
 	return nil
 }
