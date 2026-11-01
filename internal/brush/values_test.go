@@ -116,3 +116,29 @@ func TestPredictionsAreRecordedAndResolved(t *testing.T) {
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT outcome FROM brush_predictions WHERE info_hash = 'c'").Scan(&outcome))
 	require.Equal(t, store.OutcomeLost, outcome)
 }
+
+// A prediction checked long after its horizon, as when qui was stopped meanwhile, is
+// given up even though the torrent is there: its upload since covers far more than
+// the horizon.
+func TestLatePredictionIsLost(t *testing.T) {
+	ctx := t.Context()
+	db := testdb.NewMigratedSQLite(t, t.Name())
+	cipher, err := models.NewCredentialCipher(make([]byte, 32))
+	require.NoError(t, err)
+	svc, err := New(ctx, db, cipher, &fakeQB{})
+	require.NoError(t, err)
+
+	made := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, svc.store.InsertPrediction(ctx, store.Prediction{InstanceID: 1, InfoHash: "a", MadeAt: made.Unix(),
+		HorizonSeconds: int64(model.Horizon / time.Second), Predicted: 100}))
+
+	restart := made.Add(36 * time.Hour)
+	svc.values.observe(1, restart, []qbt.Torrent{brushTorrent("a", 1<<40, made.Add(-time.Hour))})
+	svc.resolvePredictions(ctx, restart)
+
+	var outcome string
+	var actual int64
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT outcome, actual FROM brush_predictions WHERE info_hash = 'a'").Scan(&outcome, &actual))
+	require.Equal(t, store.OutcomeLost, outcome)
+	require.Zero(t, actual)
+}

@@ -22,9 +22,10 @@ const (
 	// checked later. One every 10 minutes is enough to learn from and keeps the table
 	// small.
 	predictEvery = 10 * time.Minute
-	// lostAfter is how long past its horizon a prediction waits for an instance that
-	// cannot be read before it is given up.
-	lostAfter = 30 * time.Minute
+	// lostAfter is how long past its horizon a prediction can still be checked. Later,
+	// as after qui was stopped, the torrent's upload since covers far more than the
+	// horizon, so the prediction is given up instead.
+	lostAfter = 5 * time.Minute
 	// snapshotFresh is how old an instance's last read may be and still say whether
 	// a torrent is there.
 	snapshotFresh = time.Minute
@@ -219,13 +220,13 @@ func (s *Service) resolvePredictions(ctx context.Context, now time.Time) {
 		var actual int64
 		outcome := ""
 		switch {
+		case now.Unix() > p.MadeAt+p.HorizonSeconds+int64(lostAfter/time.Second):
+			outcome = store.OutcomeLost
 		case fresh && present:
 			// A counter that went down, as after a qBittorrent crash, counts as nothing.
 			actual, outcome = max(0, t.Uploaded-p.Uploaded), store.OutcomeResolved
 		case fresh:
 			outcome = store.OutcomeGone
-		case now.Unix() > p.MadeAt+p.HorizonSeconds+int64(lostAfter/time.Second):
-			outcome = store.OutcomeLost
 		default:
 			continue
 		}
