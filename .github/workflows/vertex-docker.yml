@@ -1,8 +1,8 @@
 name: Vertex Docker Hub
 
 # Builds the vertex-qui image and pushes it to Docker Hub. It has its own file and
-# runs on the vertex branch and vertex-v* tags only, so upstream's release.yml, which
-# runs on main, develop and v* tags, stays untouched and merges cleanly.
+# runs on the main branch and vertex-v* tags. Upstream's release.yml stays untouched,
+# so merges from upstream stay clean.
 #
 # Repository settings it needs:
 #   variable DOCKERHUB_USERNAME  the Docker Hub account; the image is <account>/vertex-qui
@@ -11,7 +11,7 @@ name: Vertex Docker Hub
 on:
   push:
     branches:
-      - "vertex"
+      - "main"
     tags:
       - "vertex-v*"
     paths-ignore:
@@ -128,7 +128,7 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # latest and vertex follow the branch, sha-<commit> pins one build, and a
+      # latest and main follow the branch, sha-<commit> pins one build, and a
       # vertex-v1.2.3 tag also gives 1.2.3 and 1.2.
       - name: Extract metadata
         id: meta
@@ -136,7 +136,7 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/vertex' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=ref,event=branch
             type=sha,prefix=sha-
             type=match,pattern=vertex-v(\d+\.\d+\.\d+.*),group=1
