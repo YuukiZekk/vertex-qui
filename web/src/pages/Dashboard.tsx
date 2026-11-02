@@ -4,7 +4,8 @@
  */
 
 import { isStreamUsable } from "@/lib/sync-stream-state"
-import { TodayTransferCard } from "@/components/brush/TodayTransferCard"
+import { TodayCells, TodayHeadCells, TodayHeaderStats } from "@/components/brush/TodayStats"
+import { useTodayMetrics, useTodayTransfer } from "@/components/brush/useTodayTransfer"
 import { InstanceErrorDisplay } from "@/components/instances/InstanceErrorDisplay"
 import { InstanceSettingsButton } from "@/components/instances/InstanceSettingsButton"
 import { MigrationHint } from "@/components/instances/MigrationHint"
@@ -1328,6 +1329,9 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
   const setAccordionValue = (value: string) => onCollapsedChange(value === "")
   // mobile detail drawer, keyed by id so the numbers stay live while it is open
   const [detailsInstanceId, setDetailsInstanceId] = useState<number | null>(null)
+  // vertex-qui: today's transfer from the brush module, as extra figures and columns
+  const today = useTodayTransfer()
+  const todayMetrics = useTodayMetrics()
 
   const globalStats = useMemo(() => {
     // Calculate server stats
@@ -1432,6 +1436,7 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
                   </span>
                 </div>
               )}
+              <TodayHeaderStats today={today} />
             </div>
           </div>
         </AccordionTrigger>
@@ -1495,6 +1500,7 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
                 </TableHead>
                 <TableHead className="text-center">{t("serverStats.tableHeaders.ratio")}</TableHead>
                 <TableHead className="text-center">{t("serverStats.tableHeaders.peers")}</TableHead>
+                <TodayHeadCells today={today} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1523,6 +1529,7 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
                     <TableCell className="text-center font-semibold">
                       {serverState?.total_peer_connections ?? "-"}
                     </TableCell>
+                    <TodayCells today={today} instanceId={instance.id} />
                   </TableRow>
                 )
               })}
@@ -1544,6 +1551,7 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
               { label: t("serverStats.tableHeaders.uploadedSession"), value: formatBytes(serverState?.up_info_data || 0) },
               { label: t("serverStats.tableHeaders.ratio"), value: instanceRatio.toFixed(2), color: getRatioColor(instanceRatio) },
               { label: t("serverStats.tableHeaders.peers"), value: serverState?.total_peer_connections !== undefined ? String(serverState.total_peer_connections || 0) : "-" },
+              ...todayMetrics(today, instance.id),
             ]
 
             return (
@@ -3212,7 +3220,6 @@ export function Dashboard() {
         <div className="space-y-6">
           {hasActiveInstances ? (
             <>
-              <TodayTransferCard />
               {visibleSections.map((sectionId) => {
                 switch (sectionId) {
                   case "server-stats":

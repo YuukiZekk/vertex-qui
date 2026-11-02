@@ -157,16 +157,14 @@
     "info": "空间不够放新种时，刷流删掉价值最低的种子，删除前先向 tracker 汇报（低于安全底线时为了尽快腾出空间，跳过汇报）。只删刷流添加的种子；关闭刷流后不再删除。记录保留 30 天。"
   },
   "today": {
-    "title": "今日流量",
-    "uploaded": "上传",
-    "downloaded": "下载",
     "uploadSpeed": "当前上传速度",
-    "downloadSpeed": "当前下载速度",
-    "averageUpload": "平均上传速度",
     "uploadSpeedShort": "当前上传",
     "averageUploadShort": "今日平均上传",
     "mbs": "{{value}} MB/s",
-    "instance": "实例"
+    "todayShort": "今日",
+    "todayUploaded": "今日上传",
+    "todayDownloaded": "今日下载",
+    "currentSpeed": "当前速度"
   },
   "entryStatus": {
     "pending": "检查中",

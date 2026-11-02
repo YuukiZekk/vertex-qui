@@ -157,16 +157,14 @@
     "info": "When new torrents need the space, brush deletes the torrents that earn the least, announcing them to the tracker first, except below the safety floor, where space comes first. Only torrents brush added are deleted, and nothing is deleted while brushing is off. Kept for 30 days."
   },
   "today": {
-    "title": "Today's transfer",
-    "uploaded": "Uploaded",
-    "downloaded": "Downloaded",
     "uploadSpeed": "Upload speed",
-    "downloadSpeed": "Download speed",
-    "averageUpload": "Average upload",
     "uploadSpeedShort": "Now",
-    "averageUploadShort": "Today's average",
+    "averageUploadShort": "Average today",
     "mbs": "{{value}} MB/s",
-    "instance": "Instance"
+    "todayShort": "Today",
+    "todayUploaded": "Uploaded today",
+    "todayDownloaded": "Downloaded today",
+    "currentSpeed": "Speed now"
   },
   "entryStatus": {
     "pending": "Checking",
