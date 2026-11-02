@@ -33,6 +33,7 @@ type qbittorrent interface {
 	Pause(ctx context.Context, instanceID int, hashes []string) error
 	Resume(ctx context.Context, instanceID int, hashes []string) error
 	DeleteTorrent(ctx context.Context, instanceID int, hash string, withFiles bool) error
+	DiskTotal(ctx context.Context, instanceID int, path string) (int64, bool)
 }
 
 type siteClientEntry struct {

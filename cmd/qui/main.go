@@ -771,7 +771,7 @@ func (app *Application) runServer() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize brush credential cipher")
 	}
-	brushService, err := brush.New(context.Background(), db, brushCipher, quiadapter.New(instanceStore, syncManager))
+	brushService, err := brush.New(context.Background(), db, brushCipher, quiadapter.New(instanceStore, syncManager).WithFilesystem(backendPool))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize brush service")
 	}

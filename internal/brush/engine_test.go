@@ -41,6 +41,7 @@ type fakeQB struct {
 	listed      map[int][]qbt.Torrent
 	reannounced []string
 	paused      []string
+	disks       map[int]int64
 	resumed     []string
 	deleted     []fakeDeletion
 }
@@ -78,6 +79,14 @@ func (f *fakeQB) Resume(_ context.Context, _ int, hashes []string) error {
 	defer f.mu.Unlock()
 	f.resumed = append(f.resumed, hashes...)
 	return nil
+}
+
+// disks is what DiskTotal reports per instance; an instance missing has no access.
+func (f *fakeQB) DiskTotal(_ context.Context, id int, _ string) (int64, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	total, ok := f.disks[id]
+	return total, ok
 }
 
 func (f *fakeQB) Reannounce(_ context.Context, _ int, hashes []string) error {

@@ -28,10 +28,29 @@ func estimateTotalSpace(free int64, torrents []qbt.Torrent) int64 {
 	return total
 }
 
-// defaultFloor is defaultFloorShare of the estimated disk, rounded up to a whole GiB.
-func defaultFloor(free int64, torrents []qbt.Torrent) int64 {
-	floor := int64(float64(estimateTotalSpace(free, torrents)) * defaultFloorShare)
+// floorOf is defaultFloorShare of a disk, rounded up to a whole GiB.
+func floorOf(total int64) int64 {
+	floor := int64(float64(total) * defaultFloorShare)
 	return (floor + 1<<30 - 1) / (1 << 30) * (1 << 30)
+}
+
+// defaultFloor is defaultFloorShare of the estimated disk.
+func defaultFloor(free int64, torrents []qbt.Torrent) int64 {
+	return floorOf(estimateTotalSpace(free, torrents))
+}
+
+// mainSavePath is the save path most of the instance's torrents use, where brush
+// reads the disk size.
+func mainSavePath(torrents []qbt.Torrent) string {
+	counts := make(map[string]int)
+	best := ""
+	for _, t := range torrents {
+		counts[t.SavePath]++
+		if t.SavePath != "" && counts[t.SavePath] > counts[best] {
+			best = t.SavePath
+		}
+	}
+	return best
 }
 
 // ensureFloors gives every active instance that has no safety floor yet the
@@ -63,12 +82,18 @@ func (s *Service) ensureFloors(ctx context.Context, now time.Time) {
 		if err != nil {
 			continue
 		}
-		floor := defaultFloor(free, torrents)
+		// The disk size read through qui's filesystem access beats the estimate,
+		// which misses files outside qBittorrent.
+		total, measured := s.qui.DiskTotal(ctx, inst.ID, mainSavePath(torrents))
+		if !measured {
+			total = estimateTotalSpace(free, torrents)
+		}
+		floor := floorOf(total)
 		if err := s.store.SetFloor(ctx, inst.ID, floor); err != nil {
 			s.log.Error().Err(err).Int("instance", inst.ID).Msg("set default safety floor")
 			continue
 		}
-		s.log.Info().Int("instance", inst.ID).Int64("floor", floor).
-			Int64("estimatedTotal", estimateTotalSpace(free, torrents)).Msg("set default safety floor")
+		s.log.Info().Int("instance", inst.ID).Int64("floor", floor).Int64("total", total).
+			Bool("measured", measured).Msg("set default safety floor")
 	}
 }

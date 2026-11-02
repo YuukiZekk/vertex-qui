@@ -52,3 +52,23 @@ func TestEnsureFloors(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2*gib, configs[2].FloorBytes, "1.2 GiB rounds up")
 }
+
+// An instance whose disk qui can read gets 10% of the real disk, which the
+// estimate from qBittorrent would put lower when other files share it.
+func TestEnsureFloorsReadsTheDisk(t *testing.T) {
+	ctx := t.Context()
+	db := testdb.NewMigratedSQLite(t, t.Name())
+	cipher, err := models.NewCredentialCipher(make([]byte, 32))
+	require.NoError(t, err)
+	qb := &fakeQB{
+		free:   map[int]int64{1: 300 * gib},
+		listed: map[int][]qbt.Torrent{1: {{Hash: "a", Completed: 100 * gib, SavePath: "/data"}}},
+		disks:  map[int]int64{1: 2000 * gib},
+	}
+	svc, err := New(ctx, db, cipher, qb)
+	require.NoError(t, err)
+	svc.ensureFloors(ctx, time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC))
+	configs, err := svc.store.InstanceConfigs(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 200*gib, configs[1].FloorBytes, "not 40 GiB from 300 free + 100 used")
+}

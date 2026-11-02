@@ -11,6 +11,7 @@ import (
 
 	qbt "github.com/autobrr/go-qbittorrent"
 
+	"github.com/autobrr/qui/internal/fsops"
 	"github.com/autobrr/qui/internal/models"
 	"github.com/autobrr/qui/internal/qbittorrent"
 	"github.com/autobrr/qui/internal/services/notifications"
@@ -25,6 +26,7 @@ type Instance struct {
 type Adapter struct {
 	instances *models.InstanceStore
 	sync      *qbittorrent.SyncManager
+	pool      *fsops.Pool
 }
 
 func New(instances *models.InstanceStore, sync *qbittorrent.SyncManager) *Adapter {
@@ -149,4 +151,28 @@ func (n *Notifier) Alert(ctx context.Context, instanceID int, title, message str
 		return
 	}
 	n.service.Notify(ctx, notifications.Event{Type: notifications.EventBrushAlert, Title: title, Message: message, InstanceID: instanceID})
+}
+
+// WithFilesystem lets the adapter read disk sizes through qui's filesystem
+// backends, for instances that have filesystem access.
+func (a *Adapter) WithFilesystem(pool *fsops.Pool) *Adapter {
+	a.pool = pool
+	return a
+}
+
+// DiskTotal is the size of the disk holding path on the instance, false when the
+// instance has no filesystem access in qui or the disk cannot be read.
+func (a *Adapter) DiskTotal(ctx context.Context, instanceID int, path string) (int64, bool) {
+	if a.pool == nil || path == "" {
+		return 0, false
+	}
+	backend, _, err := a.pool.Require(ctx, instanceID, models.CapabilityRead)
+	if err != nil {
+		return 0, false
+	}
+	result, err := backend.Statfs(ctx, path)
+	if err != nil || result == nil || result.BytesTotal <= 0 {
+		return 0, false
+	}
+	return result.BytesTotal, true
 }
