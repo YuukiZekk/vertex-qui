@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -13,10 +12,12 @@ import { api } from "@/lib/api"
 import { formatBytes } from "@/lib/utils"
 import type { BrushSite } from "@/types/brush"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronUp, Pencil, Plug, Trash2 } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronUp, Pencil, Plug, Plus, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { EmptyState, SectionCard, StateBadge } from "./section"
+import { sectionHeaderRowClass, sectionTableClass } from "./sectionStyles"
 import { bytesPerSecondToMBs, mbsToBytesPerSecond } from "./units"
 
 type SortKey = "name" | "todayUploaded" | "todayDownloaded" | "uploadSpeed" | "torrents" | "sizeBytes"
@@ -67,113 +68,113 @@ export function BrushSitesCard() {
       </button>
     </TableHead>
   )
+  const totals = (
+    <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <span>{t("sitesPage.count", { count: list.length })}</span>
+      <span className="flex items-center gap-1"><ChevronUp className="h-3.5 w-3.5" />{formatBytes(sum((s) => s.todayUploaded))}</span>
+      <span className="flex items-center gap-1"><ChevronDown className="h-3.5 w-3.5" />{formatBytes(sum((s) => s.todayDownloaded))}</span>
+      <span>{t("today.uploadSpeedShort")} {speed(sum((s) => s.uploadSpeed))}</span>
+    </span>
+  )
 
   return (
-    <div className="rounded-lg border bg-card">
-      <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <h3 className="text-base font-medium">{t("sitesPage.today")}</h3>
-          <span className="text-xs text-muted-foreground">{t("sitesPage.count", { count: list.length })}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            <span className="text-lg font-semibold">{formatBytes(sum((s) => s.todayUploaded))}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            <span className="text-lg font-semibold">{formatBytes(sum((s) => s.todayDownloaded))}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">{t("today.uploadSpeedShort")}</span>
-            <span className="text-lg font-semibold tabular-nums">{speed(sum((s) => s.uploadSpeed))}</span>
-          </div>
-          <Button size="sm" onClick={() => setEditing("new")}>{t("sitesPage.add")}</Button>
-        </div>
-      </div>
-
-      {/* Mobile row list */}
-      <div className="sm:hidden divide-y border-t">
-        {sorted.map((s) => (
-          <div key={s.id} className="flex items-center gap-2 px-4 py-2">
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium">{s.name}</div>
-              <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground tabular-nums">
-                <span className="flex items-center gap-0.5"><ChevronUp className="h-3 w-3" />{formatBytes(s.todayUploaded)}</span>
-                <span className="flex items-center gap-0.5"><ChevronDown className="h-3 w-3" />{formatBytes(s.todayDownloaded)}</span>
-                <span>{speed(s.uploadSpeed)}</span>
-                <span>{t("sitesPage.torrentsValue", { count: s.torrents })}</span>
-              </div>
-            </div>
-            <Button variant="ghost" size="icon" className="size-11" aria-label={t("actions.edit")} onClick={() => setEditing(s)}>
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
-      </div>
-
-      <Table className="hidden sm:table">
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            {header("name", t("sitesPage.site"))}
-            <TableHead>{t("sitesPage.rule")}</TableHead>
-            {header("todayUploaded", t("sitesPage.todayUploaded"))}
-            {header("todayDownloaded", t("sitesPage.todayDownloaded"))}
-            {header("uploadSpeed", t("today.uploadSpeed"))}
-            {header("torrents", t("sitesPage.torrents"))}
-            {header("sizeBytes", t("sitesPage.size"))}
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {list.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={8} className="text-muted-foreground">{t("sitesPage.empty")}</TableCell>
-            </TableRow>
-          )}
-          {sorted.map((s) => (
-            <TableRow key={s.id}>
-              <TableCell>
-                <div className="font-medium">{s.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {s.baseUrl}
-                  {!s.hasCookie && <span className="ml-2 text-destructive">{t("sites.cookieMissing")}</span>}
-                  {s.torrentUploadLimit > 0 && <span className="ml-2">{t("sites.uploadLimitValue", { value: bytesPerSecondToMBs(s.torrentUploadLimit) })}</span>}
+    <SectionCard
+      title={t("sitesPage.today")}
+      description={totals}
+      info={t("sitesPage.footnote")}
+      actions={(
+        <Button variant="outline" size="sm" onClick={() => setEditing("new")}>
+          <Plus className="h-4 w-4 mr-2" />
+          {t("sitesPage.add")}
+        </Button>
+      )}
+    >
+      {sites?.length === 0 && <EmptyState>{t("sitesPage.empty")}</EmptyState>}
+      {list.length > 0 && (
+        <>
+          {/* Mobile row list */}
+          <div className="sm:hidden divide-y">
+            {sorted.map((s) => (
+              <div key={s.id} className="flex items-center gap-2 px-6 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{s.name}</div>
+                  <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground tabular-nums">
+                    <span className="flex items-center gap-0.5"><ChevronUp className="h-3 w-3" />{formatBytes(s.todayUploaded)}</span>
+                    <span className="flex items-center gap-0.5"><ChevronDown className="h-3 w-3" />{formatBytes(s.todayDownloaded)}</span>
+                    <span>{speed(s.uploadSpeed)}</span>
+                    <span>{t("sitesPage.torrentsValue", { count: s.torrents })}</span>
+                  </div>
                 </div>
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline">{s.rule}</Badge>
-                <div className="mt-1 text-xs text-muted-foreground">{t("sitesPage.feedsValue", { count: s.feeds })}</div>
-              </TableCell>
-              <TableCell className="text-right font-semibold">{formatBytes(s.todayUploaded)}</TableCell>
-              <TableCell className="text-right font-semibold">{formatBytes(s.todayDownloaded)}</TableCell>
-              <TableCell className="text-right font-semibold">{speed(s.uploadSpeed)}</TableCell>
-              <TableCell className="text-right font-semibold">{s.torrents}</TableCell>
-              <TableCell className="text-right font-semibold">{formatBytes(s.sizeBytes)}</TableCell>
-              <TableCell className="text-right whitespace-nowrap">
-                <Button variant="ghost" size="icon" title={t("sitesPage.test")} disabled={test.isPending} onClick={() => test.mutate(s)}>
-                  <Plug className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" title={t("actions.edit")} onClick={() => setEditing(s)}>
+                <Button variant="ghost" size="icon" className="size-11" aria-label={t("actions.edit")} onClick={() => setEditing(s)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title={s.feeds > 0 ? t("sitesPage.deleteHasFeeds") : t("actions.delete")}
-                  disabled={s.feeds > 0}
-                  onClick={() => window.confirm(t("sitesPage.confirmDelete", { name: s.name })) && remove.mutate(s)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <p className="border-t px-4 py-3 text-xs text-muted-foreground">{t("sitesPage.footnote")}</p>
+              </div>
+            ))}
+          </div>
+
+          <Table className={`hidden sm:table ${sectionTableClass}`}>
+            <TableHeader>
+              <TableRow className={sectionHeaderRowClass}>
+                {header("name", t("sitesPage.site"))}
+                <TableHead>{t("sitesPage.rule")}</TableHead>
+                {header("todayUploaded", t("sitesPage.todayUploaded"))}
+                {header("todayDownloaded", t("sitesPage.todayDownloaded"))}
+                {header("uploadSpeed", t("today.uploadSpeed"))}
+                {header("torrents", t("sitesPage.torrents"))}
+                {header("sizeBytes", t("sitesPage.size"))}
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{s.name}</span>
+                      {!s.hasCookie && <StateBadge tone="error">{t("sites.cookieMissing")}</StateBadge>}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {s.baseUrl}
+                      {s.torrentUploadLimit > 0 && <span className="ml-2">{t("sites.uploadLimitValue", { value: bytesPerSecondToMBs(s.torrentUploadLimit) })}</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <StateBadge tone="neutral">{s.rule}</StateBadge>
+                      <span className="text-xs text-muted-foreground">{t("sitesPage.feedsValue", { count: s.feeds })}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-semibold">{formatBytes(s.todayUploaded)}</TableCell>
+                  <TableCell className="text-right font-semibold">{formatBytes(s.todayDownloaded)}</TableCell>
+                  <TableCell className="text-right font-semibold">{speed(s.uploadSpeed)}</TableCell>
+                  <TableCell className="text-right font-semibold">{s.torrents}</TableCell>
+                  <TableCell className="text-right font-semibold">{formatBytes(s.sizeBytes)}</TableCell>
+                  <TableCell className="text-right whitespace-nowrap">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" title={t("sitesPage.test")} disabled={test.isPending} onClick={() => test.mutate(s)}>
+                      <Plug className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" title={t("actions.edit")} onClick={() => setEditing(s)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      title={s.feeds > 0 ? t("sitesPage.deleteHasFeeds") : t("actions.delete")}
+                      disabled={s.feeds > 0}
+                      onClick={() => window.confirm(t("sitesPage.confirmDelete", { name: s.name })) && remove.mutate(s)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </>
+      )}
       {editing !== null && <SiteDialog site={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
-    </div>
+    </SectionCard>
   )
 }
 

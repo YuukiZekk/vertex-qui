@@ -4,7 +4,6 @@
  */
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -17,9 +16,12 @@ import { formatBytes } from "@/lib/utils"
 import type { BrushFeed, BrushTestItem } from "@/types/brush"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
+import { FlaskConical, Pencil, Plus, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { EmptyState, SectionCard, StateBadge } from "./section"
+import { sectionHeaderRowClass, sectionTableClass } from "./sectionStyles"
 import { bytesPerSecondToMBs, bytesToGB, gbToBytes } from "./units"
 
 export function BrushFeedsCard() {
@@ -42,20 +44,22 @@ export function BrushFeedsCard() {
   const siteOf = (feed: BrushFeed) => sites?.find((s) => s.id === feed.siteId)
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-1.5">
-            <CardTitle>{t("feeds.title")}</CardTitle>
-            <CardDescription>{t("feeds.description")}</CardDescription>
-          </div>
-          <Button size="sm" className="shrink-0" onClick={() => setEditing("new")}>{t("feeds.add")}</Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
+    <SectionCard
+      title={t("feeds.title")}
+      description={t("feeds.description")}
+      info={t("feeds.info")}
+      actions={(
+        <Button variant="outline" size="sm" onClick={() => setEditing("new")}>
+          <Plus className="h-4 w-4 mr-2" />
+          {t("feeds.add")}
+        </Button>
+      )}
+    >
+      {feeds?.length === 0 && <EmptyState>{t("feeds.empty")}</EmptyState>}
+      {(feeds?.length ?? 0) > 0 && (
+        <Table className={sectionTableClass}>
           <TableHeader>
-            <TableRow>
+            <TableRow className={sectionHeaderRowClass}>
               <TableHead>{t("feeds.name")}</TableHead>
               <TableHead>{t("feeds.site")}</TableHead>
               <TableHead>{t("feeds.instance")}</TableHead>
@@ -66,24 +70,21 @@ export function BrushFeedsCard() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {feeds?.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground">{t("feeds.empty")}</TableCell>
-              </TableRow>
-            )}
             {feeds?.map((feed) => {
               const site = siteOf(feed)
               return (
                 <TableRow key={feed.id}>
                   <TableCell>
-                    {feed.name}
-                    {!feed.enabled && <span className="ml-2 text-xs text-muted-foreground">{t("feeds.off")}</span>}
-                    {site && !site.hasCookie && <span className="ml-2 text-xs text-destructive">{t("sites.cookieMissing")}</span>}
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{feed.name}</span>
+                      {!feed.enabled && <StateBadge tone="neutral">{t("feeds.off")}</StateBadge>}
+                      {site && !site.hasCookie && <StateBadge tone="error">{t("sites.cookieMissing")}</StateBadge>}
+                    </div>
                   </TableCell>
                   <TableCell>{site?.name ?? "-"}</TableCell>
                   <TableCell>{instanceNames(feed.instanceIds)}</TableCell>
                   <TableCell>{t("feeds.sizeRangeValue", { min: bytesToGB(feed.minSizeBytes), max: bytesToGB(feed.maxSizeBytes) })}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-muted-foreground">
                     {[
                       feed.freeOnly && t("feeds.freeOnly"),
                       feed.skipHr && t("feeds.skipHr"),
@@ -101,17 +102,23 @@ export function BrushFeedsCard() {
                         ? new Date(feed.lastFetchAt * 1000).toLocaleTimeString()
                         : t("feeds.neverFetched")}
                   </TableCell>
-                  <TableCell className="text-right space-x-2 whitespace-nowrap">
-                    <Button size="sm" variant="outline" onClick={() => setTesting(feed)}>{t("feeds.test")}</Button>
-                    <Button size="sm" variant="outline" onClick={() => setEditing(feed)}>{t("actions.edit")}</Button>
+                  <TableCell className="text-right whitespace-nowrap">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" title={t("feeds.test")} onClick={() => setTesting(feed)}>
+                      <FlaskConical className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" title={t("actions.edit")} onClick={() => setEditing(feed)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     <Button
-                      size="sm"
-                      variant="outline"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      title={t("actions.delete")}
                       onClick={() => {
                         if (window.confirm(t("feeds.confirmDelete", { name: feed.name }))) remove.mutate(feed)
                       }}
                     >
-                      {t("actions.delete")}
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -119,10 +126,10 @@ export function BrushFeedsCard() {
             })}
           </TableBody>
         </Table>
-      </CardContent>
+      )}
       {editing !== null && <FeedDialog feed={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
       {testing !== null && <TestDialog feed={testing} onClose={() => setTesting(null)} />}
-    </Card>
+    </SectionCard>
   )
 }
 

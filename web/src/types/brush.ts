@@ -132,44 +132,6 @@ export interface BrushTransferInstance {
   downloadSpeed: number | null
 }
 
-export interface BrushTorrentValue {
-  instanceId: number
-  hash: string
-  name: string
-  sizeBytes: number
-  ageSeconds: number
-  uploaded: number
-  leechers: number
-  // Average upload over the last 10 minutes in bytes per second, the predicted
-  // upload over the horizon, and that per GiB; null until 10 minutes have been read.
-  rate: number | null
-  predicted: number | null
-  decay: number | null
-  density: number | null
-}
-
-export interface BrushPredictionCheck {
-  id: number
-  instanceId: number
-  infoHash: string
-  title: string
-  madeAt: number
-  ageSeconds: number
-  sizeBytes: number
-  rate: number
-  predicted: number
-  resolvedAt: number
-  actual: number
-}
-
-export interface BrushValues {
-  horizonSeconds: number
-  torrents: BrushTorrentValue[]
-  // Sums over the predictions checked in the last 24 hours.
-  accuracy: { count: number, predicted: number, actual: number, absError: number, gone: number }
-  recent: BrushPredictionCheck[]
-}
-
 // One torrent brush deleted to make room, with the numbers it decided on.
 export interface BrushDeletion {
   id: number

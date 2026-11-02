@@ -4,7 +4,6 @@
  */
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -16,6 +15,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { EmptyState, SectionCard, StateBadge } from "./section"
+import { sectionHeaderRowClass, sectionTableClass } from "./sectionStyles"
 import { bytesPerSecondToMbps, bytesToGB, gbToBytes, mbpsToBytesPerSecond } from "./units"
 
 export function BrushStatusCard() {
@@ -33,50 +34,40 @@ export function BrushStatusCard() {
   })
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-1.5">
-            <CardTitle>{t("status.title")}</CardTitle>
-            <CardDescription>{t("status.description")}</CardDescription>
-          </div>
-          {data && (
-            <div className="flex shrink-0 items-center gap-2">
-              <Label htmlFor="brush-enabled" className="whitespace-nowrap">{data.enabled ? t("status.enabled") : t("status.disabled")}</Label>
-              <Switch id="brush-enabled" checked={data.enabled} disabled={toggle.isPending} onCheckedChange={(v) => toggle.mutate(v)} />
-            </div>
-          )}
+    <SectionCard
+      title={t("status.title")}
+      description={t("status.description")}
+      info={t("status.info")}
+      actions={data && (
+        <div className="flex items-center gap-2">
+          <Label htmlFor="brush-enabled" className="whitespace-nowrap text-sm">{data.enabled ? t("status.enabled") : t("status.disabled")}</Label>
+          <Switch id="brush-enabled" checked={data.enabled} disabled={toggle.isPending} onCheckedChange={(v) => toggle.mutate(v)} />
         </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading && <p className="text-sm text-muted-foreground">{t("status.loading")}</p>}
-        {error && <p className="text-sm text-destructive">{t("status.loadFailed", { message: error.message })}</p>}
-        {data && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("instances.name")}</TableHead>
-                <TableHead>{t("instances.torrents")}</TableHead>
-                <TableHead>{t("instances.freeSpace")}</TableHead>
-                <TableHead>{t("instances.committed")}</TableHead>
-                <TableHead>{t("instances.floor")}</TableHead>
-                <TableHead>{t("instances.upload")}</TableHead>
-                <TableHead>{t("instances.capacity")}</TableHead>
-                <TableHead>{t("instances.state")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.instances.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-muted-foreground">{t("instances.empty")}</TableCell>
-                </TableRow>
-              )}
-              {data.instances.map((inst) => <InstanceRow key={inst.id} inst={inst} />)}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    >
+      {isLoading && <p className="px-6 py-4 text-sm text-muted-foreground">{t("status.loading")}</p>}
+      {error && <p className="px-6 py-4 text-sm text-destructive">{t("status.loadFailed", { message: error.message })}</p>}
+      {data && data.instances.length === 0 && <EmptyState>{t("instances.empty")}</EmptyState>}
+      {data && data.instances.length > 0 && (
+        <Table className={sectionTableClass}>
+          <TableHeader>
+            <TableRow className={sectionHeaderRowClass}>
+              <TableHead>{t("instances.name")}</TableHead>
+              <TableHead>{t("instances.state")}</TableHead>
+              <TableHead className="text-right">{t("instances.torrents")}</TableHead>
+              <TableHead className="text-right">{t("instances.freeSpace")}</TableHead>
+              <TableHead className="text-right">{t("instances.committed")}</TableHead>
+              <TableHead>{t("instances.floor")}</TableHead>
+              <TableHead className="text-right">{t("instances.upload")}</TableHead>
+              <TableHead>{t("instances.capacity")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.instances.map((inst) => <InstanceRow key={inst.id} inst={inst} />)}
+          </TableBody>
+        </Table>
+      )}
+    </SectionCard>
   )
 }
 
@@ -104,12 +95,23 @@ function InstanceRow({ inst }: { inst: BrushInstanceStatus }) {
   const healthy = inst.active && !inst.error
   const belowFloor = healthy && inst.floorBytes !== null && inst.committed < inst.floorBytes
 
+  const state = !inst.active
+    ? { tone: "neutral" as const, label: t("instances.inactive") }
+    : inst.error
+      ? { tone: "error" as const, label: t("instances.errorShort"), title: inst.error }
+      : inst.floorBytes === null
+        ? { tone: "warn" as const, label: t("instances.noFloor") }
+        : belowFloor
+          ? { tone: "error" as const, label: t("instances.belowFloor") }
+          : { tone: "ok" as const, label: t("instances.ok") }
+
   return (
     <TableRow>
-      <TableCell>{inst.name}</TableCell>
-      <TableCell>{healthy ? inst.torrents : "-"}</TableCell>
-      <TableCell>{healthy ? formatBytes(inst.freeSpace) : "-"}</TableCell>
-      <TableCell className={belowFloor ? "text-destructive" : undefined}>
+      <TableCell className="font-medium">{inst.name}</TableCell>
+      <TableCell><StateBadge tone={state.tone} title={state.title}>{state.label}</StateBadge></TableCell>
+      <TableCell className="text-right font-semibold">{healthy ? inst.torrents : "-"}</TableCell>
+      <TableCell className="text-right font-semibold">{healthy ? formatBytes(inst.freeSpace) : "-"}</TableCell>
+      <TableCell className={belowFloor ? "text-right font-semibold text-destructive" : "text-right font-semibold"}>
         {healthy ? formatBytes(Math.max(inst.committed, 0)) : "-"}
       </TableCell>
       <TableCell>
@@ -128,7 +130,7 @@ function InstanceRow({ inst }: { inst: BrushInstanceStatus }) {
           </Button>
         </div>
       </TableCell>
-      <TableCell className="whitespace-nowrap">
+      <TableCell className="whitespace-nowrap text-right font-semibold">
         {inst.uploadRate === null ? "-" : t("instances.mbpsValue", { value: bytesPerSecondToMbps(inst.uploadRate) })}
       </TableCell>
       <TableCell>
@@ -151,17 +153,6 @@ function InstanceRow({ inst }: { inst: BrushInstanceStatus }) {
             {t("actions.save")}
           </Button>
         </div>
-      </TableCell>
-      <TableCell className={inst.error || belowFloor ? "text-destructive" : undefined}>
-        {!inst.active
-          ? t("instances.inactive")
-          : inst.error
-            ? t("instances.error", { message: inst.error })
-            : inst.floorBytes === null
-              ? t("instances.noFloor")
-              : belowFloor
-                ? t("instances.belowFloor")
-                : t("instances.ok")}
       </TableCell>
     </TableRow>
   )

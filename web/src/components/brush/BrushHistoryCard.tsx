@@ -4,16 +4,16 @@
  */
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { api } from "@/lib/api"
 import { formatBytes } from "@/lib/utils"
 import type { BrushPlacement } from "@/types/brush"
 import { useQuery } from "@tanstack/react-query"
 import type { TFunction } from "i18next"
-import { ChevronRight } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import { EmptyState, SectionCard, StateBadge } from "./section"
+import { readOpen, sectionHeaderRowClass, sectionTableClass, type Tone, writeOpen } from "./sectionStyles"
 import { bytesPerSecondToMbps } from "./units"
 
 // splitReason separates the reason code the backend stores from its free-text detail.
@@ -44,18 +44,11 @@ function placementSummary(placement: BrushPlacement, t: TFunction<"brush">): str
 const PAGE_SIZE = 10
 const OPEN_KEY = "brush.history.open"
 
-// The card remembers whether it was open, per browser; it starts open.
-function readOpen(): boolean {
-  try {
-    return localStorage.getItem(OPEN_KEY) !== "false"
-  } catch {
-    return true
-  }
-}
+const statusTone: Record<string, Tone> = { added: "ok", rejected: "neutral", pending: "neutral", adding: "warn" }
 
 export function BrushHistoryCard() {
   const { t } = useTranslation("brush")
-  const [open, setOpen] = useState(readOpen)
+  const [open, setOpen] = useState(() => readOpen(OPEN_KEY))
   const [page, setPage] = useState(0)
   const { data: entries } = useQuery({
     queryKey: ["brush", "entries"],
@@ -67,46 +60,27 @@ export function BrushHistoryCard() {
   // New entries arrive at the top; a page past the end after a refetch falls back to the last one.
   const current = Math.min(page, pageCount - 1)
   const shown = entries?.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
-  const toggle = () => {
-    setOpen((prev) => {
-      try {
-        localStorage.setItem(OPEN_KEY, String(!prev))
-      } catch {
-        // Storage can be unavailable; the card still toggles for this visit.
-      }
-      return !prev
-    })
+  const onOpenChange = (next: boolean) => {
+    setOpen(next)
+    writeOpen(OPEN_KEY, next)
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <button type="button" className="flex w-full items-start gap-2 text-left" aria-expanded={open} onClick={toggle}>
-          <ChevronRight className={`mt-1 size-4 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
-          <div className="space-y-1.5">
-            <CardTitle>{t("history.title")}</CardTitle>
-            <CardDescription>{t("history.description")}</CardDescription>
-          </div>
-        </button>
-      </CardHeader>
-      {open && <CardContent className="space-y-4">
-        <Table>
+    <SectionCard title={t("history.title")} description={t("history.description")} open={open} onOpenChange={onOpenChange}>
+      {entries?.length === 0 && <EmptyState>{t("history.empty")}</EmptyState>}
+      {(entries?.length ?? 0) > 0 && (
+        <Table className={sectionTableClass}>
           <TableHeader>
-            <TableRow>
+            <TableRow className={sectionHeaderRowClass}>
               <TableHead>{t("history.time")}</TableHead>
               <TableHead>{t("history.feed")}</TableHead>
               <TableHead>{t("history.torrent")}</TableHead>
-              <TableHead>{t("history.size")}</TableHead>
+              <TableHead className="text-right">{t("history.size")}</TableHead>
               <TableHead>{t("history.instance")}</TableHead>
               <TableHead>{t("history.result")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {entries?.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">{t("history.empty")}</TableCell>
-              </TableRow>
-            )}
             {shown?.map((e) => {
               const placement = e.placement
               const chosen = placement?.candidates.find((c) => c.instanceId === placement.chosen)
@@ -118,36 +92,38 @@ export function BrushHistoryCard() {
                 <TableRow key={e.id}>
                   <TableCell className="whitespace-nowrap">{new Date((e.decidedAt || e.firstSeenAt) * 1000).toLocaleString()}</TableCell>
                   <TableCell>{e.feedName}</TableCell>
-                  <TableCell className="max-w-md truncate" title={e.title}>{e.title}</TableCell>
-                  <TableCell>{e.sizeBytes ? formatBytes(e.sizeBytes) : "-"}</TableCell>
+                  <TableCell className="max-w-md truncate font-medium" title={e.title}>{e.title}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right font-semibold">{e.sizeBytes ? formatBytes(e.sizeBytes) : "-"}</TableCell>
                   <TableCell
                     className={placement ? "whitespace-nowrap underline decoration-dotted cursor-help" : "whitespace-nowrap"}
                     title={placement ? placementSummary(placement, t) : undefined}
                   >
                     {chosen ? chosen.name : placement ? t("history.noInstance") : "-"}
                   </TableCell>
-                  <TableCell className={e.status === "added" ? "text-green-600" : e.status === "rejected" ? "text-muted-foreground" : "text-destructive"}>
-                    {t([`entryStatus.${e.status}`, "entryStatus.other"])}
-                    {code && <> · {t([`reasons.${code}`, "reasons.other"])}</>}
-                    {detail && <span className="ml-1 text-xs">({detail})</span>}
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <StateBadge tone={statusTone[e.status] ?? "error"}>{t([`entryStatus.${e.status}`, "entryStatus.other"])}</StateBadge>
+                      {code && <span className="text-xs text-muted-foreground">{t([`reasons.${code}`, "reasons.other"])}</span>}
+                      {detail && <span className="text-xs text-muted-foreground">({detail})</span>}
+                    </div>
                   </TableCell>
                 </TableRow>
               )
             })}
           </TableBody>
         </Table>
-        {pageCount > 1 && (
-          <div className="flex items-center justify-end gap-2 text-sm">
-            <span className="text-muted-foreground">{t("history.page", { page: current + 1, pages: pageCount })}</span>
-            <Button size="sm" variant="outline" disabled={current === 0} onClick={() => setPage(current - 1)}>
-              {t("history.previous")}
-            </Button>
-            <Button size="sm" variant="outline" disabled={current >= pageCount - 1} onClick={() => setPage(current + 1)}>
-              {t("history.next")}
-            </Button>
-          </div>
-        )}
-      </CardContent>}
-    </Card>
+      )}
+      {pageCount > 1 && (
+        <div className="flex items-center justify-end gap-2 border-t px-6 py-3 text-sm">
+          <span className="text-muted-foreground">{t("history.page", { page: current + 1, pages: pageCount })}</span>
+          <Button size="sm" variant="outline" disabled={current === 0} onClick={() => setPage(current - 1)}>
+            {t("history.previous")}
+          </Button>
+          <Button size="sm" variant="outline" disabled={current >= pageCount - 1} onClick={() => setPage(current + 1)}>
+            {t("history.next")}
+          </Button>
+        </div>
+      )}
+    </SectionCard>
   )
 }

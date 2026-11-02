@@ -13,12 +13,13 @@
   },
   "status": {
     "title": "服务器",
-    "description": "只有在所有下载完成后剩余空间仍高于安全底线时，刷流才会添加种子。新实例的安全底线自动设为磁盘总空间的 10%（按 qBittorrent 的剩余空间加上种子已占用的空间估算），可以随时修改。",
+    "description": "各下载器的空间、上传和安全底线。",
     "enabled": "刷流已开启",
     "disabled": "刷流未开启",
     "loading": "加载中…",
     "loadFailed": "无法加载刷流状态：{{message}}",
-    "saveFailed": "无法切换刷流开关"
+    "saveFailed": "无法切换刷流开关",
+    "info": "只有在所有下载完成后剩余空间仍高于安全底线时，刷流才会添加种子。新实例的安全底线自动设为磁盘总空间的 10%（按 qBittorrent 的剩余空间加上种子已占用的空间估算），可以随时修改。"
   },
   "instances": {
     "name": "实例",
@@ -41,7 +42,8 @@
     "belowFloor": "低于安全底线，暂停进种",
     "inactive": "已在 qui 中停用",
     "error": "错误：{{message}}",
-    "empty": "还没有 qBittorrent 实例，请先在设置里添加。"
+    "empty": "还没有 qBittorrent 实例，请先在设置里添加。",
+    "errorShort": "错误"
   },
   "sites": {
     "baseUrl": "站点地址",
@@ -94,7 +96,8 @@
     "saveFailed": "无法保存订阅",
     "deleteFailed": "无法删除订阅",
     "noSite": "还没有站点，请先到站点页添加。",
-    "siteHelp": "Cookie、上传上限等站点信息在站点页修改，同一站点的订阅共用。前往"
+    "siteHelp": "Cookie、上传上限等站点信息在站点页修改，同一站点的订阅共用。前往",
+    "info": "勾选「只要免费」或「跳过 H&R」时，会先到站点详情页检查；判断规则按站点地址自动选择，可在站点页查看。"
   },
   "test": {
     "title": "测试 {{name}}",
@@ -128,29 +131,9 @@
     "next": "下一页",
     "empty": "暂无记录。订阅的第一次拉取只记录当前列表，不会添加。"
   },
-  "values": {
-    "title": "种子价值",
-    "description": "预测每个刷流种子接下来 {{minutes}} 分钟能上传多少：按最近 10 分钟的速度，按种龄打折，下载者多的上调。每 10 分钟保存一次预测，到时和实际上传量对比。",
-    "accuracy": "近 24 小时：校验了 {{count}} 次预测，预测 {{predicted}}，实际上传 {{actual}}，按上传量加权误差 {{error}}%。另有 {{gone}} 个种子在校验前被删除。",
-    "noChecks": "还没有校验过的预测；种子测满 10 分钟后开始预测，{{minutes}} 分钟后出第一批校验结果。",
-    "instance": "实例",
-    "torrent": "种子",
-    "age": "种龄",
-    "leechers": "下载者",
-    "rate": "近 10 分钟",
-    "predicted": "未来 {{minutes}} 分钟",
-    "predictedShort": "预测",
-    "density": "每 GiB",
-    "measuring": "测量中",
-    "mbs": "{{value}} MB/s",
-    "empty": "设置了安全底线的实例上还没有刷流种子。",
-    "recentTitle": "最近校验",
-    "checkedAt": "校验时间",
-    "actual": "实际上传"
-  },
   "deletions": {
     "title": "删种记录",
-    "description": "空间不够放新种时，刷流删掉价值最低的种子，删除前先向 tracker 汇报（低于安全底线时为了尽快腾出空间，跳过汇报）。只删刷流添加的种子；关闭刷流后不再删除。记录保留 30 天。",
+    "description": "空间不够放新种时，刷流删掉价值最低的种子。",
     "time": "删除时间",
     "instance": "实例",
     "torrent": "种子",
@@ -163,8 +146,9 @@
       "need_space": "腾出空间给新种",
       "emergency": "低于安全底线"
     },
-    "filesKept": "（文件与辅种共用，已保留）",
-    "empty": "还没有删除过种子。"
+    "filesKept": "保留文件",
+    "empty": "还没有删除过种子。",
+    "info": "空间不够放新种时，刷流删掉价值最低的种子，删除前先向 tracker 汇报（低于安全底线时为了尽快腾出空间，跳过汇报）。只删刷流添加的种子；关闭刷流后不再删除。记录保留 30 天。"
   },
   "today": {
     "title": "今日流量",

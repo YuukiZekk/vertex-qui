@@ -13,12 +13,13 @@
   },
   "status": {
     "title": "Servers",
-    "description": "Brush adds a torrent only while the space left after every download finishes stays above the safety floor. A new instance gets 10% of its disk as the floor, estimated from qBittorrent's free space plus what its torrents hold; you can change it any time.",
+    "description": "Space, upload and safety floor of each downloader.",
     "enabled": "Brushing on",
     "disabled": "Brushing off",
     "loading": "Loading…",
     "loadFailed": "Could not load the brush status: {{message}}",
-    "saveFailed": "Could not change the brush switch"
+    "saveFailed": "Could not change the brush switch",
+    "info": "Brush adds a torrent only while the space left after every download finishes stays above the safety floor. A new instance gets 10% of its disk as the floor, estimated from qBittorrent's free space plus what its torrents hold; you can change it any time."
   },
   "instances": {
     "name": "Instance",
@@ -41,7 +42,8 @@
     "belowFloor": "Below the safety floor, adds paused",
     "inactive": "Disabled in qui",
     "error": "Error: {{message}}",
-    "empty": "No qBittorrent instances. Add one under Settings first."
+    "empty": "No qBittorrent instances. Add one under Settings first.",
+    "errorShort": "Error"
   },
   "sites": {
     "baseUrl": "Site address",
@@ -94,7 +96,8 @@
     "saveFailed": "Could not save the feed",
     "deleteFailed": "Could not delete the feed",
     "noSite": "No site yet. Add one on the sites page first.",
-    "siteHelp": "The cookie, upload limit and other site settings are edited on the sites page and shared by the site's feeds. Go to"
+    "siteHelp": "The cookie, upload limit and other site settings are edited on the sites page and shared by the site's feeds. Go to",
+    "info": "With Free only or Skip H&R on, brush checks the details page first; the rule is picked from the site's address and shown on the sites page."
   },
   "test": {
     "title": "Test {{name}}",
@@ -128,29 +131,9 @@
     "next": "Next",
     "empty": "Nothing yet. The first poll of a feed only records what it lists."
   },
-  "values": {
-    "title": "Torrent value",
-    "description": "What each brush torrent is predicted to upload in the next {{minutes}} minutes: its speed over the last 10 minutes, slowed for its age and raised for its leechers. Every 10 minutes the predictions are stored and checked against what the torrents really uploaded.",
-    "accuracy": "Last 24 hours: {{count}} predictions checked, {{predicted}} predicted against {{actual}} uploaded, off by {{error}}% weighted by upload. {{gone}} torrents were removed before their check.",
-    "noChecks": "No prediction has been checked yet; the first checks come {{minutes}} minutes after a torrent has 10 minutes of readings.",
-    "instance": "Instance",
-    "torrent": "Torrent",
-    "age": "Age",
-    "leechers": "Leechers",
-    "rate": "Last 10 min",
-    "predicted": "Next {{minutes}} min",
-    "predictedShort": "Predicted",
-    "density": "Per GiB",
-    "measuring": "Measuring",
-    "mbs": "{{value}} MB/s",
-    "empty": "No brush torrents on instances with a safety floor.",
-    "recentTitle": "Latest checks",
-    "checkedAt": "Checked",
-    "actual": "Uploaded"
-  },
   "deletions": {
     "title": "Deletions",
-    "description": "When new torrents need the space, brush deletes the torrents that earn the least, announcing them to the tracker first, except below the safety floor, where space comes first. Only torrents brush added are deleted, and nothing is deleted while brushing is off. Kept for 30 days.",
+    "description": "When new torrents need the space, brush deletes the ones that earn the least.",
     "time": "Deleted",
     "instance": "Instance",
     "torrent": "Torrent",
@@ -163,8 +146,9 @@
       "need_space": "Room for new torrents",
       "emergency": "Below the safety floor"
     },
-    "filesKept": " (files shared with a cross-seed, kept)",
-    "empty": "No torrent deleted yet."
+    "filesKept": "files kept",
+    "empty": "No torrent deleted yet.",
+    "info": "When new torrents need the space, brush deletes the torrents that earn the least, announcing them to the tracker first, except below the safety floor, where space comes first. Only torrents brush added are deleted, and nothing is deleted while brushing is off. Kept for 30 days."
   },
   "today": {
     "title": "Today's transfer",

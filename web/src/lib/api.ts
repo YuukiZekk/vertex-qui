@@ -135,7 +135,7 @@ import type {
   WarningResponse,
   WebSeed
 } from "@/types"
-import type { BrushDeletion, BrushEntry, BrushFeed, BrushFeedInput, BrushSite, BrushSiteInput, BrushSiteTest, BrushStatus, BrushTestItem, BrushTransferToday, BrushValues } from "@/types/brush"
+import type { BrushDeletion, BrushEntry, BrushFeed, BrushFeedInput, BrushSite, BrushSiteInput, BrushSiteTest, BrushStatus, BrushTestItem, BrushTransferToday } from "@/types/brush"
 import type {
   ArrInstance,
   ArrInstanceFormData,
@@ -2989,10 +2989,6 @@ class ApiClient {
 
   async getBrushTransferToday(): Promise<BrushTransferToday> {
     return this.request<BrushTransferToday>("/brush/transfer/today")
-  }
-
-  async getBrushValues(): Promise<BrushValues> {
-    return this.request<BrushValues>("/brush/values")
   }
 
   async getBrushDeletions(): Promise<BrushDeletion[]> {
