@@ -5,9 +5,10 @@
 
 import { TableCell, TableHead } from "@/components/ui/table"
 import { formatBytes } from "@/lib/utils"
-import { ChevronDown, ChevronUp } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronUp } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { bytesPerSecondToMBs } from "./units"
+import type { ServerSort, ServerSortKey } from "./useServerStatsSort"
 import type { TodayTransfer } from "./useTodayTransfer"
 
 // These pieces add today's transfer to qui's server statistics section, styled
@@ -37,15 +38,15 @@ export function TodayHeaderStats({ today }: { today: TodayTransfer }) {
   )
 }
 
-export function TodayHeadCells({ today }: { today: TodayTransfer }) {
+export function TodayHeadCells({ today, sort, onSort }: { today: TodayTransfer, sort: ServerSort | null, onSort: (key: ServerSortKey) => void }) {
   const { t } = useTranslation("brush")
   if (!today) return null
   return (
     <>
-      <TableHead className="text-center">{t("today.todayUploaded")}</TableHead>
-      <TableHead className="text-center">{t("today.todayDownloaded")}</TableHead>
-      <TableHead className="text-center">{t("today.currentSpeed")}</TableHead>
-      <TableHead className="text-center">{t("today.averageUploadShort")}</TableHead>
+      <SortHead column="todayUploaded" label={t("today.todayUploaded")} sort={sort} onSort={onSort} />
+      <SortHead column="todayDownloaded" label={t("today.todayDownloaded")} sort={sort} onSort={onSort} />
+      <SortHead column="uploadSpeed" label={t("today.currentSpeed")} sort={sort} onSort={onSort} />
+      <SortHead column="averageUpload" label={t("today.averageUploadShort")} sort={sort} onSort={onSort} />
     </>
   )
 }
@@ -68,5 +69,30 @@ export function TodayCells({ today, instanceId }: { today: TodayTransfer, instan
       </TableCell>
       <TableCell className="text-center font-semibold whitespace-nowrap">{row ? speed(row.averageUpload) : "-"}</TableCell>
     </>
+  )
+}
+
+// SortHead is a centred, sortable column head with the up-down icons the tracker
+// breakdown uses.
+export function SortHead({ column, label, sort, onSort, alignLeft }: {
+  column: ServerSortKey
+  label: string
+  sort: ServerSort | null
+  onSort: (key: ServerSortKey) => void
+  // The name column starts at the left, padded like the tracker breakdown's.
+  alignLeft?: boolean
+}) {
+  const active = sort?.key === column
+  return (
+    <TableHead className={alignLeft ? "pl-4 text-left" : "text-center"}>
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={`${alignLeft ? "" : "mx-auto "}flex items-center gap-1.5 hover:text-foreground transition-colors rounded px-1 py-0.5 -my-0.5`}
+      >
+        {label}
+        {!active ? <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" /> : sort.desc ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
+      </button>
+    </TableHead>
   )
 }

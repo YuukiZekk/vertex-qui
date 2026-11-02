@@ -4,7 +4,8 @@
  */
 
 import { isStreamUsable } from "@/lib/sync-stream-state"
-import { TodayCells, TodayHeadCells, TodayHeaderStats } from "@/components/brush/TodayStats"
+import { SortHead, TodayCells, TodayHeadCells, TodayHeaderStats } from "@/components/brush/TodayStats"
+import { sortServerRows, useServerStatsSort } from "@/components/brush/useServerStatsSort"
 import { useTodayMetrics, useTodayTransfer } from "@/components/brush/useTodayTransfer"
 import { InstanceErrorDisplay } from "@/components/instances/InstanceErrorDisplay"
 import { InstanceSettingsButton } from "@/components/instances/InstanceSettingsButton"
@@ -1332,6 +1333,7 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
   // vertex-qui: today's transfer from the brush module, as extra figures and columns
   const today = useTodayTransfer()
   const todayMetrics = useTodayMetrics()
+  const [serverSort, toggleServerSort] = useServerStatsSort()
 
   const globalStats = useMemo(() => {
     // Calculate server stats
@@ -1359,7 +1361,7 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
   // Apply color grading to ratio
   const ratioColor = getRatioColor(globalStats.globalRatio)
 
-  const reportingInstances = statsData.filter(({ serverState }) => serverState?.alltime_dl || serverState?.alltime_ul)
+  const reportingInstances = sortServerRows(statsData.filter(({ serverState }) => serverState?.alltime_dl || serverState?.alltime_ul), serverSort, today)
   const detailsInstance = reportingInstances.find(({ instance }) => instance.id === detailsInstanceId)
 
   // Don't show if no data
@@ -1477,30 +1479,14 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
           <Table className="hidden sm:table">
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="text-center">{t("serverStats.tableHeaders.instance")}</TableHead>
-                <TableHead className="text-center">
-                  <div className="flex items-center justify-center gap-1">
-                    <span>{t("serverStats.tableHeaders.downloaded")}</span>
-                  </div>
-                </TableHead>
-                <TableHead className="text-center">
-                  <div className="flex items-center justify-center gap-1">
-                    <span>{t("serverStats.tableHeaders.downloadedSession")}</span>
-                  </div>
-                </TableHead>
-                <TableHead className="text-center">
-                  <div className="flex items-center justify-center gap-1">
-                    <span>{t("serverStats.tableHeaders.uploaded")}</span>
-                  </div>
-                </TableHead>
-                <TableHead className="text-center">
-                  <div className="flex items-center justify-center gap-1">
-                    <span>{t("serverStats.tableHeaders.uploadedSession")}</span>
-                  </div>
-                </TableHead>
-                <TableHead className="text-center">{t("serverStats.tableHeaders.ratio")}</TableHead>
-                <TableHead className="text-center">{t("serverStats.tableHeaders.peers")}</TableHead>
-                <TodayHeadCells today={today} />
+                <SortHead column="name" label={t("serverStats.tableHeaders.instance")} sort={serverSort} onSort={toggleServerSort} alignLeft />
+                <SortHead column="downloaded" label={t("serverStats.tableHeaders.downloaded")} sort={serverSort} onSort={toggleServerSort} />
+                <SortHead column="downloadedSession" label={t("serverStats.tableHeaders.downloadedSession")} sort={serverSort} onSort={toggleServerSort} />
+                <SortHead column="uploaded" label={t("serverStats.tableHeaders.uploaded")} sort={serverSort} onSort={toggleServerSort} />
+                <SortHead column="uploadedSession" label={t("serverStats.tableHeaders.uploadedSession")} sort={serverSort} onSort={toggleServerSort} />
+                <SortHead column="ratio" label={t("serverStats.tableHeaders.ratio")} sort={serverSort} onSort={toggleServerSort} />
+                <SortHead column="peers" label={t("serverStats.tableHeaders.peers")} sort={serverSort} onSort={toggleServerSort} />
+                <TodayHeadCells today={today} sort={serverSort} onSort={toggleServerSort} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1510,7 +1496,7 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
 
                 return (
                   <TableRow key={instance.id}>
-                    <TableCell className="text-center font-medium">{instance.name}</TableCell>
+                    <TableCell className="pl-4 font-medium">{instance.name}</TableCell>
                     <TableCell className="text-center font-semibold">
                       {formatBytes(serverState?.alltime_dl || 0)}
                     </TableCell>
