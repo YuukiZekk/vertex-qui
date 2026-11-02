@@ -266,6 +266,22 @@
     "fastStartValue": "{{fast}} / {{judged}} 个",
     "barsLabel": "每 {{minutes}} 分钟入场 P95",
     "barTitle": "{{time}}：{{count}} 个种子，入场 P95 {{p95}}",
-    "footer": "{{added}} 确认 · {{pending}} 待确认 · {{failed}} 失败"
+    "footer": "{{added}} 确认 · {{pending}} 待确认 · {{failed}} 失败",
+    "drillDescription": "{{range}}，{{count}} 个种子。点一行看它从发布到开始上传的时间线。",
+    "drillEmpty": "这段时间没有种子。",
+    "drillSeen": "发现时间",
+    "discovery": "发现",
+    "processing": "处理",
+    "firstUpload": "开始上传",
+    "drillAll": "查看全部种子",
+    "drillFeed": "订阅 {{feed}}",
+    "steps": {
+      "published": "站点发布",
+      "seen": "刷流发现",
+      "inspected": "检查免费",
+      "fetched": "下载种子",
+      "added": "加入 qB",
+      "uploading": "开始上传"
+    }
   }
 }

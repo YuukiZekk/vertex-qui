@@ -266,6 +266,22 @@
     "fastStartValue": "{{fast}} of {{judged}}",
     "barsLabel": "Entry P95 per {{minutes}} min",
     "barTitle": "{{time}}: {{count}} torrents, entry P95 {{p95}}",
-    "footer": "{{added}} confirmed · {{pending}} pending · {{failed}} failed"
+    "footer": "{{added}} confirmed · {{pending}} pending · {{failed}} failed",
+    "drillDescription": "{{range}}, {{count}} torrents. Open a row for its timeline from publish to first upload.",
+    "drillEmpty": "No torrent in this period.",
+    "drillSeen": "Seen",
+    "discovery": "Discovery",
+    "processing": "Processing",
+    "firstUpload": "First upload",
+    "drillAll": "See every torrent",
+    "drillFeed": "Feed {{feed}}",
+    "steps": {
+      "published": "Published",
+      "seen": "Seen",
+      "inspected": "Free check",
+      "fetched": "Fetched",
+      "added": "Added to qB",
+      "uploading": "Uploading"
+    }
   }
 }

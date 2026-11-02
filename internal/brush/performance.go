@@ -4,6 +4,7 @@
 package brush
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -246,4 +247,36 @@ func (s *Service) handlePerformance(w http.ResponseWriter, r *http.Request) {
 	}
 	slices.SortFunc(resp.Groups, func(a, b perfGroup) int { return b.Stats.Added - a.Stats.Added })
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// perfDetailLimit bounds a drill-down list; a busy week can hold thousands.
+const perfDetailLimit = 500
+
+// handlePerformanceEntries lists the entries behind one group of the overview,
+// for its whole window or one bucket, each with its stage times for a timeline.
+func (s *Service) handlePerformanceEntries(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	id, err := strconv.ParseInt(q.Get("id"), 10, 64)
+	from, err2 := strconv.ParseInt(q.Get("from"), 10, 64)
+	to, err3 := strconv.ParseInt(q.Get("to"), 10, 64)
+	if err != nil || err2 != nil || err3 != nil || to <= from {
+		writeError(w, http.StatusBadRequest, errors.New("id, from and to are required, with from before to"))
+		return
+	}
+	var siteID int64
+	var instanceID int
+	if q.Get("by") == "instance" {
+		instanceID = int(id)
+	} else {
+		siteID = id
+	}
+	details, err := s.store.PerfDetails(r.Context(), time.Unix(from, 0), time.Unix(to, 0), siteID, instanceID, perfDetailLimit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if details == nil {
+		details = []store.PerfDetail{}
+	}
+	writeJSON(w, http.StatusOK, details)
 }

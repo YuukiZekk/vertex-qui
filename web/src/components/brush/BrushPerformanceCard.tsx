@@ -13,6 +13,7 @@ import { Server } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { InstanceFlag } from "./CountryFlag"
+import { type Drill, PerformanceDrill } from "./PerformanceDrill"
 import { EmptyState, SectionCard, StateBadge } from "./section"
 import { readOpen, writeOpen } from "./sectionStyles"
 import { SiteIcon } from "./SiteIcon"
@@ -74,6 +75,7 @@ export function BrushPerformanceCard() {
   })
   const { data: sites } = useQuery({ queryKey: ["brush", "sites"], queryFn: () => api.getBrushSites(), enabled: open })
   const o = data?.overall
+  const [drill, setDrill] = useState<Drill | null>(null)
 
   const controls = (
     <div className="flex flex-wrap items-center gap-2">
@@ -128,6 +130,8 @@ export function BrushPerformanceCard() {
               bucketSeconds={data.bucketSeconds}
               slowSeconds={data.slowSeconds}
               withDay={Number(hours) > 24}
+              onDrill={(from, to) => setDrill({ by: g.key, id: g.id, name: g.name, from, to })}
+              since={data.since}
               icon={g.key === "site"
                 ? (() => {
                   const site = sites?.find((s) => s.id === g.id)
@@ -138,6 +142,7 @@ export function BrushPerformanceCard() {
           ))}
         </div>
       )}
+      {drill && <PerformanceDrill drill={drill} onClose={() => setDrill(null)} />}
     </SectionCard>
   )
 }
@@ -152,12 +157,14 @@ function Stat({ label, value, hint, tone }: { label: string, value: string, hint
   )
 }
 
-function GroupCard({ group, bucketSeconds, slowSeconds, withDay, icon }: {
+function GroupCard({ group, bucketSeconds, slowSeconds, withDay, icon, since, onDrill }: {
   group: BrushPerfGroup
   bucketSeconds: number
   slowSeconds: number
   withDay: boolean
   icon: React.ReactNode
+  since: number
+  onDrill: (from: number, to: number) => void
 }) {
   const { t } = useTranslation("brush")
   const s = group.stats
@@ -167,10 +174,15 @@ function GroupCard({ group, bucketSeconds, slowSeconds, withDay, icon }: {
   return (
     <div className="space-y-4 rounded-lg border p-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          className="flex min-w-0 items-center gap-2 rounded hover:underline"
+          title={t("performance.drillAll")}
+          onClick={() => onDrill(since, Math.floor(Date.now() / 1000) + 1)}
+        >
           {icon}
           <span className="truncate font-medium">{group.name}</span>
-        </div>
+        </button>
         {group.slow > 0
           ? <StateBadge tone="warn">{t("performance.slowBuckets", { count: group.slow, slow: slowSeconds })}</StateBadge>
           : <StateBadge tone="ok">{t("performance.allFast", { slow: slowSeconds })}</StateBadge>}
@@ -204,9 +216,12 @@ function GroupCard({ group, bucketSeconds, slowSeconds, withDay, icon }: {
             const slow = p95 !== null && p95 > slowSeconds
             const height = p95 === null ? 0 : Math.max(8, Math.min(p95, SCALE_SECONDS) / SCALE_SECONDS * 100)
             return (
-              <div
+              <button
+                type="button"
                 key={b.start}
-                className="flex h-full flex-1 items-end"
+                disabled={b.added === 0}
+                onClick={() => onDrill(b.start, b.start + bucketSeconds)}
+                className="flex h-full flex-1 items-end rounded-sm enabled:cursor-pointer enabled:hover:bg-muted/60"
                 title={t("performance.barTitle", {
                   time: formatClock(b.start, withDay),
                   count: b.added,
@@ -223,7 +238,7 @@ function GroupCard({ group, bucketSeconds, slowSeconds, withDay, icon }: {
                     style={{ height: `${height}%` }}
                   />
                 )}
-              </div>
+              </button>
             )
           })}
         </div>

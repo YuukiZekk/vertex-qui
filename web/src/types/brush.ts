@@ -217,3 +217,22 @@ export interface BrushPerformance {
   overall: BrushPerfStats
   groups: BrushPerfGroup[]
 }
+
+// One torrent behind a group of the performance overview; times are unix seconds, 0 when unknown.
+export interface BrushPerfDetail {
+  id: number
+  title: string
+  sizeBytes: number
+  feedName: string
+  reason: string
+  feedId: number
+  siteId: number
+  instanceId: number
+  status: string
+  publishedAt: number
+  firstSeenAt: number
+  inspectedAt: number
+  fetchedAt: number
+  addedAt: number
+  firstUploadAt: number
+}

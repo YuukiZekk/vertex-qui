@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -103,6 +104,27 @@ func TestPerformanceOverview(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Len(t, resp.Groups, 1)
 	require.Equal(t, "vps-1", resp.Groups[0].Name)
+
+	// The drill-down lists one site's entries in a period, newest first, with their stage times.
+	rec = httptest.NewRecorder()
+	url := "/performance/entries?by=site&id=" + strconv.FormatInt(siteID, 10) +
+		"&from=" + strconv.FormatInt(seen.Unix(), 10) + "&to=" + strconv.FormatInt(seen.Add(time.Minute).Unix(), 10)
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, url, nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	var details []store.PerfDetail
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &details))
+	require.Len(t, details, 5, "a to e; f was seen later")
+	byTitle := map[string]store.PerfDetail{}
+	for _, d := range details {
+		byTitle[d.Title] = d
+	}
+	require.Equal(t, seen.Add(4*time.Second).Unix(), byTitle["a"].AddedAt)
+	require.Equal(t, seen.Add(14*time.Second).Unix(), byTitle["a"].FirstUploadAt)
+	require.Equal(t, "zm", byTitle["a"].FeedName)
+
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/performance/entries?by=site&id=1", nil))
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 // The sampler stamps a brush torrent's first upload once, and only for torrents

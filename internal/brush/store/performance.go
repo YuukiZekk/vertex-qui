@@ -38,16 +38,16 @@ func (s *Store) MarkFirstUpload(ctx context.Context, instanceID int, hash string
 // PerfEntry is one entry that got past the filters, with its stage times in unix
 // seconds, zero when unknown.
 type PerfEntry struct {
-	FeedID        int64
-	SiteID        int64
-	InstanceID    int
-	Status        string
-	PublishedAt   int64
-	FirstSeenAt   int64
-	InspectedAt   int64
-	FetchedAt     int64
-	AddedAt       int64
-	FirstUploadAt int64
+	FeedID        int64  `json:"feedId"`
+	SiteID        int64  `json:"siteId"`
+	InstanceID    int    `json:"instanceId"`
+	Status        string `json:"status"`
+	PublishedAt   int64  `json:"publishedAt"`
+	FirstSeenAt   int64  `json:"firstSeenAt"`
+	InspectedAt   int64  `json:"inspectedAt"`
+	FetchedAt     int64  `json:"fetchedAt"`
+	AddedAt       int64  `json:"addedAt"`
+	FirstUploadAt int64  `json:"firstUploadAt"`
 }
 
 // PerfEntries lists the entries first seen since a moment that brush tried to add:
@@ -70,6 +70,46 @@ func (s *Store) PerfEntries(ctx context.Context, since time.Time) ([]PerfEntry, 
 			return nil, fmt.Errorf("scan brush performance entry: %w", err)
 		}
 		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// PerfDetail is one entry of the performance drill-down, with what the overview
+// does not need: its name, size, feed and outcome.
+type PerfDetail struct {
+	PerfEntry
+	ID        int64  `json:"id"`
+	Title     string `json:"title"`
+	SizeBytes int64  `json:"sizeBytes"`
+	FeedName  string `json:"feedName"`
+	Reason    string `json:"reason"`
+}
+
+// PerfDetails lists the entries first seen in [from, to) that brush tried to add,
+// for one site (siteID > 0) or one instance, newest first.
+func (s *Store) PerfDetails(ctx context.Context, from, to time.Time, siteID int64, instanceID int, limit int) ([]PerfDetail, error) {
+	filter, arg := "f.site_id = ?", any(siteID)
+	if siteID == 0 {
+		filter, arg = "e.instance_id = ?", any(instanceID)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT e.id, e.title, e.size_bytes, f.name, e.reason, e.feed_id, f.site_id, e.instance_id,
+			e.status, e.published_at, e.first_seen_at, e.inspected_at, e.fetched_at, e.added_at, e.first_upload_at
+		FROM brush_entries e JOIN brush_feeds f ON f.id = e.feed_id
+		WHERE e.first_seen_at >= ? AND e.first_seen_at < ? AND e.status IN (?, ?, ?, ?) AND `+filter+`
+		ORDER BY e.first_seen_at DESC, e.id DESC LIMIT ?`,
+		from.Unix(), to.Unix(), StatusAdding, StatusAdded, StatusFailed, StatusUnknown, arg, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list brush performance details: %w", err)
+	}
+	defer rows.Close()
+	var out []PerfDetail
+	for rows.Next() {
+		var d PerfDetail
+		if err := rows.Scan(&d.ID, &d.Title, &d.SizeBytes, &d.FeedName, &d.Reason, &d.FeedID, &d.SiteID, &d.InstanceID,
+			&d.Status, &d.PublishedAt, &d.FirstSeenAt, &d.InspectedAt, &d.FetchedAt, &d.AddedAt, &d.FirstUploadAt); err != nil {
+			return nil, fmt.Errorf("scan brush performance detail: %w", err)
+		}
+		out = append(out, d)
 	}
 	return out, rows.Err()
 }
