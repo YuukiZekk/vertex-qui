@@ -67,8 +67,10 @@ type transferInstance struct {
 }
 
 type transferResponse struct {
-	Day       string             `json:"day"`
-	Instances []transferInstance `json:"instances"`
+	Day string `json:"day"`
+	// ElapsedSeconds is the time since midnight in the server's time zone, for averages.
+	ElapsedSeconds int64              `json:"elapsedSeconds"`
+	Instances      []transferInstance `json:"instances"`
 }
 
 // handleTransferToday returns today's totals for every instance that has them,
@@ -92,7 +94,8 @@ func (s *Service) handleTransferToday(w http.ResponseWriter, r *http.Request) {
 		names[inst.ID] = inst.Name
 	}
 
-	resp := transferResponse{Day: day, Instances: []transferInstance{}}
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	resp := transferResponse{Day: day, ElapsedSeconds: int64(now.Sub(midnight) / time.Second), Instances: []transferInstance{}}
 	for _, t := range totals {
 		name, ok := names[t.InstanceID]
 		if !ok {

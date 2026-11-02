@@ -179,6 +179,8 @@ export interface BrushDeletion {
 
 export interface BrushTransferToday {
   day: string
+  // Seconds since midnight in the server's time zone, for today's averages.
+  elapsedSeconds: number
   instances: BrushTransferInstance[]
 }
 

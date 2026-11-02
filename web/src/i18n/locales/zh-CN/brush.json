@@ -167,11 +167,13 @@
   },
   "today": {
     "title": "今日流量",
-    "description": "{{day}} 零点起各实例的上传和下载，按服务器时区计算，总量每分钟更新。",
     "uploaded": "上传",
     "downloaded": "下载",
     "uploadSpeed": "当前上传速度",
     "downloadSpeed": "当前下载速度",
+    "averageUpload": "平均上传速度",
+    "uploadSpeedShort": "当前上传",
+    "averageUploadShort": "今日平均上传",
     "mbs": "{{value}} MB/s",
     "instance": "实例"
   },

@@ -167,11 +167,13 @@
   },
   "today": {
     "title": "Today's transfer",
-    "description": "Upload and download of each instance since midnight on {{day}}, in the server's time zone. Totals update every minute.",
     "uploaded": "Uploaded",
     "downloaded": "Downloaded",
     "uploadSpeed": "Upload speed",
     "downloadSpeed": "Download speed",
+    "averageUpload": "Average upload",
+    "uploadSpeedShort": "Now",
+    "averageUploadShort": "Today's average",
     "mbs": "{{value}} MB/s",
     "instance": "Instance"
   },
