@@ -837,6 +837,7 @@ function InstanceCard({
               search={linkSearch}
               className="flex items-center gap-2 hover:underline overflow-hidden flex-1 min-w-0"
             >
+              <InstanceFlag instanceId={instance.id} />
               <CardTitle
                 className="text-lg truncate min-w-0"
                 title={instance.name}
@@ -1480,6 +1481,7 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
           <Table className="hidden sm:table">
             <TableHeader>
               <TableRow className="bg-muted/50">
+                <TableHead className="w-8 pl-4" />
                 <SortHead column="name" label={t("serverStats.tableHeaders.instance")} sort={serverSort} onSort={toggleServerSort} alignLeft />
                 <SortHead column="downloaded" label={t("serverStats.tableHeaders.downloaded")} sort={serverSort} onSort={toggleServerSort} />
                 <SortHead column="downloadedSession" label={t("serverStats.tableHeaders.downloadedSession")} sort={serverSort} onSort={toggleServerSort} />
@@ -1497,9 +1499,8 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
 
                 return (
                   <TableRow key={instance.id}>
-                    <TableCell className="pl-4 font-medium">
-                      <span className="flex items-center gap-2"><InstanceFlag instanceId={instance.id} />{instance.name}</span>
-                    </TableCell>
+                    <TableCell className="w-8 pl-4"><InstanceFlag instanceId={instance.id} /></TableCell>
+                    <TableCell className="font-medium">{instance.name}</TableCell>
                     <TableCell className="text-center font-semibold">
                       {formatBytes(serverState?.alltime_dl || 0)}
                     </TableCell>

@@ -4,6 +4,7 @@
  */
 
 import { InstanceErrorDisplay } from "@/components/instances/InstanceErrorDisplay"
+import { InstanceFlag } from "@/components/brush/CountryFlag"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -157,7 +158,8 @@ export function InstanceCard({
     <Card className="bg-muted/40">
       <div>
         <CardHeader className="flex flex-row items-center justify-between pr-2 space-y-0">
-          <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex flex-1 min-w-0 items-center gap-2 overflow-hidden">
+            <InstanceFlag instanceId={instance.id} />
             <CardTitle className="text-base font-medium truncate" title={instance.name}>
               {instance.name}
             </CardTitle>

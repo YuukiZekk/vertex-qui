@@ -84,11 +84,11 @@ export function SortHead({ column, label, sort, onSort, alignLeft }: {
 }) {
   const active = sort?.key === column
   return (
-    <TableHead className={alignLeft ? "pl-4 text-left" : "text-center"}>
+    <TableHead className={alignLeft ? "text-left" : "text-center"}>
       <button
         type="button"
         onClick={() => onSort(column)}
-        className={`${alignLeft ? "" : "mx-auto "}flex items-center gap-1.5 hover:text-foreground transition-colors rounded px-1 py-0.5 -my-0.5`}
+        className={`${alignLeft ? "-mx-1 " : "mx-auto "}flex items-center gap-1.5 hover:text-foreground transition-colors rounded px-1 py-0.5 -my-0.5`}
       >
         {label}
         {!active ? <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" /> : sort.desc ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
