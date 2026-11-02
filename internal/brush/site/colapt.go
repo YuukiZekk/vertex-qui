@@ -89,7 +89,7 @@ func (n *NexusPHP) colaptGet(ctx context.Context, rawURL string) ([]byte, error)
 	defer resp.Body.Close()
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return nil, ErrNotLoggedIn
+		return nil, fmt.Errorf("colapt API refused the cookie with HTTP %d; copy the Cookie header of a request to /api/v1 in a logged-in browser: %w", resp.StatusCode, ErrNotLoggedIn)
 	case resp.StatusCode != http.StatusOK:
 		return nil, fmt.Errorf("colapt API returned HTTP %d", resp.StatusCode)
 	}
