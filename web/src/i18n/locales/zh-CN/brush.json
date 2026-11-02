@@ -56,11 +56,11 @@
     "uploadLimitValue": "单种限速 {{value}} MB/s"
   },
   "feeds": {
-    "title": "站点与订阅",
+    "title": "订阅",
     "description": "每个订阅按自己的间隔拉取 RSS，只添加种龄在竞速窗口内的种子。",
     "add": "添加",
-    "addTitle": "添加站点与订阅",
-    "editTitle": "编辑站点与订阅",
+    "addTitle": "添加订阅",
+    "editTitle": "编辑订阅",
     "name": "名称",
     "url": "RSS 链接",
     "urlKeep": "留空则保留已保存的链接",

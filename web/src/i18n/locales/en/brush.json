@@ -56,11 +56,11 @@
     "uploadLimitValue": "{{value}} MB/s per torrent"
   },
   "feeds": {
-    "title": "Sites and feeds",
+    "title": "Feeds",
     "description": "Each feed is polled on its own interval. Only torrents younger than the race window are added.",
     "add": "Add",
-    "addTitle": "Add site and feed",
-    "editTitle": "Edit site and feed",
+    "addTitle": "Add feed",
+    "editTitle": "Edit feed",
     "name": "Name",
     "url": "RSS link",
     "urlKeep": "Leave empty to keep the saved link",
