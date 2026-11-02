@@ -216,3 +216,18 @@ func TestDeletePicksReannouncesFirst(t *testing.T) {
 	require.Equal(t, []string{"a"}, qb.reannounced, "only torrents still listed")
 	require.Equal(t, []fakeDeletion{{1, "a", true}}, qb.deleted)
 }
+
+func TestSharesFiles(t *testing.T) {
+	pack := qbt.Torrent{Hash: "pack", ContentPath: "/data/Show.S01"}
+	listed := map[string]qbt.Torrent{
+		"pack":  pack,
+		"ep":    {Hash: "ep", ContentPath: "/data/Show.S01/Show.S01E01.mkv"},
+		"other": {Hash: "other", ContentPath: "/data/Show.S01.Extras"},
+		"win":   {Hash: "win", ContentPath: `D:\data\Movie`},
+	}
+	require.True(t, sharesFiles(pack, listed), "an episode inside the pack")
+	require.True(t, sharesFiles(listed["ep"], listed), "the pack around the episode")
+	require.False(t, sharesFiles(listed["other"], listed), "a sibling folder with a longer name")
+	require.False(t, sharesFiles(qbt.Torrent{Hash: "x"}, listed), "no content path")
+	require.True(t, sharesFiles(qbt.Torrent{Hash: "w2", ContentPath: "D:/data/Movie/"}, listed), "Windows separators and a trailing slash")
+}

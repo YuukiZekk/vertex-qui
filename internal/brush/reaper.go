@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -333,12 +334,8 @@ func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrent
 		return 0
 	}
 	listed := make(map[string]qbt.Torrent, len(torrents))
-	users := make(map[string]int)
 	for _, t := range torrents {
 		listed[t.Hash] = t
-		if t.ContentPath != "" {
-			users[t.ContentPath]++
-		}
 	}
 	var targets []torrentValue
 	var hashes []string
@@ -376,7 +373,7 @@ func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrent
 	var freed int64
 	for _, tv := range targets {
 		t := listed[tv.Hash]
-		kept := t.ContentPath != "" && users[t.ContentPath] > 1
+		kept := sharesFiles(t, listed)
 		if err := s.qui.DeleteTorrent(ctx, st.InstanceID, tv.Hash, !kept); err != nil {
 			s.log.Error().Err(err).Int("instance", st.InstanceID).Str("hash", tv.Hash).Msg("delete brush torrent")
 			s.alert(ctx, fmt.Sprintf("delete:%d", st.InstanceID), st.InstanceID, "删种失败", fmt.Sprintf("删除 %s 失败：%s", tv.Name, err))
@@ -386,9 +383,7 @@ func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrent
 		s.reaper.mu.Lock()
 		s.reaper.deleted[reapKey(st.InstanceID, tv.Hash)] = now
 		s.reaper.mu.Unlock()
-		if kept {
-			users[t.ContentPath]--
-		}
+		delete(listed, tv.Hash)
 		freed += tv.SizeBytes
 		_, err := s.store.InsertReap(ctx, store.Reap{
 			InstanceID: st.InstanceID, InfoHash: tv.Hash, Name: t.Name, SizeBytes: tv.SizeBytes, Reason: st.Mode,
@@ -466,4 +461,29 @@ func (s *Service) resumeDownloads(ctx context.Context, instanceID int) {
 	}
 	delete(s.reaper.paused, instanceID)
 	s.log.Info().Int("instance", instanceID).Int("torrents", len(hashes)).Msg("resumed brush downloads")
+}
+
+// sharesFiles reports whether another listed torrent uses any of t's files: the
+// same content path, or one inside the other, like an episode cross-seeded from a
+// season pack. Such a torrent is removed with its files kept. Hardlinked or
+// reflinked cross-seeds have their own paths and keep their data either way.
+func sharesFiles(t qbt.Torrent, listed map[string]qbt.Torrent) bool {
+	mine := normalizePath(t.ContentPath)
+	if mine == "" {
+		return false
+	}
+	for hash, other := range listed {
+		if hash == t.Hash {
+			continue
+		}
+		theirs := normalizePath(other.ContentPath)
+		if theirs != "" && (theirs == mine || strings.HasPrefix(theirs, mine+"/") || strings.HasPrefix(mine, theirs+"/")) {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizePath(p string) string {
+	return strings.TrimRight(strings.ReplaceAll(p, "\\", "/"), "/")
 }
