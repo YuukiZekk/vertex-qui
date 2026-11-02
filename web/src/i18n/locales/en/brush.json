@@ -18,7 +18,14 @@
     "loadFailed": "Could not load the brush status: {{message}}",
     "saveFailed": "Could not change the brush switch",
     "badgeTitle": "{{free}} free, {{committed}} after downloads, floor {{floor}}",
-    "settingsHint": "Set the safety floor and upload capacity in Settings → Instances → Brush"
+    "settingsHint": "Set the safety floor and upload capacity in Settings → Instances → Brush",
+    "todayLabel": "Today",
+    "todayAdded": "added",
+    "todayDeleted": "deleted",
+    "missedSpace": "missed for space",
+    "missedWindow": "missed the window",
+    "missedSpaceHint": "Torrents that passed the filters but no downloader had room for. Many mean more disk or a lower floor would help.",
+    "missedWindowHint": "Torrents already past the race window when seen. Many mean a shorter poll interval would help."
   },
   "instances": {
     "torrents": "Torrents",

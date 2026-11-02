@@ -72,6 +72,19 @@ export function BrushHeader() {
           <span className="text-xs text-muted-foreground">{t("status.settingsHint")}</span>
         </div>
       )}
+      {data?.today && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted-foreground">
+          <span>{t("status.todayLabel")}</span>
+          <span>{t("status.todayAdded")} <span className="font-semibold text-foreground tabular-nums">{data.today.added}</span></span>
+          <span>{t("status.todayDeleted")} <span className="font-semibold text-foreground tabular-nums">{data.today.deleted}</span></span>
+          <span title={t("status.missedSpaceHint")}>
+            {t("status.missedSpace")} <span className={`font-semibold tabular-nums ${data.today.missedSpace > 0 ? "text-amber-500" : "text-foreground"}`}>{data.today.missedSpace}</span>
+          </span>
+          <span title={t("status.missedWindowHint")}>
+            {t("status.missedWindow")} <span className={`font-semibold tabular-nums ${data.today.missedWindow > 0 ? "text-amber-500" : "text-foreground"}`}>{data.today.missedWindow}</span>
+          </span>
+        </div>
+      )}
     </div>
   )
 }

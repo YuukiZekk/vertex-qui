@@ -113,3 +113,30 @@ func (s *Store) PerfDetails(ctx context.Context, from, to time.Time, siteID int6
 	}
 	return out, rows.Err()
 }
+
+// TodayCounts is what brush did since a moment, for the brush page's status line:
+// torrents added and deleted, and the ones that passed the filters but were missed
+// for lack of space or because the race window closed.
+type TodayCounts struct {
+	Added        int `json:"added"`
+	Deleted      int `json:"deleted"`
+	MissedSpace  int `json:"missedSpace"`
+	MissedWindow int `json:"missedWindow"`
+}
+
+func (s *Store) CountsSince(ctx context.Context, since time.Time) (TodayCounts, error) {
+	var c TodayCounts
+	err := s.db.QueryRowContext(ctx, `SELECT
+			COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = ? AND reason LIKE 'low_space%' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = ? AND reason LIKE 'window%' THEN 1 ELSE 0 END), 0)
+		FROM brush_entries WHERE decided_at >= ? AND status <> ?`,
+		StatusAdded, StatusRejected, StatusRejected, since.Unix(), StatusBaseline).Scan(&c.Added, &c.MissedSpace, &c.MissedWindow)
+	if err != nil {
+		return TodayCounts{}, fmt.Errorf("count brush entries: %w", err)
+	}
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM brush_reaps WHERE executed = 1 AND first_at >= ?", since.Unix()).Scan(&c.Deleted); err != nil {
+		return TodayCounts{}, fmt.Errorf("count brush deletions: %w", err)
+	}
+	return c, nil
+}

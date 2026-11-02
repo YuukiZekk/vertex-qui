@@ -116,3 +116,37 @@ func TestArrivalsAndYield(t *testing.T) {
 		})
 	}
 }
+
+func TestCountsSince(t *testing.T) {
+	for name, open := range dialects() {
+		t.Run(name, func(t *testing.T) {
+			db := open(t)
+			ctx := t.Context()
+			s := newTestStore(t, db)
+			siteID, err := s.CreateSite(ctx, Site{Name: "pt", BaseURL: "https://pt.example"})
+			require.NoError(t, err)
+			feed, err := s.CreateFeed(ctx, Feed{SiteID: siteID, Name: "a", URL: "https://pt.example/a", IntervalSeconds: 15, WindowSeconds: 300, InstanceIDs: []int{1}})
+			require.NoError(t, err)
+			midnight := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
+			for i, e := range []struct {
+				status, reason string
+				at             time.Time
+			}{
+				{StatusAdded, "", midnight.Add(time.Hour)},
+				{StatusRejected, "low_space: 1 < 2", midnight.Add(time.Hour)},
+				{StatusRejected, "window: 6m0s", midnight.Add(time.Hour)},
+				{StatusRejected, "size", midnight.Add(time.Hour)},
+				{StatusRejected, "low_space: 1 < 2", midnight.Add(-time.Hour)},
+			} {
+				_, _, err := s.InsertEntry(ctx, Entry{FeedID: feed, GUID: string(rune('a' + i)), Title: "t", Status: e.status, Reason: e.reason, DecidedAt: e.at.Unix()})
+				require.NoError(t, err)
+			}
+			_, err = s.InsertReap(ctx, Reap{InstanceID: 1, InfoHash: "x", Name: "x", Reason: ReapNeedSpace, DeletedAt: midnight.Add(time.Hour).Unix()})
+			require.NoError(t, err)
+
+			c, err := s.CountsSince(ctx, midnight)
+			require.NoError(t, err)
+			require.Equal(t, TodayCounts{Added: 1, Deleted: 1, MissedSpace: 1, MissedWindow: 1}, c)
+		})
+	}
+}

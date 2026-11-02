@@ -77,6 +77,8 @@ type instanceStatus struct {
 type statusResponse struct {
 	Enabled   bool             `json:"enabled"`
 	Instances []instanceStatus `json:"instances"`
+	// Today counts since midnight in the server's time zone.
+	Today store.TodayCounts `json:"today"`
 }
 
 func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +100,11 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := statusResponse{Enabled: enabled, Instances: make([]instanceStatus, 0, len(instances))}
+	local := s.now().Local()
+	if resp.Today, err = s.store.CountsSince(ctx, time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 	for _, inst := range instances {
 		st := instanceStatus{ID: inst.ID, Name: inst.Name, Active: inst.Active}
 		if cfg, ok := configs[inst.ID]; ok {

@@ -25,6 +25,8 @@ export interface BrushInstanceStatus {
 export interface BrushStatus {
   enabled: boolean
   instances: BrushInstanceStatus[]
+  // Since midnight in the server's time zone.
+  today: { added: number, deleted: number, missedSpace: number, missedWindow: number }
 }
 
 export interface BrushSite {

@@ -18,7 +18,14 @@
     "loadFailed": "无法加载刷流状态：{{message}}",
     "saveFailed": "无法切换刷流开关",
     "badgeTitle": "剩余 {{free}}，下载完成后剩余 {{committed}}，安全底线 {{floor}}",
-    "settingsHint": "安全底线和上传能力在 设置 → 实例 → 刷流 中修改"
+    "settingsHint": "安全底线和上传能力在 设置 → 实例 → 刷流 中修改",
+    "todayLabel": "今日",
+    "todayAdded": "加种",
+    "todayDeleted": "删种",
+    "missedSpace": "空间不足错过",
+    "missedWindow": "超出窗口错过",
+    "missedSpaceHint": "通过了过滤、但所有下载器都放不下而跳过的种子。多的话考虑加盘或调低安全底线。",
+    "missedWindowHint": "发现时已经超出竞速窗口而跳过的种子。多的话考虑缩短拉取间隔。"
   },
   "instances": {
     "torrents": "种子数",
