@@ -72,6 +72,8 @@ export interface BrushFeed {
   windowSeconds: number
   // Count age from when the feed first listed the torrent, for revival feeds of old torrents.
   ageFromFirstSeen: boolean
+  // qBittorrent category the feed's torrents are added with; empty for none.
+  category: string
   // Brush puts each torrent on the least busy of these. Empty, only on feeds saved
   // before instances could be picked one by one, means every instance with a floor.
   instanceIds: number[]

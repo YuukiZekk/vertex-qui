@@ -29,6 +29,9 @@ type Feed struct {
 	// from its pubDate. It is for feeds of old torrents that come back, like a
 	// revival section, whose pubDate is the original upload.
 	AgeFromFirstSeen bool `json:"ageFromFirstSeen"`
+	// Category is the qBittorrent category the feed's torrents are added with, empty
+	// for none. qBittorrent creates it when it does not exist yet.
+	Category string `json:"category"`
 	// InstanceIDs are the instances placement may choose from, in ascending order.
 	// Empty means every instance with a floor, which only feeds saved before
 	// instances could be picked one by one still have.
@@ -42,7 +45,7 @@ type Feed struct {
 
 const feedColumns = `id, site_id, name, url_encrypted, interval_seconds, min_size_bytes, max_size_bytes,
 	free_only, skip_hr, window_seconds, instance_id, instance_ids, enabled, etag, last_modified, last_fetch_at, last_error,
-	age_from_first_seen`
+	age_from_first_seen, category`
 
 // formatInstanceIDs stores a feed's instances as a comma-separated list.
 func formatInstanceIDs(ids []int) string {
@@ -88,7 +91,7 @@ func (s *Store) ListFeeds(ctx context.Context) ([]Feed, error) {
 		var freeOnly, skipHR, enabled, legacyInstance, ageFromFirstSeen int
 		if err := rows.Scan(&f.ID, &f.SiteID, &f.Name, &sealed, &f.IntervalSeconds, &f.MinSizeBytes, &f.MaxSizeBytes,
 			&freeOnly, &skipHR, &f.WindowSeconds, &legacyInstance, &instanceIDs, &enabled, &f.ETag, &f.LastModified,
-			&f.LastFetchAt, &f.LastError, &ageFromFirstSeen); err != nil {
+			&f.LastFetchAt, &f.LastError, &ageFromFirstSeen, &f.Category); err != nil {
 			return nil, fmt.Errorf("scan brush feed: %w", err)
 		}
 		f.FreeOnly, f.SkipHR, f.Enabled = freeOnly == 1, skipHR == 1, enabled == 1
@@ -124,10 +127,10 @@ func (s *Store) CreateFeed(ctx context.Context, f Feed) (int64, error) {
 	}
 	var id int64
 	err = s.db.QueryRowContext(ctx, `INSERT INTO brush_feeds (site_id, name, url_encrypted, interval_seconds, min_size_bytes,
-		max_size_bytes, free_only, skip_hr, window_seconds, instance_id, instance_ids, enabled, age_from_first_seen, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?) RETURNING id`,
+		max_size_bytes, free_only, skip_hr, window_seconds, instance_id, instance_ids, enabled, age_from_first_seen, category, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?) RETURNING id`,
 		f.SiteID, f.Name, sealed, f.IntervalSeconds, f.MinSizeBytes, f.MaxSizeBytes, boolInt(f.FreeOnly), boolInt(f.SkipHR),
-		f.WindowSeconds, formatInstanceIDs(f.InstanceIDs), boolInt(f.Enabled), boolInt(f.AgeFromFirstSeen), time.Now().Unix()).Scan(&id)
+		f.WindowSeconds, formatInstanceIDs(f.InstanceIDs), boolInt(f.Enabled), boolInt(f.AgeFromFirstSeen), f.Category, time.Now().Unix()).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create brush feed: %w", err)
 	}
@@ -138,9 +141,9 @@ func (s *Store) CreateFeed(ctx context.Context, f Feed) (int64, error) {
 // so the API never sends it back to the browser.
 func (s *Store) UpdateFeed(ctx context.Context, f Feed) error {
 	set := `site_id = ?, name = ?, interval_seconds = ?, min_size_bytes = ?, max_size_bytes = ?, free_only = ?,
-		skip_hr = ?, window_seconds = ?, instance_id = 0, instance_ids = ?, enabled = ?, age_from_first_seen = ?`
+		skip_hr = ?, window_seconds = ?, instance_id = 0, instance_ids = ?, enabled = ?, age_from_first_seen = ?, category = ?`
 	args := []any{f.SiteID, f.Name, f.IntervalSeconds, f.MinSizeBytes, f.MaxSizeBytes, boolInt(f.FreeOnly),
-		boolInt(f.SkipHR), f.WindowSeconds, formatInstanceIDs(f.InstanceIDs), boolInt(f.Enabled), boolInt(f.AgeFromFirstSeen)}
+		boolInt(f.SkipHR), f.WindowSeconds, formatInstanceIDs(f.InstanceIDs), boolInt(f.Enabled), boolInt(f.AgeFromFirstSeen), f.Category}
 	if f.URL != "" {
 		sealed, err := s.seal(f.URL, aadFeedURL)
 		if err != nil {

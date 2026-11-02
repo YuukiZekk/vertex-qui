@@ -96,7 +96,11 @@
     "sectionRules": "Rules",
     "freeOnlyHelp": "Adds a torrent only when its details page shows it free.",
     "skipHrHelp": "Checks the details page and skips torrents with H&R, or when the check fails.",
-    "enabledHelp": "When off, the feed is not polled."
+    "enabledHelp": "When off, the feed is not polled.",
+    "category": "Category",
+    "categoryPlaceholder": "e.g. brush",
+    "categoryHelp": "Torrents are added with this qBittorrent category, created when it does not exist. Leave empty for none.",
+    "categoryValue": "category {{category}}"
   },
   "test": {
     "title": "Test {{name}}",

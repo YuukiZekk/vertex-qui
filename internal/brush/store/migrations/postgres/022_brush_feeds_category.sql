@@ -1,0 +1,1 @@
+ALTER TABLE brush_feeds ADD COLUMN category TEXT NOT NULL DEFAULT ''

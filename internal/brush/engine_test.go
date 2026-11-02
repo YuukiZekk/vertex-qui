@@ -31,10 +31,11 @@ const gib = int64(1) << 30
 
 // fakeQB serves one active instance per entry in free, named vps-<id>.
 type fakeQB struct {
-	mu       sync.Mutex
-	free     map[int]int64
-	added    map[int]int
-	upLimits []int64
+	mu         sync.Mutex
+	free       map[int]int64
+	added      map[int]int
+	upLimits   []int64
+	categories []string
 	// listed is what Torrents returns; deletions remove from it.
 	listed      map[int][]qbt.Torrent
 	reannounced []string
@@ -85,13 +86,14 @@ func (f *fakeQB) Transfer(context.Context, int) (quiadapter.Transfer, bool, erro
 
 func (f *fakeQB) HasTorrent(context.Context, int, string) (bool, error) { return false, nil }
 
-func (f *fakeQB) AddTorrent(_ context.Context, id int, _ []byte, tag string, upLimit int64) error {
+func (f *fakeQB) AddTorrent(_ context.Context, id int, _ []byte, tag, category string, upLimit int64) error {
 	if tag != Tag {
 		return fmt.Errorf("unexpected tag %q", tag)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.upLimits = append(f.upLimits, upLimit)
+	f.categories = append(f.categories, category)
 	if f.added == nil {
 		f.added = make(map[int]int)
 	}
@@ -202,7 +204,7 @@ func TestPipelineRacesOnlyFreshFreeTorrentsWithinCommittedSpace(t *testing.T) {
 	require.NoError(t, err)
 	feedID, err := svc.store.CreateFeed(ctx, store.Feed{SiteID: siteID, Name: "all", URL: srv.URL + "/rss.php",
 		IntervalSeconds: 15, MinSizeBytes: 5 * gib, MaxSizeBytes: 50 * gib, FreeOnly: true, WindowSeconds: 300,
-		InstanceIDs: []int{1}, Enabled: true})
+		InstanceIDs: []int{1}, Enabled: true, Category: "brush"})
 	require.NoError(t, err)
 	require.NoError(t, svc.store.SetFloor(ctx, 1, 50*gib))
 
@@ -254,6 +256,7 @@ func TestPipelineRacesOnlyFreshFreeTorrentsWithinCommittedSpace(t *testing.T) {
 		}
 	}
 	require.Equal(t, 1, qb.addCount())
+	require.Equal(t, []string{"brush"}, qb.categories, "torrents carry the feed's category")
 }
 
 func TestCommittedSpaceCountsReservationsUntilListed(t *testing.T) {

@@ -95,6 +95,7 @@ export function BrushFeedsCard() {
                       feed.freeOnly && t("feeds.freeOnly"),
                       feed.skipHr && t("feeds.skipHr"),
                       feed.ageFromFirstSeen && t("feeds.ageFromFirstSeenShort"),
+                      feed.category && t("feeds.categoryValue", { category: feed.category }),
                       t("feeds.windowValue", { minutes: feed.windowSeconds / 60 }),
                       site?.torrentUploadLimit ? t("sites.uploadLimitValue", { value: bytesPerSecondToMBs(site.torrentUploadLimit) }) : "",
                     ]
@@ -162,6 +163,7 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
     freeOnly: feed?.freeOnly ?? true,
     skipHr: feed?.skipHr ?? false,
     ageFromFirstSeen: feed?.ageFromFirstSeen ?? false,
+    category: feed?.category ?? "",
     enabled: feed?.enabled ?? true,
   })
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((prev) => ({ ...prev, [key]: value }))
@@ -181,6 +183,7 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
         freeOnly: form.freeOnly,
         skipHr: form.skipHr,
         ageFromFirstSeen: form.ageFromFirstSeen,
+        category: form.category.trim(),
         enabled: form.enabled,
       })
     },
@@ -220,6 +223,9 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
                 )}
               </Field>
             </div>
+            <Field id="feed-category" label={t("feeds.category")} help={t("feeds.categoryHelp")}>
+              <Input id="feed-category" value={form.category} placeholder={t("feeds.categoryPlaceholder")} onChange={(e) => set("category", e.target.value)} />
+            </Field>
             <Field id="feed-url" label={t("feeds.url")} help={t("feeds.urlHelp")}>
               <Input
                 id="feed-url"

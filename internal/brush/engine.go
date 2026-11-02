@@ -236,7 +236,7 @@ func (s *Service) process(ctx context.Context, f store.Feed, client *site.NexusP
 		reject(code, detail)
 		return
 	}
-	if err := s.qui.AddTorrent(raceCtx, instanceID, data, Tag, st.TorrentUploadLimit); err != nil {
+	if err := s.qui.AddTorrent(raceCtx, instanceID, data, Tag, f.Category, st.TorrentUploadLimit); err != nil {
 		if failErr := s.store.Fail(ctx, entryID, reasonAdd+": "+err.Error()); failErr != nil {
 			s.log.Error().Err(failErr).Int64("entry", entryID).Msg("fail entry")
 		}

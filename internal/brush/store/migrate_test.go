@@ -96,7 +96,7 @@ func TestSecretsAreSealedAndKeptOnBlankUpdate(t *testing.T) {
 
 			require.NoError(t, s.UpdateSite(ctx, Site{ID: siteID, Name: "pt2", BaseURL: "https://pt.example"}))
 			require.NoError(t, s.UpdateFeed(ctx, Feed{ID: feedID, SiteID: siteID, Name: "all2", IntervalSeconds: 20,
-				WindowSeconds: 300, InstanceIDs: []int{1, 3}, AgeFromFirstSeen: true}))
+				WindowSeconds: 300, InstanceIDs: []int{1, 3}, AgeFromFirstSeen: true, Category: "brush"}))
 
 			site, err := s.GetSite(ctx, siteID)
 			require.NoError(t, err)
@@ -108,6 +108,7 @@ func TestSecretsAreSealedAndKeptOnBlankUpdate(t *testing.T) {
 			require.False(t, feed.Enabled)
 			require.Equal(t, []int{1, 3}, feed.InstanceIDs)
 			require.True(t, feed.AgeFromFirstSeen)
+			require.Equal(t, "brush", feed.Category)
 		})
 	}
 }

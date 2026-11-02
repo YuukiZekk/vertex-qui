@@ -235,6 +235,7 @@ type feedBody struct {
 	SkipHR           bool   `json:"skipHr"`
 	WindowSeconds    int    `json:"windowSeconds"`
 	AgeFromFirstSeen bool   `json:"ageFromFirstSeen"`
+	Category         string `json:"category"`
 	InstanceIDs      []int  `json:"instanceIds"`
 	Enabled          bool   `json:"enabled"`
 }
@@ -259,7 +260,7 @@ func (s *Service) handleSaveFeed(w http.ResponseWriter, r *http.Request) {
 	f := store.Feed{
 		SiteID: body.SiteID, Name: strings.TrimSpace(body.Name), URL: strings.TrimSpace(body.URL),
 		IntervalSeconds: body.IntervalSeconds, MinSizeBytes: body.MinSizeBytes, MaxSizeBytes: body.MaxSizeBytes,
-		FreeOnly: body.FreeOnly, SkipHR: body.SkipHR, WindowSeconds: body.WindowSeconds, AgeFromFirstSeen: body.AgeFromFirstSeen,
+		FreeOnly: body.FreeOnly, SkipHR: body.SkipHR, WindowSeconds: body.WindowSeconds, AgeFromFirstSeen: body.AgeFromFirstSeen, Category: strings.TrimSpace(body.Category),
 		InstanceIDs: normalizeIDs(body.InstanceIDs), Enabled: body.Enabled,
 	}
 	create := chi.URLParam(r, "id") == ""

@@ -96,7 +96,11 @@
     "sectionRules": "规则",
     "freeOnlyHelp": "到站点详情页确认是免费种才添加。",
     "skipHrHelp": "到站点详情页检查，带 H&R 或检查失败的都跳过。",
-    "enabledHelp": "关闭后不再拉取这个订阅。"
+    "enabledHelp": "关闭后不再拉取这个订阅。",
+    "category": "分类",
+    "categoryPlaceholder": "例如 brush",
+    "categoryHelp": "添加种子时设为这个 qBittorrent 分类，分类不存在时会自动创建。留空表示不设分类。",
+    "categoryValue": "分类 {{category}}"
   },
   "test": {
     "title": "测试 {{name}}",
