@@ -238,5 +238,7 @@ export interface BrushTestItem {
   sizeOk: boolean
   free: boolean | null
   hr: boolean | null
+  // The site rule that read the details page, like "nexusphp" or "m-team".
+  rule?: string
   error?: string
 }

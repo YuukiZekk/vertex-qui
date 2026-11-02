@@ -47,7 +47,7 @@
     "baseUrlPlaceholder": "https://example.org",
     "cookie": "Cookie",
     "cookieKeep": "Leave empty to keep the saved cookie",
-    "cookieHelp": "Copy the Cookie header from a logged-in browser; brush uses it to check free status and download torrents. It is stored encrypted and never shown again.",
+    "cookieHelp": "Copy the Cookie header from a logged-in browser; brush uses it to check free status and download torrents. It is stored encrypted and never shown again. For M-Team, enter the API key here.",
     "cookieMissing": "No cookie",
     "uploadLimit": "Per-torrent upload limit (MB/s)",
     "uploadLimitPlaceholder": "e.g. 100",
@@ -103,6 +103,7 @@
     "ageValue": "{{minutes}} min",
     "free": "Free",
     "hr": "H&R",
+    "rule": "Rule",
     "yes": "Yes",
     "no": "No"
   },

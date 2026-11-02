@@ -1,0 +1,124 @@
+// Copyright (c) 2026, vertex-qui contributors.
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+package site
+
+import (
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+// Each site rule follows the original Vertex's scrape.js for that site.
+func TestSiteRules(t *testing.T) {
+	const user = `<a href="userdetails.php?id=1">me</a>`
+	tests := []struct {
+		name, host, page string
+		free, hr         bool
+		rule             string
+	}{
+		{"generic site uses the title", "zmpt.cc", `<h1 id="top">x <b><font class="free">免费</font></b></h1>`, true, false, "nexusphp"},
+		{"listed NexusPHP site uses the title", "hdsky.me", `<h1 id="top">x <font class="halfdown">50%</font></h1>`, false, false, "nexusphp"},
+		{"hit and run is an image", "ourbits.club", `<h1 id="top">x</h1><span class="hitandrun">legend</span>`, false, false, "nexusphp"},
+		{"opencd free icon", "open.cd", `<div class="title">x <img class="pro_free" src="t.gif"></div>`, true, false, "opencd"},
+		{"opencd first icon is not free", "www.open.cd", `<div class="title">x <img class="pro_50pctdown"><img class="pro_free"></div>`, false, false, "opencd"},
+		{"ttg free and hr", "totheglory.im", `<img src="/pic/ico_free.gif" class="topic"><img src="/pic/hit_run.gif" alt="Hit & Run">`, true, true, "totheglory"},
+		{"ttg not free", "totheglory.im", `<img src="/pic/ico_half.gif" class="topic">`, false, false, "totheglory"},
+		{"u2 free icon", "u2.dmhy.org", `<table><tr><td valign="top"><img class="pro_free2up"></td></tr></table>`, true, false, "u2"},
+		{"u2 custom zero download", "u2.dmhy.org", `<table><tr><td valign="top"><img class="arrowdown"> <b>0.00X</b></td></tr></table>`, true, false, "u2"},
+		{"u2 custom half download", "u2.dmhy.org", `<table><tr><td valign="top"><img class="arrowdown"><b>0.50X</b></td></tr></table>`, false, false, "u2"},
+		{"hares bold font", "club.hares.top", `<b><font class="twoupfree">2xFree</font></b>`, true, false, "bold-font"},
+		{"putao bold font", "pt.sjtu.edu.cn", `<b><font class="halfdown">50%</font></b><b><font class="free">x</font></b>`, false, false, "bold-font"},
+		{"byr share", "byr.pt", `<div id="share"><span class="free">免费</span></div>`, true, false, "byr"},
+		{"hhanclub tag", "hhanclub.net", `<span class="promotion-tag promotion-tag-free">Free</span>`, true, false, "hhanclub"},
+		{"hudbt minor list", "hudbt.hust.edu.cn", `<div class="minor-list"><img class="twoupfree"></div>`, true, false, "hudbt"},
+		{"hdcity font", "hdcity.city", `<font class="free">Free</font>`, true, false, "hdcity"},
+		{"chdbits text hr", "ptchdbits.co", `<h1 id="top">x <font class="free">Free</font></h1><table><tr><td><b>H&amp;R:&nbsp;</b>5day</td></tr></table>`, true, true, "chdbits"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := InspectPage(tt.host, []byte(user+tt.page))
+			require.NoError(t, err)
+			require.Equal(t, Inspection{Free: tt.free, HR: tt.hr, Rule: tt.rule}, got)
+		})
+	}
+}
+
+func TestParseFeedQuirks(t *testing.T) {
+	t.Run("feed inside the XML viewer page", func(t *testing.T) {
+		body := []byte(`<html><head><style id="xml-viewer-style">x</style></head><body><rss version="2.0"><channel>
+<item><title>A</title><link>https://pt.example/details.php?id=1</link><guid>g1</guid>
+<enclosure url="https://pt.example/download.php?id=1&amp;passkey=k" length="10"/></item>
+</channel></rss></body></html>`)
+		items, err := ParseFeed("https://pt.example/torrentrss.php", body)
+		require.NoError(t, err)
+		require.Len(t, items, 1)
+		require.Equal(t, int64(10), items[0].Size)
+	})
+
+	t.Run("putao link and title size", func(t *testing.T) {
+		body := []byte(`<?xml version="1.0"?><rss version="2.0"><channel>
+<item><title>Some.Movie.2160p [12.50 GB]</title>
+<link>https://pt.sjtu.edu.cn/download.php?id=42&amp;passkey=secret&amp;https=1</link>
+<guid>pt42</guid><pubDate>Fri, 30 Oct 2026 20:00:00 +0800</pubDate></item>
+</channel></rss>`)
+		items, err := ParseFeed("https://pt.sjtu.edu.cn/torrentrss.php?rows=10", body)
+		require.NoError(t, err)
+		require.Len(t, items, 1)
+		require.Equal(t, "https://pt.sjtu.edu.cn/details.php?id=42", items[0].Link)
+		require.Equal(t, "https://pt.sjtu.edu.cn/download.php?id=42&passkey=secret&https=1", items[0].DownloadURL)
+		require.Equal(t, int64(12_500_000_000), items[0].Size)
+		require.Equal(t, "pt42", items[0].GUID)
+	})
+}
+
+// M-Team is read through its API with the API key, retrying on rate limits and on
+// a cut-off response, and never gets the key sent as a cookie.
+func TestInspectMTeam(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "key-123", r.Header.Get("x-api-key"))
+		require.Empty(t, r.Header.Get("Cookie"))
+		require.NoError(t, r.ParseMultipartForm(1<<20))
+		switch calls.Add(1) {
+		case 1:
+			_, _ = io.WriteString(w, `{"code":"4","message":"rate"}`)
+		case 2:
+			_, _ = io.WriteString(w, `{"code":"0","data":{"sta`)
+		default:
+			require.Equal(t, "987", r.FormValue("id"))
+			_, _ = io.WriteString(w, `{"code":"0","message":"SUCCESS","data":{"status":{"discount":"_2X_FREE"}}}`)
+		}
+	}))
+	defer srv.Close()
+	oldAPI, oldGap := mteamAPI, mteamGap
+	mteamAPI, mteamGap = srv.URL, time.Millisecond
+	defer func() { mteamAPI, mteamGap = oldAPI, oldGap }()
+
+	n := NewNexusPHP("key-123")
+	got, err := n.Inspect(context.Background(), "https://kp.m-team.cc/detail/987")
+	require.NoError(t, err)
+	require.Equal(t, Inspection{Free: true, Rule: "m-team"}, got)
+	require.Equal(t, int32(3), calls.Load())
+
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"code":"1","message":"key invalid","data":null}`)
+	})
+	_, err = n.Inspect(context.Background(), "https://kp.m-team.cc/detail/987")
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "API key"), err.Error())
+
+	req, err := n.request(context.Background(), "https://rss.m-team.cc/api/rss/dl/abc")
+	require.NoError(t, err)
+	require.Empty(t, req.Header.Get("Cookie"), "the API key is not a cookie")
+	req, err = n.request(context.Background(), "https://pt.example/download.php?id=1")
+	require.NoError(t, err)
+	require.Equal(t, "key-123", req.Header.Get("Cookie"))
+}

@@ -33,7 +33,7 @@ func TestParseFeed(t *testing.T) {
 </item>
 </channel></rss>`)
 
-	items, err := ParseFeed(body)
+	items, err := ParseFeed("https://pt.example/torrentrss.php", body)
 	require.NoError(t, err)
 	require.Len(t, items, 2)
 
@@ -58,22 +58,22 @@ func TestInspectPage(t *testing.T) {
 		{
 			name: "free in title",
 			page: user + `<h1 id="top">Name <b>[<font class="free">Free</font>]</b></h1>`,
-			want: Inspection{Free: true},
+			want: Inspection{Free: true, Rule: "nexusphp"},
 		},
 		{
 			name: "2x free icon in title",
 			page: user + `<h1 id="top">Name <img class="pro_free2up" src="pic/trans.gif"></h1>`,
-			want: Inspection{Free: true},
+			want: Inspection{Free: true, Rule: "nexusphp"},
 		},
 		{
 			name: "free class outside title is ignored",
 			page: user + `<h1 id="top">Name</h1><div><span class="free">site-wide notice</span></div>`,
-			want: Inspection{},
+			want: Inspection{Rule: "nexusphp"},
 		},
 		{
 			name: "hit and run",
 			page: user + `<h1 id="top">Name</h1><img class="hitandrun" src="pic/hr.png">`,
-			want: Inspection{HR: true},
+			want: Inspection{HR: true, Rule: "nexusphp"},
 		},
 		{
 			name:    "logged out",
@@ -83,7 +83,7 @@ func TestInspectPage(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := InspectPage([]byte(tt.page))
+			got, err := InspectPage("pt.example", []byte(tt.page))
 			if tt.wantErr != nil {
 				require.True(t, errors.Is(err, tt.wantErr), "got %v", err)
 				return
@@ -93,6 +93,6 @@ func TestInspectPage(t *testing.T) {
 		})
 	}
 
-	_, err := InspectPage([]byte(user + `<h1>no id</h1>`))
+	_, err := InspectPage("pt.example", []byte(user+`<h1>no id</h1>`))
 	require.Error(t, err, "a page without #top cannot be read, so it must not count as not-free")
 }

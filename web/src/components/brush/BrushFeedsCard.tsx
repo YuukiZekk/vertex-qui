@@ -356,6 +356,7 @@ function TestDialog({ feed, onClose }: { feed: BrushFeed, onClose: () => void })
                 <TableHead>{t("test.age")}</TableHead>
                 <TableHead>{t("test.free")}</TableHead>
                 <TableHead>{t("test.hr")}</TableHead>
+                <TableHead>{t("test.rule")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -370,6 +371,7 @@ function TestDialog({ feed, onClose }: { feed: BrushFeed, onClose: () => void })
                   </TableCell>
                   <TableCell>{item.error ? <span className="text-destructive">{item.error}</span> : yesNo(item.free)}</TableCell>
                   <TableCell>{item.error ? "-" : yesNo(item.hr)}</TableCell>
+                  <TableCell className="text-muted-foreground">{item.rule || "-"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -4,8 +4,11 @@
 package site
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -37,9 +40,31 @@ type rssDoc struct {
 
 var pubDateLayouts = []string{time.RFC1123Z, time.RFC1123, time.RFC822Z, time.RFC822, "Mon, 2 Jan 2006 15:04:05 -0700"}
 
-// ParseFeed reads a NexusPHP RSS 2.0 feed. Items without a download URL are dropped,
-// because brush cannot add them.
-func ParseFeed(body []byte) ([]Item, error) {
+var (
+	rssElement = regexp.MustCompile(`(?s)<rss.*</rss>`)
+	// titleSize is PuTao's size in the title, like [12.34 GB], in powers of 1000.
+	titleSize  = regexp.MustCompile(`\[(\d+(?:\.\d+)?) ([KMGT])B\]`)
+	unitFactor = map[string]float64{"K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12}
+)
+
+// ParseFeed reads a NexusPHP RSS 2.0 feed from the feed's URL. Items without a
+// download URL are dropped, because brush cannot add them. Site quirks follow the
+// original Vertex's rss.js: a feed served inside the browser's XML viewer page, and
+// PuTao, whose link is the download URL and whose size is in the title.
+func ParseFeed(feedURL string, body []byte) ([]Item, error) {
+	if bytes.Contains(body, []byte("xml-viewer-style")) {
+		if rss := rssElement.Find(body); rss != nil {
+			body = rss
+		}
+	}
+	host := ""
+	if u, err := url.Parse(feedURL); err == nil {
+		host = strings.ToLower(u.Host)
+	}
+	if host == "pt.sjtu.edu.cn" {
+		return parsePuTao(body)
+	}
+
 	var doc rssDoc
 	if err := xml.Unmarshal(body, &doc); err != nil {
 		return nil, fmt.Errorf("parse rss: %w", err)
@@ -67,6 +92,38 @@ func ParseFeed(body []byte) ([]Item, error) {
 			item.Size = n
 		}
 		item.Published = parsePubDate(raw.PubDate)
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func parsePuTao(body []byte) ([]Item, error) {
+	var doc rssDoc
+	if err := xml.Unmarshal(body, &doc); err != nil {
+		return nil, fmt.Errorf("parse rss: %w", err)
+	}
+	items := make([]Item, 0, len(doc.Items))
+	for _, raw := range doc.Items {
+		download := strings.TrimSpace(raw.Link)
+		if download == "" {
+			continue
+		}
+		details, _, _ := strings.Cut(download, "&passkey=")
+		item := Item{
+			Title:       strings.TrimSpace(raw.Title),
+			Link:        strings.Replace(details, "download", "details", 1),
+			DownloadURL: download,
+			GUID:        strings.TrimSpace(raw.GUID),
+			Published:   parsePubDate(raw.PubDate),
+		}
+		if item.GUID == "" {
+			item.GUID = item.Link
+		}
+		if m := titleSize.FindStringSubmatch(item.Title); m != nil {
+			if v, err := strconv.ParseFloat(m[1], 64); err == nil {
+				item.Size = int64(v * unitFactor[m[2]])
+			}
+		}
 		items = append(items, item)
 	}
 	return items, nil

@@ -117,7 +117,7 @@ func (s *Service) poll(ctx context.Context, f store.Feed) {
 		record(etag, lastModified, "")
 		return
 	}
-	items, err := site.ParseFeed(body)
+	items, err := site.ParseFeed(f.URL, body)
 	if err != nil {
 		record(f.ETag, f.LastModified, err.Error())
 		return

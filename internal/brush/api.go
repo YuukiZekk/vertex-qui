@@ -317,6 +317,7 @@ type testItem struct {
 	SizeOK      bool   `json:"sizeOk"`
 	Free        *bool  `json:"free"`
 	HR          *bool  `json:"hr"`
+	Rule        string `json:"rule,omitempty"`
 	Error       string `json:"error,omitempty"`
 }
 
@@ -344,7 +345,7 @@ func (s *Service) handleTestFeed(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err)
 		return
 	}
-	items, err := site.ParseFeed(body)
+	items, err := site.ParseFeed(f.URL, body)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
 		return
@@ -366,7 +367,7 @@ func (s *Service) handleTestFeed(w http.ResponseWriter, r *http.Request) {
 		if insp, err := client.Inspect(ctx, item.Link); err != nil {
 			ti.Error = err.Error()
 		} else {
-			ti.Free, ti.HR = &insp.Free, &insp.HR
+			ti.Free, ti.HR, ti.Rule = &insp.Free, &insp.HR, insp.Rule
 		}
 		out = append(out, ti)
 	}

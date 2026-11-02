@@ -28,21 +28,23 @@ const (
 
 var ErrNotLoggedIn = errors.New("site page has no user link; the cookie is probably expired")
 
-// freeClasses are the NexusPHP promotion classes that mean the download is not counted.
-var freeClasses = []string{"free", "twoupfree", "pro_free", "pro_free2up"}
-
 type Inspection struct {
 	Free bool
 	HR   bool
+	// Rule names the site rule that read the page.
+	Rule string
 }
 
-// NexusPHP talks to one NexusPHP site with the user's cookie.
+// NexusPHP talks to one site with the user's cookie: a NexusPHP site, or M-Team,
+// where the cookie field holds the API key.
 type NexusPHP struct {
 	client *http.Client
 	cookie string
 
 	mu   sync.Mutex
 	last time.Time
+	// apiLast spaces M-Team API calls, which it limits to about one every 3 seconds.
+	apiLast time.Time
 }
 
 func NewNexusPHP(cookie string) *NexusPHP {
@@ -81,8 +83,16 @@ func (n *NexusPHP) FetchFeed(ctx context.Context, feedURL, etag, lastModified st
 	return body, resp.Header.Get("ETag"), resp.Header.Get("Last-Modified"), false, nil
 }
 
-// Inspect reads the details page and reports the promotion and H&R markers.
+// Inspect reads the details page and reports the promotion and H&R markers, using
+// the rule for the page's host.
 func (n *NexusPHP) Inspect(ctx context.Context, detailsURL string) (Inspection, error) {
+	u, err := url.Parse(detailsURL)
+	if err != nil {
+		return Inspection{}, errors.New("invalid details URL")
+	}
+	if isMTeam(u.Host) {
+		return n.inspectMTeam(ctx, detailsURL)
+	}
 	req, err := n.request(ctx, detailsURL)
 	if err != nil {
 		return Inspection{}, err
@@ -99,28 +109,24 @@ func (n *NexusPHP) Inspect(ctx context.Context, detailsURL string) (Inspection, 
 	if err != nil {
 		return Inspection{}, err
 	}
-	return InspectPage(body)
+	return InspectPage(u.Host, body)
 }
 
-// InspectPage finds the markers in a details page. Promotion classes are read only
-// inside the title (#top), because the rest of the page can carry the same classes
-// for other torrents or for site-wide notices.
-func InspectPage(page []byte) (Inspection, error) {
-	if !bytes.Contains(page, []byte("userdetails.php")) {
+// InspectPage finds the promotion and H&R markers in a details page of the host.
+func InspectPage(host string, page []byte) (Inspection, error) {
+	if !bytes.Contains(page, []byte("userdetails")) {
 		return Inspection{}, ErrNotLoggedIn
 	}
 	doc, err := html.Parse(bytes.NewReader(page))
 	if err != nil {
 		return Inspection{}, fmt.Errorf("parse details page: %w", err)
 	}
-	top := findByID(doc, "top")
-	if top == nil {
-		return Inspection{}, errors.New("details page has no #top title")
+	r := ruleFor(host)
+	free, err := r.free(doc)
+	if err != nil {
+		return Inspection{}, err
 	}
-	return Inspection{
-		Free: hasClass(top, freeClasses...),
-		HR:   hasClass(doc, "hitandrun"),
-	}, nil
+	return Inspection{Free: free, HR: r.hr(doc, page), Rule: r.name}, nil
 }
 
 func (n *NexusPHP) Download(ctx context.Context, rawURL string) ([]byte, error) {
@@ -145,7 +151,8 @@ func (n *NexusPHP) request(ctx context.Context, rawURL string) (*http.Request, e
 		return nil, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("User-Agent", "vertex-qui")
-	if n.cookie != "" {
+	// M-Team's RSS and download links are signed; its "cookie" is an API key.
+	if n.cookie != "" && !isMTeam(req.URL.Host) {
 		req.Header.Set("Cookie", n.cookie)
 	}
 	return req, nil
