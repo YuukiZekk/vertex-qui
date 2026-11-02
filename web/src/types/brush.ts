@@ -32,6 +32,22 @@ export interface BrushSite {
   hasCookie: boolean
   // Per-torrent upload limit in bytes per second, 0 for none.
   torrentUploadLimit: number
+  // How brush reads the site's torrents, from its address: a site rule, "nexusphp" or "m-team".
+  rule: string
+  feeds: number
+  // Today's totals over every instance, written once a minute; the rest is live.
+  todayUploaded: number
+  todayDownloaded: number
+  uploadSpeed: number
+  downloadSpeed: number
+  torrents: number
+  sizeBytes: number
+}
+
+export interface BrushSiteTest {
+  ok: boolean
+  rule: string
+  error?: string
 }
 
 export interface BrushSiteInput {

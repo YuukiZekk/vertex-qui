@@ -106,7 +106,8 @@ func (s *Service) runSampler(ctx context.Context) {
 }
 
 // sample gives new instances their default floor, reads every instance brush has a
-// floor for, then stores and checks predictions against what it read.
+// floor for to meter instances, torrents and sites, then stores and checks
+// predictions against what it read.
 func (s *Service) sample(ctx context.Context) {
 	s.ensureFloors(ctx, s.now())
 	configs, err := s.store.InstanceConfigs(ctx)
@@ -114,6 +115,10 @@ func (s *Service) sample(ctx context.Context) {
 		s.log.Error().Err(err).Msg("read brush instances for sampling")
 		return
 	}
+	start := s.now().Local()
+	s.refreshSites(ctx, start)
+	s.flushSites(ctx, start)
+	day := start.Format(time.DateOnly)
 	for id := range configs {
 		torrents, err := s.qui.Torrents(ctx, id)
 		if err != nil {
@@ -122,6 +127,7 @@ func (s *Service) sample(ctx context.Context) {
 		now := s.now()
 		s.meter.observe(id, now, torrents)
 		s.values.observe(id, now, torrents)
+		s.sites.observe(id, day, torrents)
 	}
 	now := s.now()
 	s.resolvePredictions(ctx, now)

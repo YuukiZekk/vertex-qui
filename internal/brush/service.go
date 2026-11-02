@@ -46,6 +46,7 @@ type Service struct {
 	meter  *uploadMeter
 	values *valueTracker
 	reaper *reaper
+	sites  *siteMeter
 	// lastPrediction is only touched by the sampler goroutine.
 	lastPrediction time.Time
 	// lastFloorCheck is only touched by the sampler goroutine.
@@ -72,6 +73,7 @@ func New(ctx context.Context, db dbinterface.Querier, cipher *models.CredentialC
 		meter:     newUploadMeter(),
 		values:    newValueTracker(),
 		reaper:    newReaper(),
+		sites:     newSiteMeter(),
 		baselined: make(map[int64]bool),
 		polling:   make(map[int64]bool),
 		clients:   make(map[int64]siteClientEntry),

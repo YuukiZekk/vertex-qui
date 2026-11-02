@@ -37,6 +37,7 @@ func (s *Service) Routes(r chi.Router) {
 	r.Post("/sites", s.handleSaveSite)
 	r.Put("/sites/{id}", s.handleSaveSite)
 	r.Delete("/sites/{id}", s.handleDeleteSite)
+	r.Post("/sites/{id}/test", s.handleTestSite)
 
 	r.Get("/feeds", s.handleListFeeds)
 	r.Post("/feeds", s.handleSaveFeed)
@@ -177,24 +178,6 @@ func (s *Service) handleCapacity(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type siteView struct {
-	store.Site
-	HasCookie bool `json:"hasCookie"`
-}
-
-func (s *Service) handleListSites(w http.ResponseWriter, r *http.Request) {
-	sites, err := s.store.ListSites(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	out := make([]siteView, 0, len(sites))
-	for _, st := range sites {
-		out = append(out, siteView{Site: st, HasCookie: st.Cookie != ""})
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
 func (s *Service) handleSaveSite(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name               string `json:"name"`
@@ -224,9 +207,22 @@ func (s *Service) handleSaveSite(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleDeleteSite refuses a site that still has feeds, which would be left without
+// a cookie to fetch with.
 func (s *Service) handleDeleteSite(w http.ResponseWriter, r *http.Request) {
-	s.deleteAndRespond(w, r, s.store.DeleteSite)
+	s.deleteAndRespond(w, r, func(ctx context.Context, id int64) error {
+		feeds, err := s.store.FeedCounts(ctx)
+		if err != nil {
+			return err
+		}
+		if feeds[id] > 0 {
+			return errSiteHasFeeds
+		}
+		return s.store.DeleteSite(ctx, id)
+	})
 }
+
+var errSiteHasFeeds = errors.New("delete the site's feeds first")
 
 type feedBody struct {
 	SiteID           int64  `json:"siteId"`
@@ -432,6 +428,10 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 func writeStoreError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errSiteHasFeeds) {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, err)
 		return

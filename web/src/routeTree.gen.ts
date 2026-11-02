@@ -9,31 +9,31 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SetupRouteImport } from './routes/setup'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as AddRouteImport } from './routes/add'
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
-import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
-import { Route as AuthenticatedRssRouteImport } from './routes/_authenticated/rss'
-import { Route as AuthenticatedInstancesRouteImport } from './routes/_authenticated/instances'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
-import { Route as AuthenticatedCrossSeedRouteImport } from './routes/_authenticated/cross-seed'
-import { Route as AuthenticatedBrushRouteImport } from './routes/_authenticated/brush'
-import { Route as AuthenticatedBackupsRouteImport } from './routes/_authenticated/backups'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as AddRouteImport } from './routes/add'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AuthenticatedAutomationsRouteImport } from './routes/_authenticated/automations'
+import { Route as AuthenticatedBackupsRouteImport } from './routes/_authenticated/backups'
+import { Route as AuthenticatedBrushRouteImport } from './routes/_authenticated/brush'
+import { Route as AuthenticatedCrossSeedRouteImport } from './routes/_authenticated/cross-seed'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedInstancesRouteImport } from './routes/_authenticated/instances'
+import { Route as AuthenticatedRssRouteImport } from './routes/_authenticated/rss'
+import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedSitesRouteImport } from './routes/_authenticated/sites'
 import { Route as AuthenticatedInstancesIndexRouteImport } from './routes/_authenticated/instances.index'
 import { Route as AuthenticatedInstancesInstanceIdRouteImport } from './routes/_authenticated/instances.$instanceId'
 
-const SetupRoute = SetupRouteImport.update({
-  id: '/setup',
-  path: '/setup',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AddRoute = AddRouteImport.update({
@@ -41,54 +41,15 @@ const AddRoute = AddRouteImport.update({
   path: '/add',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRoute = AuthenticatedRouteImport.update({
-  id: '/_authenticated',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedSearchRoute = AuthenticatedSearchRouteImport.update({
-  id: '/search',
-  path: '/search',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedRssRoute = AuthenticatedRssRouteImport.update({
-  id: '/rss',
-  path: '/rss',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedInstancesRoute = AuthenticatedInstancesRouteImport.update({
-  id: '/instances',
-  path: '/instances',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedCrossSeedRoute = AuthenticatedCrossSeedRouteImport.update({
-  id: '/cross-seed',
-  path: '/cross-seed',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedBrushRoute = AuthenticatedBrushRouteImport.update({
-  id: '/brush',
-  path: '/brush',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedBackupsRoute = AuthenticatedBackupsRouteImport.update({
-  id: '/backups',
-  path: '/backups',
-  getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedAutomationsRoute =
   AuthenticatedAutomationsRouteImport.update({
@@ -96,6 +57,51 @@ const AuthenticatedAutomationsRoute =
     path: '/automations',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedBackupsRoute = AuthenticatedBackupsRouteImport.update({
+  id: '/backups',
+  path: '/backups',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedBrushRoute = AuthenticatedBrushRouteImport.update({
+  id: '/brush',
+  path: '/brush',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedCrossSeedRoute = AuthenticatedCrossSeedRouteImport.update({
+  id: '/cross-seed',
+  path: '/cross-seed',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedInstancesRoute = AuthenticatedInstancesRouteImport.update({
+  id: '/instances',
+  path: '/instances',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedRssRoute = AuthenticatedRssRouteImport.update({
+  id: '/rss',
+  path: '/rss',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSearchRoute = AuthenticatedSearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSitesRoute = AuthenticatedSitesRouteImport.update({
+  id: '/sites',
+  path: '/sites',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedInstancesIndexRoute =
   AuthenticatedInstancesIndexRouteImport.update({
     id: '/',
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/rss': typeof AuthenticatedRssRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/sites': typeof AuthenticatedSitesRoute
   '/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/instances/': typeof AuthenticatedInstancesIndexRoute
 }
@@ -139,6 +146,7 @@ export interface FileRoutesByTo {
   '/rss': typeof AuthenticatedRssRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/sites': typeof AuthenticatedSitesRoute
   '/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/instances': typeof AuthenticatedInstancesIndexRoute
 }
@@ -158,6 +166,7 @@ export interface FileRoutesById {
   '/_authenticated/rss': typeof AuthenticatedRssRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/sites': typeof AuthenticatedSitesRoute
   '/_authenticated/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/_authenticated/instances/': typeof AuthenticatedInstancesIndexRoute
 }
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/rss'
     | '/search'
     | '/settings'
+    | '/sites'
     | '/instances/$instanceId'
     | '/instances/'
   fileRoutesByTo: FileRoutesByTo
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/rss'
     | '/search'
     | '/settings'
+    | '/sites'
     | '/instances/$instanceId'
     | '/instances'
   id:
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/_authenticated/rss'
     | '/_authenticated/search'
     | '/_authenticated/settings'
+    | '/_authenticated/sites'
     | '/_authenticated/instances/$instanceId'
     | '/_authenticated/instances/'
   fileRoutesById: FileRoutesById
@@ -225,18 +237,18 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/setup': {
-      id: '/setup'
-      path: '/setup'
-      fullPath: '/setup'
-      preLoaderRoute: typeof SetupRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/add': {
@@ -246,67 +258,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AddRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof AuthenticatedRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/settings': {
-      id: '/_authenticated/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/search': {
-      id: '/_authenticated/search'
-      path: '/search'
-      fullPath: '/search'
-      preLoaderRoute: typeof AuthenticatedSearchRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/rss': {
-      id: '/_authenticated/rss'
-      path: '/rss'
-      fullPath: '/rss'
-      preLoaderRoute: typeof AuthenticatedRssRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/instances': {
-      id: '/_authenticated/instances'
-      path: '/instances'
-      fullPath: '/instances'
-      preLoaderRoute: typeof AuthenticatedInstancesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/cross-seed': {
-      id: '/_authenticated/cross-seed'
-      path: '/cross-seed'
-      fullPath: '/cross-seed'
-      preLoaderRoute: typeof AuthenticatedCrossSeedRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/brush': {
-      id: '/_authenticated/brush'
-      path: '/brush'
-      fullPath: '/brush'
-      preLoaderRoute: typeof AuthenticatedBrushRouteImport
+    '/_authenticated/automations': {
+      id: '/_authenticated/automations'
+      path: '/automations'
+      fullPath: '/automations'
+      preLoaderRoute: typeof AuthenticatedAutomationsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/backups': {
@@ -316,11 +286,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBackupsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/automations': {
-      id: '/_authenticated/automations'
-      path: '/automations'
-      fullPath: '/automations'
-      preLoaderRoute: typeof AuthenticatedAutomationsRouteImport
+    '/_authenticated/brush': {
+      id: '/_authenticated/brush'
+      path: '/brush'
+      fullPath: '/brush'
+      preLoaderRoute: typeof AuthenticatedBrushRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/cross-seed': {
+      id: '/_authenticated/cross-seed'
+      path: '/cross-seed'
+      fullPath: '/cross-seed'
+      preLoaderRoute: typeof AuthenticatedCrossSeedRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/instances': {
+      id: '/_authenticated/instances'
+      path: '/instances'
+      fullPath: '/instances'
+      preLoaderRoute: typeof AuthenticatedInstancesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/rss': {
+      id: '/_authenticated/rss'
+      path: '/rss'
+      fullPath: '/rss'
+      preLoaderRoute: typeof AuthenticatedRssRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/search': {
+      id: '/_authenticated/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof AuthenticatedSearchRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/sites': {
+      id: '/_authenticated/sites'
+      path: '/sites'
+      fullPath: '/sites'
+      preLoaderRoute: typeof AuthenticatedSitesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/instances/': {
@@ -367,6 +386,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRssRoute: typeof AuthenticatedRssRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSitesRoute: typeof AuthenticatedSitesRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -379,6 +399,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRssRoute: AuthenticatedRssRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSitesRoute: AuthenticatedSitesRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

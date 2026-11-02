@@ -1,5 +1,6 @@
 {
   "nav": "Brush",
+  "sitesNav": "Sites",
   "page": {
     "title": "Brush",
     "description": "Race new torrents from RSS onto the least busy server and remove the torrents that earn the least."
@@ -64,8 +65,6 @@
     "url": "RSS link",
     "urlKeep": "Leave empty to keep the saved link",
     "urlHelp": "The link contains your passkey. It is stored encrypted and never shown again.",
-    "newSite": "New site",
-    "sharedSiteHelp": "Shares the address, cookie and upload limit with the site's other feeds; changes here apply to all of them.",
     "site": "Site",
     "instance": "Instance",
     "instances": "Downloaders",
@@ -93,7 +92,9 @@
     "empty": "No feeds yet.",
     "confirmDelete": "Delete {{name}}?",
     "saveFailed": "Could not save the feed",
-    "deleteFailed": "Could not delete the feed"
+    "deleteFailed": "Could not delete the feed",
+    "noSite": "No site yet. Add one on the sites page first.",
+    "siteHelp": "The cookie, upload limit and other site settings are edited on the sites page and shared by the site's feeds. Go to"
   },
   "test": {
     "title": "Test {{name}}",
@@ -203,5 +204,33 @@
     "site_unavailable": "Could not read the site settings",
     "interrupted": "qui stopped during the add",
     "other": "other"
+  },
+  "sitesPage": {
+    "title": "Sites",
+    "description": "What each site's torrents uploaded and downloaded today, what they seed now, and the site's cookie and upload limit. Feeds pick their site on the brush page.",
+    "today": "Site traffic today",
+    "count": "{{count}} sites",
+    "add": "Add site",
+    "addTitle": "Add site",
+    "editTitle": "Edit site",
+    "site": "Site",
+    "rule": "Rule",
+    "todayUploaded": "Uploaded today",
+    "todayDownloaded": "Downloaded today",
+    "torrents": "Torrents",
+    "torrentsValue": "{{count}} torrents",
+    "size": "Size",
+    "feedsValue": "{{count}} feeds",
+    "baseUrlHelp": "The rule is picked from the address, following the original Vertex's site support; sites without their own rule use the generic NexusPHP rule.",
+    "test": "Test login",
+    "loginOk": "{{name}}: login works",
+    "loginFailed": "{{name}}: login does not work",
+    "testFailed": "Could not test the login",
+    "saveFailed": "Could not save the site",
+    "deleteFailed": "Could not delete the site",
+    "deleteHasFeeds": "Delete this site's feeds first",
+    "confirmDelete": "Delete site {{name}}?",
+    "empty": "No sites yet.",
+    "footnote": "Counts the torrents on every downloader with a safety floor: the ones brush added belong to their feed's site, the others to the site their tracker's domain matches. Today's totals are written once a minute; speed, torrents and size are live."
   }
 }

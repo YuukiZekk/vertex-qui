@@ -122,3 +122,35 @@ func TestInspectMTeam(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "key-123", req.Header.Get("Cookie"))
 }
+
+func TestCheckLogin(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/index.php", r.URL.Path)
+		if r.Header.Get("Cookie") == "good" {
+			_, _ = io.WriteString(w, `<a href="userdetails.php?id=1">me</a>`)
+			return
+		}
+		_, _ = io.WriteString(w, `<form action="takelogin.php"></form>`)
+	}))
+	defer srv.Close()
+	require.NoError(t, NewNexusPHP("good").CheckLogin(context.Background(), srv.URL+"/"))
+	require.ErrorIs(t, NewNexusPHP("bad").CheckLogin(context.Background(), srv.URL), ErrNotLoggedIn)
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("x-api-key") == "key" {
+			_, _ = io.WriteString(w, `{"code":"0","message":"SUCCESS","data":{}}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"code":"1","message":"bad key"}`)
+	}))
+	defer api.Close()
+	oldAPI, oldGap := mteamProfileAPI, mteamGap
+	mteamProfileAPI, mteamGap = api.URL, time.Millisecond
+	defer func() { mteamProfileAPI, mteamGap = oldAPI, oldGap }()
+	require.NoError(t, NewNexusPHP("key").CheckLogin(context.Background(), "https://kp.m-team.cc"))
+	require.ErrorContains(t, NewNexusPHP("nope").CheckLogin(context.Background(), "https://kp.m-team.cc"), "bad key")
+
+	require.Equal(t, "m-team", RuleName("kp.m-team.cc"))
+	require.Equal(t, "chdbits", RuleName("ptchdbits.co"))
+	require.Equal(t, "nexusphp", RuleName("zmpt.cc"))
+}

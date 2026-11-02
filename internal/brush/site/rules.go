@@ -205,3 +205,12 @@ func text(n *html.Node) string {
 	walk(n)
 	return b.String()
 }
+
+// RuleName names how brush reads the host's torrents: a site rule, the generic
+// NexusPHP rule, or M-Team's API.
+func RuleName(host string) string {
+	if isMTeam(host) {
+		return "m-team"
+	}
+	return ruleFor(host).name
+}

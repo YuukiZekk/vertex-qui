@@ -107,6 +107,12 @@ const navigation: NavItem[] = [
     icon: Gauge,
   },
   {
+    id: "sites",
+    titleKey: "brush:sitesNav",
+    href: "/sites",
+    icon: Globe,
+  },
+  {
     id: "settings",
     titleKey: "nav.settings",
     href: "/settings",
