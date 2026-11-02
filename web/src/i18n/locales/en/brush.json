@@ -41,7 +41,6 @@
     "noFloor": "Reading the disk; the floor is set shortly",
     "belowFloor": "Below the safety floor, adds paused",
     "inactive": "Disabled in qui",
-    "error": "Error: {{message}}",
     "empty": "No qBittorrent instances. Add one under Settings first.",
     "errorShort": "Error"
   },

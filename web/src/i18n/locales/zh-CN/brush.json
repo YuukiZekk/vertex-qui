@@ -41,7 +41,6 @@
     "noFloor": "正在读取空间，稍后自动设置安全底线",
     "belowFloor": "低于安全底线，暂停进种",
     "inactive": "已在 qui 中停用",
-    "error": "错误：{{message}}",
     "empty": "还没有 qBittorrent 实例，请先在设置里添加。",
     "errorShort": "错误"
   },
