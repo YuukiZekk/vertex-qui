@@ -109,6 +109,12 @@ func TestSecretsAreSealedAndKeptOnBlankUpdate(t *testing.T) {
 			require.Equal(t, []int{1, 3}, feed.InstanceIDs)
 			require.True(t, feed.AgeFromFirstSeen)
 			require.Equal(t, "brush", feed.Category)
+
+			require.NoError(t, s.SetFloor(ctx, 4, 1<<30))
+			require.NoError(t, s.SetCountry(ctx, 4, "nl"))
+			configs, err := s.InstanceConfigs(ctx)
+			require.NoError(t, err)
+			require.Equal(t, "nl", configs[4].CountryCode)
 		})
 	}
 }

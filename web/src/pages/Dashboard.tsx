@@ -4,6 +4,7 @@
  */
 
 import { isStreamUsable } from "@/lib/sync-stream-state"
+import { InstanceFlag } from "@/components/brush/CountryFlag"
 import { SortHead, TodayCells, TodayHeadCells, TodayHeaderStats } from "@/components/brush/TodayStats"
 import { sortServerRows, useServerStatsSort } from "@/components/brush/useServerStatsSort"
 import { useTodayMetrics, useTodayTransfer } from "@/components/brush/useTodayTransfer"
@@ -1457,7 +1458,7 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
                   className="flex w-full items-center gap-2 px-4 py-2 text-left"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{instance.name}</div>
+                    <div className="flex items-center gap-2 truncate text-sm font-medium"><InstanceFlag instanceId={instance.id} />{instance.name}</div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
                       <span className="flex shrink-0 items-center gap-0.5">
                         <ChevronDown className="h-3 w-3" />{formatBytes(serverState?.alltime_dl || 0)}
@@ -1496,7 +1497,9 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
 
                 return (
                   <TableRow key={instance.id}>
-                    <TableCell className="pl-4 font-medium">{instance.name}</TableCell>
+                    <TableCell className="pl-4 font-medium">
+                      <span className="flex items-center gap-2"><InstanceFlag instanceId={instance.id} />{instance.name}</span>
+                    </TableCell>
                     <TableCell className="text-center font-semibold">
                       {formatBytes(serverState?.alltime_dl || 0)}
                     </TableCell>

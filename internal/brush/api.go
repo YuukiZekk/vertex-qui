@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -32,6 +33,7 @@ func (s *Service) Routes(r chi.Router) {
 	r.Put("/settings", s.handleSettings)
 	r.Put("/instances/{instanceID}/floor", s.handleFloor)
 	r.Put("/instances/{instanceID}/capacity", s.handleCapacity)
+	r.Put("/instances/{instanceID}/country", s.handleCountry)
 
 	r.Get("/sites", s.handleListSites)
 	r.Post("/sites", s.handleSaveSite)
@@ -63,9 +65,11 @@ type instanceStatus struct {
 	FloorBytes *int64 `json:"floorBytes"`
 	// UploadCapacity is in bytes per second, zero when not set. UploadRate is the
 	// meter's average, null until it has samples.
-	UploadCapacity int64  `json:"uploadCapacity"`
-	UploadRate     *int64 `json:"uploadRate"`
-	Error          string `json:"error,omitempty"`
+	UploadCapacity int64 `json:"uploadCapacity"`
+	// CountryCode is where the instance runs, for its flag; empty when not set.
+	CountryCode string `json:"countryCode"`
+	UploadRate  *int64 `json:"uploadRate"`
+	Error       string `json:"error,omitempty"`
 }
 
 type statusResponse struct {
@@ -97,6 +101,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		if cfg, ok := configs[inst.ID]; ok {
 			st.FloorBytes = &cfg.FloorBytes
 			st.UploadCapacity = cfg.UploadCapacity
+			st.CountryCode = cfg.CountryCode
 		}
 		if rate, ok := s.meter.rate(inst.ID, s.now()); ok {
 			st.UploadRate = &rate
@@ -448,4 +453,34 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func writeError(w http.ResponseWriter, code int, err error) {
 	writeJSON(w, code, map[string]string{"error": err.Error()})
+}
+
+var countryCode = regexp.MustCompile(`^[a-z]{2}$`)
+
+func (s *Service) handleCountry(w http.ResponseWriter, r *http.Request) {
+	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("invalid instance id"))
+		return
+	}
+	var body struct {
+		CountryCode string `json:"countryCode"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	code := strings.ToLower(strings.TrimSpace(body.CountryCode))
+	if code != "" && !countryCode.MatchString(code) {
+		writeError(w, http.StatusBadRequest, errors.New("countryCode must be a two-letter ISO code"))
+		return
+	}
+	if err := s.store.SetCountry(r.Context(), instanceID, code); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusBadRequest, errors.New("set the safety floor first"))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

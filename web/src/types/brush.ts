@@ -18,6 +18,8 @@ export interface BrushInstanceStatus {
   // Average upload over the last minute in bytes per second, null until measured.
   uploadRate: number | null
   error?: string
+  // Where the instance runs, as a lower-case ISO code for its flag; empty when not set.
+  countryCode: string
 }
 
 export interface BrushStatus {

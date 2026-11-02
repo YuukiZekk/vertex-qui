@@ -15,6 +15,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { countryOptions } from "./countries"
+import { CountryFlag } from "./CountryFlag"
 import { bytesPerSecondToMbps, bytesToGB, gbToBytes, mbpsToBytesPerSecond } from "./units"
 
 // BrushInstanceTab is the brush tab of qui's instance settings dialog: the safety
@@ -27,7 +29,7 @@ export function BrushInstanceTab({ instanceId }: { instanceId: number }) {
 
   return (
     <TabsContent value="brush" className="mt-6 flex min-h-0 flex-1 flex-col overflow-hidden">
-      {inst ? <BrushInstanceForm key={`${inst.floorBytes}-${inst.uploadCapacity}`} inst={inst} /> : (
+      {inst ? <BrushInstanceForm key={`${inst.floorBytes}-${inst.uploadCapacity}-${inst.countryCode}`} inst={inst} /> : (
         <p className="py-8 text-center text-sm text-muted-foreground">{t("status.loading")}</p>
       )}
     </TabsContent>
@@ -35,8 +37,9 @@ export function BrushInstanceTab({ instanceId }: { instanceId: number }) {
 }
 
 function BrushInstanceForm({ inst }: { inst: BrushInstanceStatus }) {
-  const { t } = useTranslation("brush")
+  const { t, i18n } = useTranslation("brush")
   const queryClient = useQueryClient()
+  const [country, setCountry] = useState(inst.countryCode)
   const [floorGB, setFloorGB] = useState(inst.floorBytes === null ? "" : bytesToGB(inst.floorBytes))
   const [capacityMbps, setCapacityMbps] = useState(inst.uploadCapacity ? bytesPerSecondToMbps(inst.uploadCapacity) : "")
   // The capacity is stored with the floor, so the floor is saved first.
@@ -44,6 +47,7 @@ function BrushInstanceForm({ inst }: { inst: BrushInstanceStatus }) {
     mutationFn: async () => {
       await api.setBrushFloor(inst.id, gbToBytes(floorGB))
       await api.setBrushCapacity(inst.id, mbpsToBytesPerSecond(capacityMbps || "0"))
+      await api.setBrushCountry(inst.id, country)
     },
     onSuccess: () => {
       toast.success(t("instanceTab.saved"))
@@ -90,6 +94,19 @@ function BrushInstanceForm({ inst }: { inst: BrushInstanceStatus }) {
               <Input id="brush-capacity" type="number" min="0" value={capacityMbps} placeholder={t("instances.capacityPlaceholder")}
                 onChange={(e) => setCapacityMbps(e.target.value)} />
               <p className="text-xs text-muted-foreground">{t("instanceTab.capacityHelp")}</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="brush-country" className="flex items-center gap-2">{t("instanceTab.country")}<CountryFlag code={country} /></Label>
+              <select
+                id="brush-country"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
+              >
+                <option value="">—</option>
+                {countryOptions(i18n.language).map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+              </select>
+              <p className="text-xs text-muted-foreground">{t("instanceTab.countryHelp")}</p>
             </div>
           </div>
         </section>

@@ -234,6 +234,8 @@
     "nowTitle": "当前",
     "nowDescription": "刷流读到的这台下载器的空间和上传，每 5 秒更新。",
     "saved": "刷流设置已保存",
-    "saveFailed": "无法保存刷流设置"
+    "saveFailed": "无法保存刷流设置",
+    "country": "地区",
+    "countryHelp": "这台下载器所在的国家或地区，在仪表盘的服务器统计里显示对应国旗。"
   }
 }

@@ -234,6 +234,8 @@
     "nowTitle": "Now",
     "nowDescription": "The space and upload brush reads for this downloader, updated every 5 seconds.",
     "saved": "Brush settings saved",
-    "saveFailed": "Could not save the brush settings"
+    "saveFailed": "Could not save the brush settings",
+    "country": "Region",
+    "countryHelp": "Where this downloader runs; its flag shows in the dashboard's server statistics."
   }
 }
