@@ -148,11 +148,21 @@ func parsePubDate(s string) time.Time {
 	return time.Time{}
 }
 
-// detailsLink turns a NexusPHP download link, download.php?id=N, into the details
-// page of the same torrent on the same site.
+// colaptFeedDownload is colapt's RSS download path, /feeds/downloads/<passkey>/<id>.
+var colaptFeedDownload = regexp.MustCompile(`^/feeds/downloads/[^/]+/(\d+)/?$`)
+
+// detailsLink turns a download link into the details page of the same torrent on
+// the same site: NexusPHP's download.php?id=N, and colapt's passkey path, whose
+// details page is /torrents/N.
 func detailsLink(link string) (string, bool) {
 	u, err := url.Parse(link)
-	if err != nil || !strings.HasSuffix(u.Path, "/download.php") {
+	if err != nil {
+		return "", false
+	}
+	if m := colaptFeedDownload.FindStringSubmatch(u.Path); m != nil {
+		return (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: "/torrents/" + m[1]}).String(), true
+	}
+	if !strings.HasSuffix(u.Path, "/download.php") {
 		return "", false
 	}
 	id := u.Query().Get("id")

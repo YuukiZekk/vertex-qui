@@ -18,7 +18,9 @@ import (
 // /api/v1, and only its RSS speaks NexusPHP. The API takes the logged-in session
 // cookie, like the browser app does. It has no H&R marker on a torrent.
 
-var colaptTorrentPath = regexp.MustCompile(`/torrents/(\d+)`)
+// colaptTorrentPath takes the id at the end of /torrents/N or of an RSS download
+// path /feeds/downloads/<passkey>/N.
+var colaptTorrentPath = regexp.MustCompile(`/(\d+)/?$`)
 
 func isColapt(host string) bool {
 	return strings.Contains(strings.ToLower(host), "colapt")

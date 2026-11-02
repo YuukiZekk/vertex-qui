@@ -177,7 +177,18 @@ func TestColapt(t *testing.T) {
 	api, err = colaptTorrentAPI("https://www.colapt.com/torrents/78")
 	require.NoError(t, err)
 	require.Equal(t, "https://www.colapt.com/api/v1/torrents/78", api)
+	api, err = colaptTorrentAPI("https://www.colapt.com/feeds/downloads/abc123/79")
+	require.NoError(t, err)
+	require.Equal(t, "https://www.colapt.com/api/v1/torrents/79", api)
 	require.Equal(t, "colapt", RuleName("www.colapt.com"))
+
+	items, err := ParseFeed("https://www.colapt.com/torrentrss.php?rows=50&linktype=dl", []byte(`<?xml version="1.0"?><rss version="2.0"><channel>
+<item><title>A</title><link>https://www.colapt.com/feeds/downloads/abc123/80</link><guid>https://www.colapt.com/torrents/80</guid></item>
+</channel></rss>`))
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, "https://www.colapt.com/torrents/80", items[0].Link, "the passkey path is not kept as the details link")
+	require.Equal(t, "https://www.colapt.com/feeds/downloads/abc123/80", items[0].DownloadURL)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Cookie") != "session=1" {
