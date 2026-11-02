@@ -1499,8 +1499,13 @@ function GlobalAllTimeStats({ statsData, isCollapsed, onCollapsedChange }: Globa
 
                 return (
                   <TableRow key={instance.id}>
-                    <TableCell className="w-8 pl-4"><InstanceFlag instanceId={instance.id} /></TableCell>
-                    <TableCell className="font-medium">{instance.name}</TableCell>
+                    <TableCell className="w-8 pl-4" />
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <InstanceFlag instanceId={instance.id} iconBox />
+                        <span className="font-medium truncate">{instance.name}</span>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-center font-semibold">
                       {formatBytes(serverState?.alltime_dl || 0)}
                     </TableCell>
