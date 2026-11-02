@@ -8,7 +8,7 @@ import { api } from "@/lib/api"
 import { formatBytes } from "@/lib/utils"
 import { useQuery } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
-import { EmptyState, SectionCard, StateBadge } from "./section"
+import { EmptyState, StateBadge } from "./section"
 import { sectionHeaderRowClass, sectionTableClass } from "./sectionStyles"
 
 function formatAge(seconds: number): string {
@@ -16,8 +16,9 @@ function formatAge(seconds: number): string {
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`
 }
 
-// BrushDeletionsCard lists the torrents brush deleted to make room, newest first.
-export function BrushDeletionsCard() {
+// BrushDeletionsLog lists the torrents brush deleted to make room, newest first,
+// in the brush log under qui's logs.
+export function BrushDeletionsLog() {
   const { t } = useTranslation("brush")
   const { data } = useQuery({
     queryKey: ["brush", "deletions"],
@@ -28,7 +29,8 @@ export function BrushDeletionsCard() {
   const instanceName = (id: number) => status?.instances.find((i) => i.id === id)?.name ?? `#${id}`
 
   return (
-    <SectionCard title={t("deletions.title")} description={t("deletions.description")} info={t("deletions.info")}>
+    <>
+      <p className="px-6 py-3 text-sm text-muted-foreground">{t("deletions.info")}</p>
       {data?.length === 0 && <EmptyState>{t("deletions.empty")}</EmptyState>}
       {(data?.length ?? 0) > 0 && (
         <Table className={sectionTableClass}>
@@ -65,6 +67,6 @@ export function BrushDeletionsCard() {
           </TableBody>
         </Table>
       )}
-    </SectionCard>
+    </>
   )
 }

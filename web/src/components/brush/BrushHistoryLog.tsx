@@ -12,8 +12,8 @@ import { useQuery } from "@tanstack/react-query"
 import type { TFunction } from "i18next"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { EmptyState, SectionCard, StateBadge } from "./section"
-import { readOpen, sectionHeaderRowClass, sectionTableClass, type Tone, writeOpen } from "./sectionStyles"
+import { EmptyState, StateBadge } from "./section"
+import { sectionHeaderRowClass, sectionTableClass, type Tone } from "./sectionStyles"
 import { bytesPerSecondToMbps } from "./units"
 
 // splitReason separates the reason code the backend stores from its free-text detail.
@@ -42,31 +42,26 @@ function placementSummary(placement: BrushPlacement, t: TFunction<"brush">): str
 }
 
 const PAGE_SIZE = 10
-const OPEN_KEY = "brush.history.open"
-
 const statusTone: Record<string, Tone> = { added: "ok", rejected: "neutral", pending: "neutral", adding: "warn" }
 
-export function BrushHistoryCard() {
+// BrushHistoryLog is what brush decided for each new torrent, newest first, in the
+// brush log under qui's logs.
+export function BrushHistoryLog() {
   const { t } = useTranslation("brush")
-  const [open, setOpen] = useState(() => readOpen(OPEN_KEY))
   const [page, setPage] = useState(0)
   const { data: entries } = useQuery({
     queryKey: ["brush", "entries"],
     queryFn: () => api.getBrushEntries(),
     refetchInterval: 5000,
-    enabled: open,
   })
   const pageCount = Math.max(1, Math.ceil((entries?.length ?? 0) / PAGE_SIZE))
   // New entries arrive at the top; a page past the end after a refetch falls back to the last one.
   const current = Math.min(page, pageCount - 1)
   const shown = entries?.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
-  const onOpenChange = (next: boolean) => {
-    setOpen(next)
-    writeOpen(OPEN_KEY, next)
-  }
 
   return (
-    <SectionCard title={t("history.title")} description={t("history.description")} open={open} onOpenChange={onOpenChange}>
+    <>
+      <p className="px-6 py-3 text-sm text-muted-foreground">{t("history.description")}</p>
       {entries?.length === 0 && <EmptyState>{t("history.empty")}</EmptyState>}
       {(entries?.length ?? 0) > 0 && (
         <Table className={sectionTableClass}>
@@ -124,6 +119,6 @@ export function BrushHistoryCard() {
           </Button>
         </div>
       )}
-    </SectionCard>
+    </>
   )
 }

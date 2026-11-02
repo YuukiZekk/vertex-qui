@@ -139,7 +139,6 @@
   },
   "deletions": {
     "title": "Deletions",
-    "description": "When new torrents need the space, brush deletes the ones that earn the least.",
     "time": "Deleted",
     "instance": "Instance",
     "torrent": "Torrent",
@@ -224,5 +223,9 @@
     "sectionSite": "Site",
     "sectionLogin": "Login",
     "sectionLimits": "Limits"
+  },
+  "log": {
+    "title": "Brush log",
+    "description": "What brush decided for each new torrent, and the torrents it deleted to make room."
   }
 }

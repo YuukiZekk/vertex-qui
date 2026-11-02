@@ -139,7 +139,6 @@
   },
   "deletions": {
     "title": "删种记录",
-    "description": "空间不够放新种时，刷流删掉价值最低的种子。",
     "time": "删除时间",
     "instance": "实例",
     "torrent": "种子",
@@ -224,5 +223,9 @@
     "sectionSite": "站点",
     "sectionLogin": "登录",
     "sectionLimits": "限速"
+  },
+  "log": {
+    "title": "刷流日志",
+    "description": "刷流对每个新种的处理结果，以及为了腾出空间删掉的种子。"
   }
 }

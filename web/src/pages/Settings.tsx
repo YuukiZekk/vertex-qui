@@ -16,6 +16,7 @@ import { GazelleSettingsCard } from "@/components/settings/GazelleSettingsCard"
 import { supportedLanguages, languageNames, changeLanguage, type AppLanguage } from "@/i18n"
 import { ExternalProgramsManager } from "@/components/settings/ExternalProgramsManager"
 import { LogSettingsPanel } from "@/components/settings/LogSettingsPanel"
+import { BrushLogPanel } from "@/components/brush/BrushLogPanel"
 import { NotificationsManager } from "@/components/settings/NotificationsManager"
 import { InstallUpdateButton } from "@/components/settings/InstallUpdateButton"
 import { RestartButton } from "@/components/settings/RestartButton"
@@ -1697,6 +1698,7 @@ export function Settings({ search, onSearchChange }: SettingsProps) {
           {activeTab === "logs" && (
             <SettingsScrollPanel contentClassName={scrollPanelContentClassName}>
               <LogSettingsPanel />
+              <BrushLogPanel />
             </SettingsScrollPanel>
           )}
         </div>
