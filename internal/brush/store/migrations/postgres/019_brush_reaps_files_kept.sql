@@ -1,0 +1,1 @@
+ALTER TABLE brush_reaps ADD COLUMN files_kept INTEGER NOT NULL DEFAULT 0

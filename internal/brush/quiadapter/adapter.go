@@ -99,3 +99,17 @@ func (a *Adapter) AddTorrent(ctx context.Context, instanceID int, file []byte, t
 	_, err := a.sync.AddTorrent(ctx, instanceID, file, options)
 	return err
 }
+
+// Reannounce asks the torrents' trackers to take their latest upload now.
+func (a *Adapter) Reannounce(ctx context.Context, instanceID int, hashes []string) error {
+	return a.sync.BulkAction(ctx, instanceID, hashes, "reannounce")
+}
+
+// DeleteTorrent removes a torrent, with its files or keeping them.
+func (a *Adapter) DeleteTorrent(ctx context.Context, instanceID int, hash string, withFiles bool) error {
+	action := "delete"
+	if withFiles {
+		action = "deleteWithFiles"
+	}
+	return a.sync.BulkAction(ctx, instanceID, []string{hash}, action)
+}

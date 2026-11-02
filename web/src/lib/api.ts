@@ -135,7 +135,7 @@ import type {
   WarningResponse,
   WebSeed
 } from "@/types"
-import type { BrushEntry, BrushFeed, BrushFeedInput, BrushReaper, BrushSite, BrushSiteInput, BrushStatus, BrushTestItem, BrushTransferToday, BrushValues } from "@/types/brush"
+import type { BrushDeletion, BrushEntry, BrushFeed, BrushFeedInput, BrushSite, BrushSiteInput, BrushStatus, BrushTestItem, BrushTransferToday, BrushValues } from "@/types/brush"
 import type {
   ArrInstance,
   ArrInstanceFormData,
@@ -2991,8 +2991,8 @@ class ApiClient {
     return this.request<BrushValues>("/brush/values")
   }
 
-  async getBrushReaper(): Promise<BrushReaper> {
-    return this.request<BrushReaper>("/brush/reaper")
+  async getBrushDeletions(): Promise<BrushDeletion[]> {
+    return this.request<BrushDeletion[]>("/brush/deletions")
   }
 }
 

@@ -20,18 +20,20 @@ func TestReapsRoundTrip(t *testing.T) {
 			at := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
 			density, replacement := 12.5, 40.0
 			predicted := int64(1 << 20)
-			id, err := s.InsertReap(ctx, Reap{InstanceID: 1, InfoHash: "a", Name: "A", SizeBytes: 4 << 30,
-				Reason: ReapNeedSpace, FirstAt: at.Unix(), LastAt: at.Unix(), Rounds: 1, AgeSeconds: 3600,
-				Predicted: &predicted, Density: &density, Replacement: &replacement, Committed: 10, Need: 20,
-				FloorBytes: 30, UploadedFirst: 100, UploadedLast: 100, MeasuredAt: at.Unix()})
+			_, err := s.InsertReap(ctx, Reap{InstanceID: 1, InfoHash: "a", Name: "A", SizeBytes: 4 << 30,
+				Reason: ReapNeedSpace, DeletedAt: at.Unix(), AgeSeconds: 3600, Predicted: &predicted, Density: &density,
+				Replacement: &replacement, Committed: 10, Need: 20, FloorBytes: 30, Uploaded: 100, Ratio: 1.5,
+				FilesKept: true})
 			require.NoError(t, err)
-			// An emergency pick of a torrent whose value is unknown stores no value.
+			// An emergency deletion of a torrent whose value is unknown stores no value.
 			_, err = s.InsertReap(ctx, Reap{InstanceID: 1, InfoHash: "b", Name: "B", Reason: ReapEmergency,
-				FirstAt: at.Add(time.Minute).Unix(), LastAt: at.Add(time.Minute).Unix(), Rounds: 1})
+				DeletedAt: at.Add(time.Minute).Unix()})
 			require.NoError(t, err)
-
-			require.NoError(t, s.PickedAgain(ctx, id, at.Add(time.Minute)))
-			require.NoError(t, s.MeasureReap(ctx, id, at.Add(2*time.Minute), 500, true))
+			// A row the preview wrote is not a deletion.
+			_, err = db.ExecContext(ctx, `INSERT INTO brush_reaps (instance_id, info_hash, name, size_bytes, reason, first_at,
+				last_at, rounds, age_seconds, committed, need, floor_bytes, uploaded_first, uploaded_last, measured_at)
+				VALUES (1, 'p', 'P', 0, 'need_space', ?, 0, 1, 0, 0, 0, 0, 0, 0, 0)`, at.Add(2*time.Minute).Unix())
+			require.NoError(t, err)
 
 			reaps, err := s.RecentReaps(ctx, 10)
 			require.NoError(t, err)
@@ -41,11 +43,9 @@ func TestReapsRoundTrip(t *testing.T) {
 			require.Nil(t, reaps[0].Density)
 			require.Nil(t, reaps[0].Replacement)
 			a := reaps[1]
-			require.Equal(t, 2, a.Rounds)
-			require.Equal(t, at.Add(time.Minute).Unix(), a.LastAt)
-			require.Equal(t, int64(500), a.UploadedLast)
-			require.True(t, a.Gone)
-			require.False(t, a.Executed)
+			require.Equal(t, int64(100), a.Uploaded)
+			require.InDelta(t, 1.5, a.Ratio, 1e-9)
+			require.True(t, a.FilesKept)
 			require.Equal(t, predicted, *a.Predicted)
 			require.InDelta(t, density, *a.Density, 1e-9)
 			require.InDelta(t, replacement, *a.Replacement, 1e-9)

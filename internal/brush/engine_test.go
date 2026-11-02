@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -34,6 +35,16 @@ type fakeQB struct {
 	free     map[int]int64
 	added    map[int]int
 	upLimits []int64
+	// listed is what Torrents returns; deletions remove from it.
+	listed      map[int][]qbt.Torrent
+	reannounced []string
+	deleted     []fakeDeletion
+}
+
+type fakeDeletion struct {
+	instanceID int
+	hash       string
+	withFiles  bool
 }
 
 func (f *fakeQB) Instances(context.Context) ([]quiadapter.Instance, error) {
@@ -45,7 +56,26 @@ func (f *fakeQB) Instances(context.Context) ([]quiadapter.Instance, error) {
 }
 
 // Torrents never lists what brush added, so admission has to rely on its reservations.
-func (f *fakeQB) Torrents(context.Context, int) ([]qbt.Torrent, error) { return nil, nil }
+func (f *fakeQB) Torrents(_ context.Context, id int) ([]qbt.Torrent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.listed[id]), nil
+}
+
+func (f *fakeQB) Reannounce(_ context.Context, _ int, hashes []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reannounced = append(f.reannounced, hashes...)
+	return nil
+}
+
+func (f *fakeQB) DeleteTorrent(_ context.Context, id int, hash string, withFiles bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deleted = append(f.deleted, fakeDeletion{instanceID: id, hash: hash, withFiles: withFiles})
+	f.listed[id] = slices.DeleteFunc(f.listed[id], func(t qbt.Torrent) bool { return t.Hash == hash })
+	return nil
+}
 
 func (f *fakeQB) FreeSpace(_ context.Context, id int) (int64, error) { return f.free[id], nil }
 

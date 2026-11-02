@@ -152,76 +152,27 @@ export interface BrushValues {
   recent: BrushPredictionCheck[]
 }
 
-export type BrushReapMode = "ok" | "watch" | "need_space" | "emergency" | "unavailable"
-
-export interface BrushReapPick {
-  hash: string
-  name: string
-  sizeBytes: number
-  ageSeconds: number
-  predicted: number | null
-  density: number | null
-}
-
-export interface BrushReapInstance {
-  instanceId: number
-  name: string
-  at: number
-  mode: BrushReapMode
-  committed: number
-  floorBytes: number
-  need: number
-  shortfall: number
-  streak: number
-  replacement: {
-    // Upload per GiB a new torrent brought over one horizon; null without enough checks.
-    yield: number | null
-    yieldFrom: "instance" | "all" | ""
-    // Torrents per hour that passed the feeds' filters.
-    arrivalRate: number
-    probability: number
-    value: number | null
-  }
-  torrents: number
-  unknown: number
-  eligible: number
-  picks: BrushReapPick[]
-  error?: string
-}
-
-export interface BrushReap {
+// One torrent brush deleted to make room, with the numbers it decided on.
+export interface BrushDeletion {
   id: number
   instanceId: number
   infoHash: string
   name: string
   sizeBytes: number
   reason: "need_space" | "emergency"
-  executed: boolean
-  firstAt: number
-  lastAt: number
-  rounds: number
+  deletedAt: number
   ageSeconds: number
+  // Null when the torrent's value was still unknown, which only an emergency deletes.
   predicted: number | null
   density: number | null
   replacement: number | null
   committed: number
   need: number
   floorBytes: number
-  uploadedFirst: number
-  uploadedLast: number
-  measuredAt: number
-  gone: boolean
-}
-
-export interface BrushReaper {
-  preview: boolean
-  horizonSeconds: number
-  lookaheadSeconds: number
-  marginPercent: number
-  minKeepSeconds: number
-  needRounds: number
-  instances: BrushReapInstance[]
-  recent: BrushReap[]
+  uploaded: number
+  ratio: number
+  // Another torrent, like a cross-seed, shared its files, so they were kept.
+  filesKept: boolean
 }
 
 export interface BrushTransferToday {

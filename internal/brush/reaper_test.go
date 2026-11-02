@@ -10,7 +10,6 @@ import (
 	qbt "github.com/autobrr/go-qbittorrent"
 	"github.com/stretchr/testify/require"
 
-	"github.com/autobrr/qui/internal/brush/model"
 	"github.com/autobrr/qui/internal/brush/store"
 	"github.com/autobrr/qui/internal/models"
 	"github.com/autobrr/qui/internal/testutil/testdb"
@@ -130,83 +129,79 @@ func TestDemandAndReplacement(t *testing.T) {
 	require.Nil(t, r.Value)
 }
 
-// In preview the reaper records what it would delete, counts the rounds a pick
-// stays picked, and measures what the torrent uploads for one horizon after.
-func TestReapPreviewRecordsAndMeasures(t *testing.T) {
+// The reaper deletes only while brushing is on. Below the floor it skips the
+// announce and deletes the oldest unknown-value torrents first, keeps the files of
+// one a cross-seed shares, and does not pick a deleted torrent again from a read
+// that still lists it.
+func TestReapDeletesBelowTheFloor(t *testing.T) {
 	ctx := t.Context()
 	db := testdb.NewMigratedSQLite(t, t.Name())
 	cipher, err := models.NewCredentialCipher(make([]byte, 32))
 	require.NoError(t, err)
-	qb := &fakeQB{free: map[int]int64{1: 14 * gib}}
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	old := brushTorrent("old", 5<<30, now.Add(-3*time.Hour))
+	old.ContentPath, old.Ratio = "/data/old", 1.25
+	mid := brushTorrent("mid", 1<<30, now.Add(-2*time.Hour))
+	mid.ContentPath = "/data/mid"
+	young := brushTorrent("young", 0, now.Add(-time.Hour))
+	young.ContentPath = "/data/young"
+	xseed := qbt.Torrent{Hash: "xseed", Name: "old", ContentPath: "/data/old", Size: 4 << 30}
+	qb := &fakeQB{free: map[int]int64{1: 14 * gib}, listed: map[int][]qbt.Torrent{1: {old, mid, young, xseed}}}
 	svc, err := New(ctx, db, cipher, qb)
 	require.NoError(t, err)
+	svc.now = func() time.Time { return now }
 	require.NoError(t, svc.store.SetFloor(ctx, 1, 20*gib))
 
-	start := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
-	added := start.Add(-2 * time.Hour)
-	at := start
-	svc.now = func() time.Time { return at }
-	// slow uploads 1 MiB/s and fast 10 MiB/s; fresh arrives later and has no value yet.
 	read := func() {
-		el := int64(at.Sub(start).Seconds())
-		torrents := []qbt.Torrent{
-			brushTorrent("slow", el*(1<<20), added),
-			brushTorrent("fast", el*(10<<20), added),
-		}
-		if at.After(start.Add(model.RateWindow / 2)) {
-			torrents = append(torrents, brushTorrent("fresh", 0, at))
-		}
-		svc.values.observe(1, at, torrents)
+		listed, _ := qb.Torrents(ctx, 1)
+		svc.values.observe(1, now, listed)
 	}
-	for ; !at.After(start.Add(model.RateWindow)); at = at.Add(sampleInterval) {
-		read()
-	}
-	at = at.Add(-sampleInterval)
-
-	// 6 GiB below the floor: slow then fast, 4 GiB each.
-	svc.reap(ctx)
-	state := svc.reaper.states[1]
-	require.Equal(t, reapEmergency, state.Mode)
-	require.Equal(t, 6*gib, state.Shortfall)
-	require.Equal(t, 3, state.Torrents)
-	require.Equal(t, 1, state.Unknown)
-	require.Len(t, state.Picks, 2)
-	require.Equal(t, "slow", state.Picks[0].Hash)
-	require.Equal(t, "fast", state.Picks[1].Hash)
-	first := at
-
-	at = at.Add(reapInterval)
 	read()
 	svc.reap(ctx)
-	reaps, err := svc.store.RecentReaps(ctx, 10)
-	require.NoError(t, err)
-	require.Len(t, reaps, 2, "a pick still inside its horizon is not recorded twice")
-	for _, r := range reaps {
-		require.Equal(t, 2, r.Rounds)
-		require.Equal(t, store.ReapEmergency, r.Reason)
-		require.False(t, r.Executed)
-	}
+	require.Empty(t, qb.deleted, "brushing is off")
 
-	// Space comes back; the picks are still measured until their horizon ends.
-	qb.free[1] = 100 * gib
-	for at = at.Add(sampleInterval); !at.After(first.Add(model.Horizon)); at = at.Add(sampleInterval) {
-		read()
-		if at.Sub(first)%reapInterval == 0 {
-			svc.reap(ctx)
-		}
-	}
-	require.Equal(t, reapOK, svc.reaper.states[1].Mode)
-	require.Empty(t, svc.reaper.open, "every pick closed after its horizon")
-	reaps, err = svc.store.RecentReaps(ctx, 10)
+	require.NoError(t, svc.store.SetEnabled(ctx, true))
+	svc.reap(ctx)
+	// 6 GiB short: old and mid, 4 GiB each.
+	require.Equal(t, []fakeDeletion{{1, "old", false}, {1, "mid", true}}, qb.deleted)
+	require.Empty(t, qb.reannounced, "an emergency does not wait for the announce")
+
+	deletions, err := svc.store.RecentReaps(ctx, 10)
 	require.NoError(t, err)
-	require.Len(t, reaps, 2)
-	for _, r := range reaps {
-		rate := int64(1 << 20)
-		if r.InfoHash == "fast" {
-			rate = 10 << 20
-		}
-		require.Equal(t, int64(model.Horizon/time.Second)*rate, r.UploadedLast-r.UploadedFirst, r.InfoHash)
-		require.Equal(t, 2, r.Rounds)
-		require.False(t, r.Gone)
+	require.Len(t, deletions, 2)
+	byHash := map[string]store.Reap{}
+	for _, d := range deletions {
+		byHash[d.InfoHash] = d
+		require.Equal(t, store.ReapEmergency, d.Reason)
+		require.Equal(t, now.Unix(), d.DeletedAt)
 	}
+	require.True(t, byHash["old"].FilesKept)
+	require.Equal(t, int64(5<<30), byHash["old"].Uploaded)
+	require.InDelta(t, 1.25, byHash["old"].Ratio, 1e-9)
+	require.False(t, byHash["mid"].FilesKept)
+
+	// The value tracker has not read the instance again and still lists both.
+	svc.reap(ctx)
+	require.Len(t, qb.deleted, 2)
+}
+
+// Deleting for space announces the picks first.
+func TestDeletePicksReannouncesFirst(t *testing.T) {
+	ctx := t.Context()
+	db := testdb.NewMigratedSQLite(t, t.Name())
+	cipher, err := models.NewCredentialCipher(make([]byte, 32))
+	require.NoError(t, err)
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	a := brushTorrent("a", 1, now.Add(-time.Hour))
+	qb := &fakeQB{free: map[int]int64{1: 100 * gib}, listed: map[int][]qbt.Torrent{1: {a}}}
+	svc, err := New(ctx, db, cipher, qb)
+	require.NoError(t, err)
+	svc.now = func() time.Time { return now }
+	old := reannounceWait
+	reannounceWait = time.Millisecond
+	defer func() { reannounceWait = old }()
+
+	svc.deletePicks(ctx, reapState{InstanceID: 1, Mode: reapNeedSpace}, []torrentValue{{Hash: "a", SizeBytes: a.Size}, {Hash: "missing"}})
+	require.Equal(t, []string{"a"}, qb.reannounced, "only torrents still listed")
+	require.Equal(t, []fakeDeletion{{1, "a", true}}, qb.deleted)
 }

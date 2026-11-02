@@ -10,10 +10,10 @@ import (
 	"net/http"
 	"slices"
 	"sort"
-	"sync"
 	"time"
 
-	"github.com/autobrr/qui/internal/brush/model"
+	qbt "github.com/autobrr/go-qbittorrent"
+
 	"github.com/autobrr/qui/internal/brush/store"
 )
 
@@ -36,19 +36,23 @@ const (
 	// new torrent is expected to bring, it is at least minKeep old, and space has been
 	// short for needRounds evaluations in a row, so a torrent is not deleted on a
 	// momentary dip.
-	reapMargin = 0.8
-	minKeep    = 30 * time.Minute
-	needRounds = 2
-	reapRecent = 50
+	reapMargin    = 0.8
+	minKeep       = 30 * time.Minute
+	needRounds    = 2
+	reapRecent    = 100
+	deletedMemory = 5 * time.Minute
 )
+
+// reannounceWait gives the trackers time to take the last upload before a torrent is
+// deleted, as the original Vertex does. A variable so tests need not wait.
+var reannounceWait = 2 * time.Second
 
 // Reaper modes of an instance.
 const (
-	reapOK          = "ok"
-	reapWatch       = "watch"
-	reapNeedSpace   = store.ReapNeedSpace
-	reapEmergency   = store.ReapEmergency
-	reapUnavailable = "unavailable"
+	reapOK        = "ok"
+	reapWatch     = "watch"
+	reapNeedSpace = store.ReapNeedSpace
+	reapEmergency = store.ReapEmergency
 )
 
 // replacement is what deleting a torrent on an instance would make room for: the
@@ -64,51 +68,27 @@ type replacement struct {
 	Value       *float64 `json:"value"`
 }
 
-type reapPick struct {
-	Hash       string   `json:"hash"`
-	Name       string   `json:"name"`
-	SizeBytes  int64    `json:"sizeBytes"`
-	AgeSeconds int64    `json:"ageSeconds"`
-	Predicted  *int64   `json:"predicted"`
-	Density    *float64 `json:"density"`
-}
-
-// reapState is the latest evaluation of one instance.
+// reapState is one instance's evaluation in a round, kept with each deletion.
 type reapState struct {
-	InstanceID  int         `json:"instanceId"`
-	Name        string      `json:"name"`
-	At          int64       `json:"at"`
-	Mode        string      `json:"mode"`
-	Committed   int64       `json:"committed"`
-	FloorBytes  int64       `json:"floorBytes"`
-	Need        int64       `json:"need"`
-	Shortfall   int64       `json:"shortfall"`
-	Streak      int         `json:"streak"`
-	Replacement replacement `json:"replacement"`
-	Torrents    int         `json:"torrents"`
-	Unknown     int         `json:"unknown"`
-	Eligible    int         `json:"eligible"`
-	Picks       []reapPick  `json:"picks"`
-	Error       string      `json:"error,omitempty"`
+	InstanceID  int
+	Mode        string
+	Committed   int64
+	FloorBytes  int64
+	Need        int64
+	Shortfall   int64
+	Replacement replacement
 }
 
-type openReap struct {
-	id         int64
-	instanceID int
-	hash       string
-	firstAt    time.Time
-}
-
+// reaper is only touched by the reaper goroutine.
 type reaper struct {
-	mu     sync.Mutex
-	states map[int]reapState
-	// streak and open are only touched by the reaper goroutine.
 	streak map[int]int
-	open   map[string]*openReap
+	// deleted remembers what was just deleted, so a read that still lists it cannot
+	// pick it again.
+	deleted map[string]time.Time
 }
 
 func newReaper() *reaper {
-	return &reaper{states: make(map[int]reapState), streak: make(map[int]int), open: make(map[string]*openReap)}
+	return &reaper{streak: make(map[int]int), deleted: make(map[string]time.Time)}
 }
 
 func reapKey(instanceID int, hash string) string {
@@ -237,8 +217,8 @@ func replacementFor(instanceID int, yields map[int]store.Yield, rate float64) re
 	return r
 }
 
-// runReaper evaluates every instance each reapInterval. It only runs in preview
-// mode: what it would delete is recorded and measured, nothing is deleted.
+// runReaper evaluates every instance each reapInterval and deletes what it picks
+// while brushing is on.
 func (s *Service) runReaper(ctx context.Context) {
 	ticker := time.NewTicker(reapInterval)
 	defer ticker.Stop()
@@ -254,8 +234,11 @@ func (s *Service) runReaper(ctx context.Context) {
 
 func (s *Service) reap(ctx context.Context) {
 	now := s.now()
-	s.measureReaps(ctx, now)
-
+	enabled, err := s.store.Enabled(ctx)
+	if err != nil {
+		s.log.Error().Err(err).Msg("read brush switch for reaping")
+		return
+	}
 	configs, err := s.store.InstanceConfigs(ctx)
 	if err != nil {
 		s.log.Error().Err(err).Msg("read brush instances for reaping")
@@ -276,16 +259,15 @@ func (s *Service) reap(ctx context.Context) {
 		s.log.Error().Err(err).Msg("read brush new torrent yield")
 		return
 	}
-	names := make(map[int]string)
-	if instances, err := s.qui.Instances(ctx); err == nil {
-		for _, inst := range instances {
-			names[inst.ID] = inst.Name
-		}
-	}
 	need, rate := demand(feeds, arrivals, configs, now)
 	byInstance := make(map[int][]torrentValue)
 	for _, tv := range s.values.values(now) {
 		byInstance[tv.InstanceID] = append(byInstance[tv.InstanceID], tv)
+	}
+	for key, at := range s.reaper.deleted {
+		if now.Sub(at) > deletedMemory {
+			delete(s.reaper.deleted, key)
+		}
 	}
 
 	ids := make([]int, 0, len(configs))
@@ -293,129 +275,119 @@ func (s *Service) reap(ctx context.Context) {
 		ids = append(ids, id)
 	}
 	sort.Ints(ids)
-	states := make(map[int]reapState, len(ids))
 	for _, id := range ids {
-		st := reapState{InstanceID: id, Name: names[id], At: now.Unix(), FloorBytes: configs[id].FloorBytes,
-			Need: need[id], Replacement: replacementFor(id, yields, rate[id]), Picks: []reapPick{}}
-		if st.Name == "" {
-			st.Name = fmt.Sprintf("#%d", id)
-		}
+		st := reapState{InstanceID: id, FloorBytes: configs[id].FloorBytes, Need: need[id],
+			Replacement: replacementFor(id, yields, rate[id])}
 		space, err := s.instanceSpace(ctx, id)
 		if err == nil && !s.values.fresh(id, now) {
 			err = fmt.Errorf("no recent reading of its torrents")
 		}
 		if err != nil {
 			s.reaper.streak[id] = 0
-			st.Mode, st.Error = reapUnavailable, err.Error()
-			states[id] = st
 			continue
 		}
 		st.Committed = space.Committed
-		torrents := byInstance[id]
-		st.Torrents = len(torrents)
-		for _, tv := range torrents {
-			if tv.Density == nil {
-				st.Unknown++
-			}
-		}
 		if space.Committed-st.Need < st.FloorBytes {
 			s.reaper.streak[id]++
 		} else {
 			s.reaper.streak[id] = 0
 		}
-		st.Streak = s.reaper.streak[id]
 
 		var picks []torrentValue
-		st.Mode, st.Shortfall, picks, st.Eligible = pickReaps(st.Committed, st.FloorBytes, st.Need, st.Streak, st.Replacement.Value, torrents)
-		for _, tv := range picks {
-			st.Picks = append(st.Picks, reapPick{Hash: tv.Hash, Name: tv.Name, SizeBytes: tv.SizeBytes,
-				AgeSeconds: tv.AgeSeconds, Predicted: tv.Predicted, Density: tv.Density})
-			s.recordReap(ctx, now, st, tv)
+		st.Mode, st.Shortfall, picks, _ = pickReaps(st.Committed, st.FloorBytes, st.Need, s.reaper.streak[id], st.Replacement.Value, byInstance[id])
+		if enabled && len(picks) > 0 {
+			s.deletePicks(ctx, st, picks)
 		}
-		states[id] = st
 	}
 
-	s.reaper.mu.Lock()
-	s.reaper.states = states
-	s.reaper.mu.Unlock()
 	if err := s.store.PruneReaps(ctx, now); err != nil {
 		s.log.Error().Err(err).Msg("prune brush reaps")
 	}
 }
 
-// recordReap stores a pick, or counts another round of a pick still being measured.
-func (s *Service) recordReap(ctx context.Context, now time.Time, st reapState, tv torrentValue) {
-	key := reapKey(st.InstanceID, tv.Hash)
-	if open, ok := s.reaper.open[key]; ok {
-		if err := s.store.PickedAgain(ctx, open.id, now); err != nil {
-			s.log.Error().Err(err).Msg("update brush reap")
-		}
-		return
-	}
-	id, err := s.store.InsertReap(ctx, store.Reap{
-		InstanceID: st.InstanceID, InfoHash: tv.Hash, Name: tv.Name, SizeBytes: tv.SizeBytes, Reason: st.Mode,
-		FirstAt: now.Unix(), LastAt: now.Unix(), Rounds: 1, AgeSeconds: tv.AgeSeconds, Predicted: tv.Predicted,
-		Density: tv.Density, Replacement: st.Replacement.Value, Committed: st.Committed, Need: st.Need,
-		FloorBytes: st.FloorBytes, UploadedFirst: tv.Uploaded, UploadedLast: tv.Uploaded, MeasuredAt: now.Unix(),
-	})
+// deletePicks reannounces the picks so their trackers count the last upload, waits
+// for the announce except in an emergency, where space comes first, and deletes them
+// one by one. A torrent whose files another torrent shares, like a cross-seed, is
+// removed with its files kept. A failed deletion is logged and the rest go on; the
+// next round picks again if space is still short.
+func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrentValue) {
+	torrents, err := s.qui.Torrents(ctx, st.InstanceID)
 	if err != nil {
-		s.log.Error().Err(err).Msg("store brush reap")
+		s.log.Error().Err(err).Int("instance", st.InstanceID).Msg("read torrents before deleting")
 		return
 	}
-	s.log.Info().Int("instance", st.InstanceID).Str("hash", tv.Hash).Str("reason", st.Mode).
-		Int64("shortfall", st.Shortfall).Msg("preview: would delete torrent")
-	s.reaper.open[key] = &openReap{id: id, instanceID: st.InstanceID, hash: tv.Hash, firstAt: now}
-}
+	listed := make(map[string]qbt.Torrent, len(torrents))
+	users := make(map[string]int)
+	for _, t := range torrents {
+		listed[t.Hash] = t
+		if t.ContentPath != "" {
+			users[t.ContentPath]++
+		}
+	}
+	var targets []torrentValue
+	var hashes []string
+	for _, tv := range picks {
+		if _, done := s.reaper.deleted[reapKey(st.InstanceID, tv.Hash)]; done {
+			continue
+		}
+		if _, ok := listed[tv.Hash]; ok {
+			targets = append(targets, tv)
+			hashes = append(hashes, tv.Hash)
+		}
+	}
+	if len(targets) == 0 {
+		return
+	}
 
-// measureReaps reads what every pick still inside its horizon has uploaded since it
-// was picked, so the preview shows what deleting it would have cost.
-func (s *Service) measureReaps(ctx context.Context, now time.Time) {
-	for key, open := range s.reaper.open {
-		t, present, fresh := s.values.lookup(open.instanceID, open.hash, now)
-		ended := now.Sub(open.firstAt) >= model.Horizon
-		if fresh {
-			if err := s.store.MeasureReap(ctx, open.id, now, t.Uploaded, !present); err != nil {
-				s.log.Error().Err(err).Msg("measure brush reap")
-				continue
+	if st.Mode != reapEmergency {
+		if err := s.qui.Reannounce(ctx, st.InstanceID, hashes); err != nil {
+			s.log.Warn().Err(err).Int("instance", st.InstanceID).Msg("reannounce before deleting")
+		} else {
+			timer := time.NewTimer(reannounceWait)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
 			}
 		}
-		if (fresh && !present) || (fresh && ended) || now.Sub(open.firstAt) > model.Horizon+lostAfter {
-			delete(s.reaper.open, key)
+	}
+
+	for _, tv := range targets {
+		t := listed[tv.Hash]
+		kept := t.ContentPath != "" && users[t.ContentPath] > 1
+		if err := s.qui.DeleteTorrent(ctx, st.InstanceID, tv.Hash, !kept); err != nil {
+			s.log.Error().Err(err).Int("instance", st.InstanceID).Str("hash", tv.Hash).Msg("delete brush torrent")
+			continue
 		}
+		now := s.now()
+		s.reaper.deleted[reapKey(st.InstanceID, tv.Hash)] = now
+		if kept {
+			users[t.ContentPath]--
+		}
+		_, err := s.store.InsertReap(ctx, store.Reap{
+			InstanceID: st.InstanceID, InfoHash: tv.Hash, Name: t.Name, SizeBytes: tv.SizeBytes, Reason: st.Mode,
+			DeletedAt: now.Unix(), AgeSeconds: tv.AgeSeconds, Predicted: tv.Predicted, Density: tv.Density,
+			Replacement: st.Replacement.Value, Committed: st.Committed, Need: st.Need, FloorBytes: st.FloorBytes,
+			Uploaded: t.Uploaded, Ratio: t.Ratio, FilesKept: kept,
+		})
+		if err != nil {
+			s.log.Error().Err(err).Msg("record brush deletion")
+		}
+		s.log.Info().Int("instance", st.InstanceID).Str("hash", tv.Hash).Str("reason", st.Mode).
+			Int64("shortfall", st.Shortfall).Bool("filesKept", kept).Msg("deleted brush torrent")
 	}
 }
 
-type reaperResponse struct {
-	Preview          bool         `json:"preview"`
-	HorizonSeconds   int64        `json:"horizonSeconds"`
-	LookaheadSeconds int64        `json:"lookaheadSeconds"`
-	MarginPercent    int          `json:"marginPercent"`
-	MinKeepSeconds   int64        `json:"minKeepSeconds"`
-	NeedRounds       int          `json:"needRounds"`
-	Instances        []reapState  `json:"instances"`
-	Recent           []store.Reap `json:"recent"`
-}
-
-func (s *Service) handleReaper(w http.ResponseWriter, r *http.Request) {
+// handleDeletions returns the latest deletions, newest first.
+func (s *Service) handleDeletions(w http.ResponseWriter, r *http.Request) {
 	recent, err := s.store.RecentReaps(r.Context(), reapRecent)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	resp := reaperResponse{
-		Preview: true, HorizonSeconds: int64(model.Horizon / time.Second),
-		LookaheadSeconds: int64(needLookahead / time.Second), MarginPercent: int(math.Round((1 - reapMargin) * 100)),
-		MinKeepSeconds: int64(minKeep / time.Second), NeedRounds: needRounds,
-		Instances: []reapState{}, Recent: recent,
+	if recent == nil {
+		recent = []store.Reap{}
 	}
-	s.reaper.mu.Lock()
-	for _, st := range s.reaper.states {
-		resp.Instances = append(resp.Instances, st)
-	}
-	s.reaper.mu.Unlock()
-	slices.SortFunc(resp.Instances, func(a, b reapState) int { return a.InstanceID - b.InstanceID })
-	if resp.Recent == nil {
-		resp.Recent = []store.Reap{}
-	}
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, recent)
 }

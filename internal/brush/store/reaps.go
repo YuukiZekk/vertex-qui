@@ -9,21 +9,20 @@ import (
 	"time"
 )
 
-// reapRetention bounds how long reap records are kept.
-const reapRetention = 14 * 24 * time.Hour
+// reapRetention bounds how long the deletion log is kept.
+const reapRetention = 30 * 24 * time.Hour
 
 // Reap reasons.
 const (
 	// ReapNeedSpace means the instance will need the space for new torrents soon and
-	// the torrent earns clearly less than a new one would.
+	// the torrent earned clearly less than a new one would.
 	ReapNeedSpace = "need_space"
-	// ReapEmergency means committed space is already below the floor.
+	// ReapEmergency means committed space was already below the floor.
 	ReapEmergency = "emergency"
 )
 
-// Reap is one torrent brush picked to delete, or would have in preview mode, and
-// what it really uploaded after it was picked. It covers one horizon from FirstAt:
-// LastAt and Rounds say how long it stayed picked within it.
+// Reap is one torrent brush deleted, with the numbers it decided on. Rows written
+// while deletion ran in preview mode have executed = 0 and are not listed.
 type Reap struct {
 	ID         int64  `json:"id"`
 	InstanceID int    `json:"instanceId"`
@@ -31,14 +30,10 @@ type Reap struct {
 	Name       string `json:"name"`
 	SizeBytes  int64  `json:"sizeBytes"`
 	Reason     string `json:"reason"`
-	// Executed is false while deletion runs in preview mode.
-	Executed   bool  `json:"executed"`
-	FirstAt    int64 `json:"firstAt"`
-	LastAt     int64 `json:"lastAt"`
-	Rounds     int   `json:"rounds"`
-	AgeSeconds int64 `json:"ageSeconds"`
+	DeletedAt  int64  `json:"deletedAt"`
+	AgeSeconds int64  `json:"ageSeconds"`
 	// Predicted and Density are nil for a torrent whose value was still unknown, which
-	// only an emergency picks.
+	// only an emergency deletes.
 	Predicted *int64   `json:"predicted"`
 	Density   *float64 `json:"density"`
 	// Replacement is what a new torrent was expected to upload per GiB, nil when there
@@ -47,47 +42,33 @@ type Reap struct {
 	Committed   int64    `json:"committed"`
 	Need        int64    `json:"need"`
 	FloorBytes  int64    `json:"floorBytes"`
-	// UploadedFirst is the torrent's cumulative upload when it was picked;
-	// UploadedLast is the latest reading, at MeasuredAt, at most a horizon later.
-	UploadedFirst int64 `json:"uploadedFirst"`
-	UploadedLast  int64 `json:"uploadedLast"`
-	MeasuredAt    int64 `json:"measuredAt"`
-	// Gone means the torrent was removed by something else while it was measured.
-	Gone bool `json:"gone"`
+	// Uploaded and Ratio are the torrent's totals when it was deleted.
+	Uploaded int64   `json:"uploaded"`
+	Ratio    float64 `json:"ratio"`
+	// FilesKept means another torrent shared its files, so only the torrent was removed.
+	FilesKept bool `json:"filesKept"`
 }
 
 func (s *Store) InsertReap(ctx context.Context, r Reap) (int64, error) {
 	var id int64
 	err := s.db.QueryRowContext(ctx, `INSERT INTO brush_reaps (instance_id, info_hash, name, size_bytes, reason, executed,
 		first_at, last_at, rounds, age_seconds, predicted, density, replacement, committed, need, floor_bytes,
-		uploaded_first, uploaded_last, measured_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		r.InstanceID, r.InfoHash, r.Name, r.SizeBytes, r.Reason, boolInt(r.Executed), r.FirstAt, r.LastAt, r.Rounds,
-		r.AgeSeconds, r.Predicted, r.Density, r.Replacement, r.Committed, r.Need, r.FloorBytes, r.UploadedFirst,
-		r.UploadedLast, r.MeasuredAt).Scan(&id)
+		uploaded_first, uploaded_last, measured_at, ratio, files_kept)
+		VALUES (?, ?, ?, ?, ?, 1, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		r.InstanceID, r.InfoHash, r.Name, r.SizeBytes, r.Reason, r.DeletedAt, r.DeletedAt, r.AgeSeconds, r.Predicted,
+		r.Density, r.Replacement, r.Committed, r.Need, r.FloorBytes, r.Uploaded, r.Uploaded, r.DeletedAt, r.Ratio,
+		boolInt(r.FilesKept)).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("insert brush reap: %w", err)
 	}
 	return id, nil
 }
 
-// PickedAgain records that a reap's torrent was picked in another round.
-func (s *Store) PickedAgain(ctx context.Context, id int64, at time.Time) error {
-	return s.execOne(ctx, "update brush reap", "UPDATE brush_reaps SET last_at = ?, rounds = rounds + 1 WHERE id = ?", at.Unix(), id)
-}
-
-// MeasureReap stores the torrent's latest cumulative upload, or that it is gone.
-func (s *Store) MeasureReap(ctx context.Context, id int64, at time.Time, uploaded int64, gone bool) error {
-	return s.execOne(ctx, "measure brush reap",
-		"UPDATE brush_reaps SET uploaded_last = ?, measured_at = ?, gone = ? WHERE id = ?",
-		uploaded, at.Unix(), boolInt(gone), id)
-}
-
-// RecentReaps returns the newest reaps first.
+// RecentReaps returns the newest deletions first.
 func (s *Store) RecentReaps(ctx context.Context, limit int) ([]Reap, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, instance_id, info_hash, name, size_bytes, reason, executed, first_at,
-			last_at, rounds, age_seconds, predicted, density, replacement, committed, need, floor_bytes, uploaded_first,
-			uploaded_last, measured_at, gone
-		FROM brush_reaps ORDER BY first_at DESC, id DESC LIMIT ?`, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, instance_id, info_hash, name, size_bytes, reason, first_at, age_seconds,
+			predicted, density, replacement, committed, need, floor_bytes, uploaded_first, ratio, files_kept
+		FROM brush_reaps WHERE executed = 1 ORDER BY first_at DESC, id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list brush reaps: %w", err)
 	}
@@ -96,19 +77,19 @@ func (s *Store) RecentReaps(ctx context.Context, limit int) ([]Reap, error) {
 	var out []Reap
 	for rows.Next() {
 		var r Reap
-		var executed, gone int
-		if err := rows.Scan(&r.ID, &r.InstanceID, &r.InfoHash, &r.Name, &r.SizeBytes, &r.Reason, &executed, &r.FirstAt,
-			&r.LastAt, &r.Rounds, &r.AgeSeconds, &r.Predicted, &r.Density, &r.Replacement, &r.Committed, &r.Need,
-			&r.FloorBytes, &r.UploadedFirst, &r.UploadedLast, &r.MeasuredAt, &gone); err != nil {
+		var kept int
+		if err := rows.Scan(&r.ID, &r.InstanceID, &r.InfoHash, &r.Name, &r.SizeBytes, &r.Reason, &r.DeletedAt,
+			&r.AgeSeconds, &r.Predicted, &r.Density, &r.Replacement, &r.Committed, &r.Need, &r.FloorBytes,
+			&r.Uploaded, &r.Ratio, &kept); err != nil {
 			return nil, fmt.Errorf("scan brush reap: %w", err)
 		}
-		r.Executed, r.Gone = executed != 0, gone != 0
+		r.FilesKept = kept != 0
 		out = append(out, r)
 	}
 	return out, rows.Err()
 }
 
-// PruneReaps drops reaps picked before the retention period.
+// PruneReaps drops deletions older than the retention period.
 func (s *Store) PruneReaps(ctx context.Context, now time.Time) error {
 	if _, err := s.db.ExecContext(ctx, "DELETE FROM brush_reaps WHERE first_at < ?", now.Add(-reapRetention).Unix()); err != nil {
 		return fmt.Errorf("prune brush reaps: %w", err)
