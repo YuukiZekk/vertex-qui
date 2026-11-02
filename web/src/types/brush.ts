@@ -181,3 +181,35 @@ export interface BrushTestItem {
   rule?: string
   error?: string
 }
+
+// How fast brush got torrents in; delays are in seconds, null without samples.
+export interface BrushPerfStats {
+  added: number
+  failed: number
+  pending: number
+  discoveryP50: number | null
+  discoveryP95: number | null
+  processingP50: number | null
+  processingP95: number | null
+  entryP95: number | null
+  fastStart: number
+  fastStartJudged: number
+}
+
+export interface BrushPerfGroup {
+  key: "site" | "instance"
+  id: number
+  name: string
+  stats: BrushPerfStats
+  buckets: Array<{ start: number, added: number, entryP95: number | null }>
+  // Buckets whose entry P95 was over slowSeconds.
+  slow: number
+}
+
+export interface BrushPerformance {
+  since: number
+  bucketSeconds: number
+  slowSeconds: number
+  overall: BrushPerfStats
+  groups: BrushPerfGroup[]
+}

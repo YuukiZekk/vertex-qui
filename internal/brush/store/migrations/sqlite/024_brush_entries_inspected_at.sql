@@ -1,0 +1,1 @@
+ALTER TABLE brush_entries ADD COLUMN inspected_at BIGINT NOT NULL DEFAULT 0

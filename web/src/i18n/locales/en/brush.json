@@ -237,5 +237,32 @@
     "saveFailed": "Could not save the brush settings",
     "country": "Region",
     "countryHelp": "Where this downloader runs; its flag shows in the dashboard's server statistics."
+  },
+  "performance": {
+    "title": "Performance",
+    "description": "How fast brush gets torrents in: from the site's publish to the downloader's confirmation, and how soon they upload.",
+    "info": "Discovery = site publish → brush first sees it in the RSS, set mostly by the poll interval; processing = first sight → qBittorrent confirms the add, including the free check, the torrent download and the add. Entry is both. Bars are each period's entry P95, amber past {{slow}} s, faded with fewer than 3 torrents. It reports facts only; placement and deletion do not use it.",
+    "bySite": "By site",
+    "byInstance": "By VPS",
+    "window": {
+      "1": "Last hour",
+      "6": "Last 6 hours",
+      "24": "Last 24 hours",
+      "168": "Last 7 days"
+    },
+    "entryP95": "Entry P95",
+    "splitP95": "Discovery / processing P95",
+    "splitHint": "publish→seen / seen→confirmed",
+    "fastStart": "Uploading within 30 s",
+    "outcomes": "Confirmed / pending / failed",
+    "outcomesHint": "Failures and unconfirmed adds counted apart",
+    "empty": "Brush added no torrent in this period.",
+    "slowBuckets": "{{count}} periods over {{slow}} s",
+    "allFast": "Every period under {{slow}} s",
+    "splitValue": "discovery {{discovery}} · processing {{processing}}",
+    "fastStartValue": "{{fast}} of {{judged}}",
+    "barsLabel": "Entry P95 per {{minutes}} min",
+    "barTitle": "{{time}}: {{count}} torrents, entry P95 {{p95}}",
+    "footer": "{{added}} confirmed · {{pending}} pending · {{failed}} failed"
   }
 }

@@ -128,8 +128,33 @@ func (s *Service) sample(ctx context.Context) {
 		s.meter.observe(id, now, torrents)
 		s.values.observe(id, now, torrents)
 		s.sites.observe(id, day, torrents)
+		s.markFirstUploads(ctx, id, now, torrents)
 	}
 	now := s.now()
 	s.resolvePredictions(ctx, now)
 	s.recordPredictions(ctx, now)
+}
+
+// firstUploadWindow bounds how long after its add a torrent's first upload is
+// recorded, so torrents read for the first time after a restart are not stamped.
+const firstUploadWindow = 30 * time.Minute
+
+// markFirstUploads stores when each brush torrent was first seen uploading, within
+// one sample of the moment it started.
+func (s *Service) markFirstUploads(ctx context.Context, instanceID int, now time.Time, torrents []qbt.Torrent) {
+	seen := s.uploading[instanceID]
+	next := make(map[string]bool, len(seen))
+	for _, t := range torrents {
+		if !hasTag(t, Tag) || t.Uploaded <= 0 {
+			continue
+		}
+		next[t.Hash] = true
+		if seen[t.Hash] {
+			continue
+		}
+		if err := s.store.MarkFirstUpload(ctx, instanceID, t.Hash, now, now.Add(-firstUploadWindow)); err != nil {
+			s.log.Error().Err(err).Msg("record first upload")
+		}
+	}
+	s.uploading[instanceID] = next
 }

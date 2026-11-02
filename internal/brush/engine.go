@@ -193,12 +193,15 @@ func (s *Service) process(ctx context.Context, f store.Feed, client *site.NexusP
 		reject(code, err.Error())
 	}
 
+	// The stage times feed the performance overview only.
+	var inspectedAt, fetchedAt time.Time
 	if f.FreeOnly || f.SkipHR {
 		insp, err := client.Inspect(raceCtx, item.Link)
 		if err != nil {
 			stepFailed(reasonInspect, err)
 			return
 		}
+		inspectedAt = s.now()
 		if f.FreeOnly && !insp.Free {
 			reject(reasonNotFree, "")
 			return
@@ -214,6 +217,7 @@ func (s *Service) process(ctx context.Context, f store.Feed, client *site.NexusP
 		stepFailed(reasonDownload, err)
 		return
 	}
+	fetchedAt = s.now()
 	tf, err := site.ParseTorrent(data)
 	if err != nil {
 		reject(reasonTorrent, err.Error())
@@ -244,6 +248,9 @@ func (s *Service) process(ctx context.Context, f store.Feed, client *site.NexusP
 	}
 	if err := s.store.MarkAdded(ctx, entryID); err != nil {
 		s.log.Error().Err(err).Int64("entry", entryID).Msg("mark entry added")
+	}
+	if err := s.store.RecordStages(ctx, entryID, inspectedAt, fetchedAt); err != nil {
+		s.log.Error().Err(err).Int64("entry", entryID).Msg("record entry stages")
 	}
 	s.log.Info().Int64("feed", f.ID).Int("instance", instanceID).Str("hash", tf.InfoHash).Msg("added torrent")
 }

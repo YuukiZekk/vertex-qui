@@ -72,8 +72,12 @@ func (s *Store) Fail(ctx context.Context, id int64, reason string) error {
 	return s.setStatus(ctx, id, StatusFailed, reason)
 }
 
+// MarkAdded also stamps added_at, when qBittorrent accepted the torrent.
 func (s *Store) MarkAdded(ctx context.Context, id int64) error {
-	return s.setStatus(ctx, id, StatusAdded, "")
+	now := time.Now().Unix()
+	return s.execOne(ctx, "mark brush entry added",
+		"UPDATE brush_entries SET status = ?, reason = ?, decided_at = ?, added_at = ? WHERE id = ?",
+		StatusAdded, "", now, now, id)
 }
 
 func (s *Store) setStatus(ctx context.Context, id int64, status, reason string) error {

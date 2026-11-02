@@ -1,0 +1,1 @@
+ALTER TABLE brush_entries ADD COLUMN fetched_at BIGINT NOT NULL DEFAULT 0

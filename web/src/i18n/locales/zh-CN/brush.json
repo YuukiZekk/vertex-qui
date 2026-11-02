@@ -237,5 +237,32 @@
     "saveFailed": "无法保存刷流设置",
     "country": "地区",
     "countryHelp": "这台下载器所在的国家或地区，在仪表盘的服务器统计里显示对应国旗。"
+  },
+  "performance": {
+    "title": "表现总览",
+    "description": "抢种有多快：从站点发布到下载器确认，以及开始上传的速度。",
+    "info": "发现延迟 = 站点发布 → 刷流首次在 RSS 里看到，主要由拉取间隔决定；处理延迟 = 首次看到 → qBittorrent 确认添加，包括检查免费、下载种子和添加。入场延迟是两者之和。柱子是每个时段的入场 P95，超过 {{slow}} 秒标黄，种子少于 3 个的时段颜色变浅。只统计运行事实，不影响选机和删种。",
+    "bySite": "按站点",
+    "byInstance": "按 VPS",
+    "window": {
+      "1": "近 1 小时",
+      "6": "近 6 小时",
+      "24": "近 24 小时",
+      "168": "近 7 天"
+    },
+    "entryP95": "入场 P95",
+    "splitP95": "发现 / 处理 P95",
+    "splitHint": "发布→发现 / 发现→确认",
+    "fastStart": "30 秒内开始上传",
+    "outcomes": "确认 / 待确认 / 失败",
+    "outcomesHint": "失败和未确认的单独列出",
+    "empty": "这段时间还没有刷流添加过种子。",
+    "slowBuckets": "{{count}} 个时段超过 {{slow}} 秒",
+    "allFast": "各时段均低于 {{slow}} 秒",
+    "splitValue": "发现 {{discovery}} · 处理 {{processing}}",
+    "fastStartValue": "{{fast}} / {{judged}} 个",
+    "barsLabel": "每 {{minutes}} 分钟入场 P95",
+    "barTitle": "{{time}}：{{count}} 个种子，入场 P95 {{p95}}",
+    "footer": "{{added}} 确认 · {{pending}} 待确认 · {{failed}} 失败"
   }
 }

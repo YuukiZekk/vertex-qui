@@ -51,6 +51,9 @@ type Service struct {
 	lastPrediction time.Time
 	// lastFloorCheck is only touched by the sampler goroutine.
 	lastFloorCheck time.Time
+	// uploading holds, per instance, the brush torrents already seen uploading, so
+	// their first upload is stored once. Only the sampler touches it.
+	uploading map[int]map[string]bool
 
 	// admitMu serialises admission across all feeds and instances.
 	admitMu sync.Mutex
@@ -74,6 +77,7 @@ func New(ctx context.Context, db dbinterface.Querier, cipher *models.CredentialC
 		values:    newValueTracker(),
 		reaper:    newReaper(),
 		sites:     newSiteMeter(),
+		uploading: make(map[int]map[string]bool),
 		baselined: make(map[int64]bool),
 		polling:   make(map[int64]bool),
 		clients:   make(map[int64]siteClientEntry),
