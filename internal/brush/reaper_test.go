@@ -146,7 +146,10 @@ func TestReapDeletesBelowTheFloor(t *testing.T) {
 	young := brushTorrent("young", 0, now.Add(-time.Hour))
 	young.ContentPath = "/data/young"
 	xseed := qbt.Torrent{Hash: "xseed", Name: "old", ContentPath: "/data/old", Size: 4 << 30}
-	qb := &fakeQB{free: map[int]int64{1: 14 * gib}, listed: map[int][]qbt.Torrent{1: {old, mid, young, xseed}}}
+	// Still downloading 1 GiB, added last: paused rather than deleted.
+	dl := brushTorrent("dl", 0, now.Add(-10*time.Minute))
+	dl.ContentPath, dl.AmountLeft, dl.State = "/data/dl", 1<<30, qbt.TorrentStateDownloading
+	qb := &fakeQB{free: map[int]int64{1: 14 * gib}, listed: map[int][]qbt.Torrent{1: {old, mid, young, xseed, dl}}}
 	svc, err := New(ctx, db, cipher, qb)
 	require.NoError(t, err)
 	svc.now = func() time.Time { return now }
@@ -162,9 +165,10 @@ func TestReapDeletesBelowTheFloor(t *testing.T) {
 
 	require.NoError(t, svc.store.SetEnabled(ctx, true))
 	svc.reap(ctx)
-	// 6 GiB short: old and mid, 4 GiB each.
+	// 7 GiB short with the download still to write: old and mid, 4 GiB each.
 	require.Equal(t, []fakeDeletion{{1, "old", false}, {1, "mid", true}}, qb.deleted)
 	require.Empty(t, qb.reannounced, "an emergency does not wait for the announce")
+	require.Equal(t, []string{"dl"}, qb.paused, "the download is paused first")
 
 	deletions, err := svc.store.RecentReaps(ctx, 10)
 	require.NoError(t, err)
@@ -183,6 +187,13 @@ func TestReapDeletesBelowTheFloor(t *testing.T) {
 	// The value tracker has not read the instance again and still lists both.
 	svc.reap(ctx)
 	require.Len(t, qb.deleted, 2)
+	require.Equal(t, []string{"dl"}, qb.paused, "paused once")
+
+	// Out of the emergency, what brush paused runs again.
+	qb.free[1] = 100 * gib
+	read()
+	svc.reap(ctx)
+	require.Equal(t, []string{"dl"}, qb.resumed)
 }
 
 // Deleting for space announces the picks first.

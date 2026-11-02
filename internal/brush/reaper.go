@@ -85,10 +85,13 @@ type reaper struct {
 	// deleted remembers what was just deleted, so a read that still lists it cannot
 	// pick it again.
 	deleted map[string]time.Time
+	// paused holds, per instance, the downloads an emergency paused, to resume once
+	// the instance is out of it. Torrents paused by anyone else are left alone.
+	paused map[int][]string
 }
 
 func newReaper() *reaper {
-	return &reaper{streak: make(map[int]int), deleted: make(map[string]time.Time)}
+	return &reaper{streak: make(map[int]int), deleted: make(map[string]time.Time), paused: make(map[int][]string)}
 }
 
 func reapKey(instanceID int, hash string) string {
@@ -295,6 +298,11 @@ func (s *Service) reap(ctx context.Context) {
 
 		var picks []torrentValue
 		st.Mode, st.Shortfall, picks, _ = pickReaps(st.Committed, st.FloorBytes, st.Need, s.reaper.streak[id], st.Replacement.Value, byInstance[id])
+		if enabled && st.Mode == reapEmergency {
+			s.pauseDownloads(ctx, id)
+		} else if st.Mode != reapEmergency {
+			s.resumeDownloads(ctx, id)
+		}
 		if enabled && len(picks) > 0 {
 			s.deletePicks(ctx, st, picks)
 		}
@@ -390,4 +398,54 @@ func (s *Service) handleDeletions(w http.ResponseWriter, r *http.Request) {
 		recent = []store.Reap{}
 	}
 	writeJSON(w, http.StatusOK, recent)
+}
+
+// pausedStates are qBittorrent states of a torrent that is not running.
+var pausedStates = map[qbt.TorrentState]bool{
+	qbt.TorrentStatePausedDl: true, qbt.TorrentStatePausedUp: true,
+	qbt.TorrentStateStoppedDl: true, qbt.TorrentStateStoppedUp: true,
+}
+
+// pauseDownloads stops every brush torrent on the instance that is still
+// downloading, the first step of an emergency: pausing stops disk writes at once
+// and can be undone, so it buys time while deletions free space.
+func (s *Service) pauseDownloads(ctx context.Context, instanceID int) {
+	torrents, err := s.qui.Torrents(ctx, instanceID)
+	if err != nil {
+		return
+	}
+	already := make(map[string]bool)
+	for _, h := range s.reaper.paused[instanceID] {
+		already[h] = true
+	}
+	var hashes []string
+	for _, t := range torrents {
+		if hasTag(t, Tag) && t.AmountLeft > 0 && !pausedStates[t.State] && !already[t.Hash] {
+			hashes = append(hashes, t.Hash)
+		}
+	}
+	if len(hashes) == 0 {
+		return
+	}
+	if err := s.qui.Pause(ctx, instanceID, hashes); err != nil {
+		s.log.Error().Err(err).Int("instance", instanceID).Msg("pause brush downloads in an emergency")
+		return
+	}
+	s.reaper.paused[instanceID] = append(s.reaper.paused[instanceID], hashes...)
+	s.log.Warn().Int("instance", instanceID).Int("torrents", len(hashes)).Msg("paused brush downloads: below the safety floor")
+}
+
+// resumeDownloads starts again what an emergency paused, once the instance is out
+// of it. A torrent deleted meanwhile is simply not found.
+func (s *Service) resumeDownloads(ctx context.Context, instanceID int) {
+	hashes := s.reaper.paused[instanceID]
+	if len(hashes) == 0 {
+		return
+	}
+	if err := s.qui.Resume(ctx, instanceID, hashes); err != nil {
+		s.log.Error().Err(err).Int("instance", instanceID).Msg("resume brush downloads")
+		return
+	}
+	delete(s.reaper.paused, instanceID)
+	s.log.Info().Int("instance", instanceID).Int("torrents", len(hashes)).Msg("resumed brush downloads")
 }

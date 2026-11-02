@@ -40,6 +40,8 @@ type fakeQB struct {
 	// listed is what Torrents returns; deletions remove from it.
 	listed      map[int][]qbt.Torrent
 	reannounced []string
+	paused      []string
+	resumed     []string
 	deleted     []fakeDeletion
 }
 
@@ -62,6 +64,20 @@ func (f *fakeQB) Torrents(_ context.Context, id int) ([]qbt.Torrent, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return slices.Clone(f.listed[id]), nil
+}
+
+func (f *fakeQB) Pause(_ context.Context, _ int, hashes []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.paused = append(f.paused, hashes...)
+	return nil
+}
+
+func (f *fakeQB) Resume(_ context.Context, _ int, hashes []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.resumed = append(f.resumed, hashes...)
+	return nil
 }
 
 func (f *fakeQB) Reannounce(_ context.Context, _ int, hashes []string) error {

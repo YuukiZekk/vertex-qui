@@ -121,3 +121,13 @@ func (a *Adapter) DeleteTorrent(ctx context.Context, instanceID int, hash string
 	}
 	return a.sync.BulkAction(ctx, instanceID, []string{hash}, action)
 }
+
+// Pause stops the torrents, so a download stops writing to the disk at once.
+func (a *Adapter) Pause(ctx context.Context, instanceID int, hashes []string) error {
+	return a.sync.BulkAction(ctx, instanceID, hashes, "pause")
+}
+
+// Resume starts torrents Pause stopped.
+func (a *Adapter) Resume(ctx context.Context, instanceID int, hashes []string) error {
+	return a.sync.BulkAction(ctx, instanceID, hashes, "resume")
+}
