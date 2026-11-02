@@ -93,6 +93,9 @@ func (n *NexusPHP) Inspect(ctx context.Context, detailsURL string) (Inspection, 
 	if isMTeam(u.Host) {
 		return n.inspectMTeam(ctx, detailsURL)
 	}
+	if isColapt(u.Host) {
+		return n.inspectColapt(ctx, detailsURL)
+	}
 	req, err := n.request(ctx, detailsURL)
 	if err != nil {
 		return Inspection{}, err

@@ -212,5 +212,8 @@ func RuleName(host string) string {
 	if isMTeam(host) {
 		return "m-team"
 	}
+	if isColapt(host) {
+		return "colapt"
+	}
 	return ruleFor(host).name
 }

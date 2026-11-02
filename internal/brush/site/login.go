@@ -27,6 +27,10 @@ func (n *NexusPHP) CheckLogin(ctx context.Context, baseURL string) error {
 	if isMTeam(u.Host) {
 		return n.checkMTeam(ctx)
 	}
+	if isColapt(u.Host) {
+		_, err := n.colaptGet(ctx, (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: "/api/v1/me"}).String())
+		return err
+	}
 	req, err := n.request(ctx, strings.TrimRight(baseURL, "/")+"/index.php")
 	if err != nil {
 		return err

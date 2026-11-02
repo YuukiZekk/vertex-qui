@@ -168,3 +168,42 @@ func TestCheckLogin(t *testing.T) {
 	require.Equal(t, "chdbits", RuleName("ptchdbits.co"))
 	require.Equal(t, "nexusphp", RuleName("zmpt.cc"))
 }
+
+// colapt is read through its JSON API with the session cookie.
+func TestColapt(t *testing.T) {
+	api, err := colaptTorrentAPI("https://www.colapt.com/details.php?id=77")
+	require.NoError(t, err)
+	require.Equal(t, "https://www.colapt.com/api/v1/torrents/77", api)
+	api, err = colaptTorrentAPI("https://www.colapt.com/torrents/78")
+	require.NoError(t, err)
+	require.Equal(t, "https://www.colapt.com/api/v1/torrents/78", api)
+	require.Equal(t, "colapt", RuleName("www.colapt.com"))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Cookie") != "session=1" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		require.Equal(t, "application/json", r.Header.Get("Accept"))
+		switch r.URL.Path {
+		case "/api/v1/torrents/1":
+			_, _ = io.WriteString(w, `{"id":1,"promotion":{"upload":{"num":2,"den":1},"download":{"num":0,"den":1},"ends_at":null}}`)
+		case "/api/v1/torrents/2":
+			_, _ = io.WriteString(w, `{"id":2,"promotion":{"upload":{"num":1,"den":1},"download":{"num":1,"den":2},"ends_at":null}}`)
+		case "/api/v1/torrents/3":
+			_, _ = io.WriteString(w, `{"id":3,"promotion":null}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	n := NewNexusPHP("session=1")
+	for id, free := range map[string]bool{"1": true, "2": false, "3": false} {
+		got, err := n.inspectColapt(context.Background(), srv.URL+"/details.php?id="+id)
+		require.NoError(t, err)
+		require.Equal(t, Inspection{Free: free, Rule: "colapt"}, got, id)
+	}
+	_, err = NewNexusPHP("bad").inspectColapt(context.Background(), srv.URL+"/details.php?id=1")
+	require.ErrorIs(t, err, ErrNotLoggedIn)
+}
