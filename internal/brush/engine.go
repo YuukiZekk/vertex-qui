@@ -6,6 +6,7 @@ package brush
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
@@ -99,6 +100,9 @@ func (s *Service) poll(ctx context.Context, f store.Feed) {
 	record := func(etag, lastModified, fetchErr string) {
 		if err := s.store.RecordFetch(ctx, f.ID, etag, lastModified, fetchErr); err != nil {
 			s.log.Error().Err(err).Int64("feed", f.ID).Msg("record fetch")
+		}
+		if fetchErr != "" {
+			s.alert(ctx, fmt.Sprintf("feed:%d", f.ID), 0, "订阅拉取失败", fmt.Sprintf("订阅 %s 拉取失败：%s", f.Name, fetchErr))
 		}
 	}
 
@@ -198,6 +202,9 @@ func (s *Service) process(ctx context.Context, f store.Feed, client *site.NexusP
 	if f.FreeOnly || f.SkipHR {
 		insp, err := client.Inspect(raceCtx, item.Link)
 		if err != nil {
+			if errors.Is(err, site.ErrNotLoggedIn) {
+				s.alert(ctx, fmt.Sprintf("site:%d", f.SiteID), 0, "站点登录失效", fmt.Sprintf("订阅 %s 的站点不接受保存的 Cookie 或 API Key，请在站点页更新：%s", f.Name, err))
+			}
 			stepFailed(reasonInspect, err)
 			return
 		}

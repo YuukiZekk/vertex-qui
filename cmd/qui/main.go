@@ -775,6 +775,7 @@ func (app *Application) runServer() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize brush service")
 	}
+	brushService.SetNotifier(quiadapter.NewNotifier(notificationService))
 
 	orphanScanStore := models.NewOrphanScanStore(db)
 	orphanScanService := orphanscan.NewService(orphanscan.DefaultConfig(), instanceStore, orphanScanStore, syncManager, notificationService, backendPool)

@@ -292,6 +292,7 @@ func (s *Service) reap(ctx context.Context) {
 		}
 		if err != nil {
 			s.reaper.streak[id] = 0
+			s.alert(ctx, fmt.Sprintf("instance:%d", id), id, "读不到下载器", fmt.Sprintf("刷流无法读取这台下载器：%s", err))
 			continue
 		}
 		st.Committed = space.Committed
@@ -304,6 +305,8 @@ func (s *Service) reap(ctx context.Context) {
 		var picks []torrentValue
 		st.Mode, st.Shortfall, picks, _ = pickReaps(st.Committed, st.FloorBytes, st.Need, s.reaper.streak[id], st.Replacement.Value, byInstance[id])
 		if enabled && st.Mode == reapEmergency {
+			s.alert(ctx, fmt.Sprintf("emergency:%d", id), id, "低于安全底线",
+				fmt.Sprintf("下载完成后剩余空间 %d GiB，低于安全底线 %d GiB；已暂停刷流下载并开始删种。", st.Committed>>30, st.FloorBytes>>30))
 			s.pauseDownloads(ctx, id)
 		} else if st.Mode != reapEmergency {
 			s.resumeDownloads(ctx, id)
@@ -376,6 +379,7 @@ func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrent
 		kept := t.ContentPath != "" && users[t.ContentPath] > 1
 		if err := s.qui.DeleteTorrent(ctx, st.InstanceID, tv.Hash, !kept); err != nil {
 			s.log.Error().Err(err).Int("instance", st.InstanceID).Str("hash", tv.Hash).Msg("delete brush torrent")
+			s.alert(ctx, fmt.Sprintf("delete:%d", st.InstanceID), st.InstanceID, "删种失败", fmt.Sprintf("删除 %s 失败：%s", tv.Name, err))
 			continue
 		}
 		now := s.now()

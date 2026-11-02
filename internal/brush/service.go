@@ -48,6 +48,7 @@ type Service struct {
 	meter  *uploadMeter
 	values *valueTracker
 	reaper *reaper
+	alerts *alerter
 	sites  *siteMeter
 	// lastPrediction is only touched by the sampler goroutine.
 	lastPrediction time.Time
@@ -78,6 +79,7 @@ func New(ctx context.Context, db dbinterface.Querier, cipher *models.CredentialC
 		meter:     newUploadMeter(),
 		values:    newValueTracker(),
 		reaper:    newReaper(),
+		alerts:    &alerter{sent: make(map[string]time.Time)},
 		sites:     newSiteMeter(),
 		uploading: make(map[int]map[string]bool),
 		baselined: make(map[int64]bool),

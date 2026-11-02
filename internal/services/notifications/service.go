@@ -435,6 +435,8 @@ func (s *Service) formatEvent(ctx context.Context, event Event, humanReadableMet
 	case EventAutomationsRunFailed:
 		title := "Automations run failed"
 		return formatAutomationsEvent(instanceLabel, title, event.Title, customMessage, humanReadableMetrics)
+	case EventBrushAlert:
+		return "Brush: " + strings.TrimSpace(event.Title), buildMessage(instanceLabel, []string{customMessage})
 	default:
 		return "", ""
 	}

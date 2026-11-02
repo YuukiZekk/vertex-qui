@@ -13,6 +13,7 @@ import (
 
 	"github.com/autobrr/qui/internal/models"
 	"github.com/autobrr/qui/internal/qbittorrent"
+	"github.com/autobrr/qui/internal/services/notifications"
 )
 
 type Instance struct {
@@ -130,4 +131,22 @@ func (a *Adapter) Pause(ctx context.Context, instanceID int, hashes []string) er
 // Resume starts torrents Pause stopped.
 func (a *Adapter) Resume(ctx context.Context, instanceID int, hashes []string) error {
 	return a.sync.BulkAction(ctx, instanceID, hashes, "resume")
+}
+
+// Notifier sends brush alerts through qui's notification targets, as the
+// brush_alert event.
+type Notifier struct {
+	service *notifications.Service
+}
+
+func NewNotifier(service *notifications.Service) *Notifier {
+	return &Notifier{service: service}
+}
+
+// Alert sends one alert; instanceID is zero when it is not about an instance.
+func (n *Notifier) Alert(ctx context.Context, instanceID int, title, message string) {
+	if n == nil || n.service == nil {
+		return
+	}
+	n.service.Notify(ctx, notifications.Event{Type: notifications.EventBrushAlert, Title: title, Message: message, InstanceID: instanceID})
 }

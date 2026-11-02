@@ -29,6 +29,8 @@ const (
 	EventCrossSeedWebhookFailed       EventType = "cross_seed_webhook_failed"
 	EventAutomationsActionsApplied    EventType = "automations_actions_applied"
 	EventAutomationsRunFailed         EventType = "automations_run_failed"
+	// EventBrushAlert is raised by vertex-qui's brush module when something needs attention.
+	EventBrushAlert EventType = "brush_alert"
 )
 
 type EventDefinition struct {
@@ -56,6 +58,7 @@ var eventDefinitions = []EventDefinition{
 	{Type: EventCrossSeedWebhookFailed, Label: "Cross-seed webhook failed", Description: "A webhook check or apply fails."},
 	{Type: EventAutomationsActionsApplied, Label: "Automations actions applied", Description: "Automation rules applied actions (summary counts and samples; only when actions occur)."},
 	{Type: EventAutomationsRunFailed, Label: "Automations run failed", Description: "Automation rules failed to run for an instance (system error)."},
+	{Type: EventBrushAlert, Label: "Brush alert", Description: "Brushing needs attention: a downloader below its safety floor, a failed deletion, a feed or site that cannot be read, or a downloader that cannot be reached."},
 }
 
 var eventTypeIndex = func() map[string]int {
