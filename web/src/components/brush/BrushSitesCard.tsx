@@ -140,6 +140,7 @@ export function BrushSitesCard() {
                     <div className="text-xs text-muted-foreground">
                       {s.baseUrl}
                       {s.torrentUploadLimit > 0 && <span className="ml-2">{t("sites.uploadLimitValue", { value: bytesPerSecondToMBs(s.torrentUploadLimit) })}</span>}
+                      {s.torrentDownloadLimit > 0 && <span className="ml-2">{t("sites.downloadLimitValue", { value: bytesPerSecondToMBs(s.torrentDownloadLimit) })}</span>}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -190,6 +191,7 @@ function SiteDialog({ site, onClose }: { site: BrushSite | null, onClose: () => 
     baseUrl: site?.baseUrl ?? "",
     cookie: "",
     uploadLimitMBs: site?.torrentUploadLimit ? bytesPerSecondToMBs(site.torrentUploadLimit) : "",
+    downloadLimitMBs: site?.torrentDownloadLimit ? bytesPerSecondToMBs(site.torrentDownloadLimit) : "",
   })
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((prev) => ({ ...prev, [key]: value }))
   const save = useMutation({
@@ -198,6 +200,7 @@ function SiteDialog({ site, onClose }: { site: BrushSite | null, onClose: () => 
       baseUrl: form.baseUrl.trim(),
       cookie: form.cookie,
       torrentUploadLimit: form.uploadLimitMBs ? mbsToBytesPerSecond(form.uploadLimitMBs) : 0,
+      torrentDownloadLimit: form.downloadLimitMBs ? mbsToBytesPerSecond(form.downloadLimitMBs) : 0,
     }),
     onSuccess: () => {
       onClose()
@@ -246,18 +249,30 @@ function SiteDialog({ site, onClose }: { site: BrushSite | null, onClose: () => 
           </FormSection>
 
           <FormSection title={t("sitesPage.sectionLimits")}>
-            <Field id="site-limit" label={t("sites.uploadLimit")} help={t("sites.uploadLimitHelp")}>
-              <Input
-                id="site-limit"
-                className="sm:w-48"
-                type="number"
-                min="0"
-                step="any"
-                value={form.uploadLimitMBs}
-                placeholder={t("sites.uploadLimitPlaceholder")}
-                onChange={(e) => set("uploadLimitMBs", e.target.value)}
-              />
-            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="site-limit" label={t("sites.uploadLimit")} help={t("sites.uploadLimitHelp")}>
+                <Input
+                  id="site-limit"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={form.uploadLimitMBs}
+                  placeholder={t("sites.uploadLimitPlaceholder")}
+                  onChange={(e) => set("uploadLimitMBs", e.target.value)}
+                />
+              </Field>
+              <Field id="site-dl-limit" label={t("sites.downloadLimit")} help={t("sites.downloadLimitHelp")}>
+                <Input
+                  id="site-dl-limit"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={form.downloadLimitMBs}
+                  placeholder={t("sites.uploadLimitPlaceholder")}
+                  onChange={(e) => set("downloadLimitMBs", e.target.value)}
+                />
+              </Field>
+            </div>
           </FormSection>
         </div>
         <DialogFooter className="flex-shrink-0 border-t pt-4">

@@ -28,7 +28,7 @@ type qbittorrent interface {
 	FreeSpace(ctx context.Context, instanceID int) (int64, error)
 	Transfer(ctx context.Context, instanceID int) (quiadapter.Transfer, bool, error)
 	HasTorrent(ctx context.Context, instanceID int, infoHash string) (bool, error)
-	AddTorrent(ctx context.Context, instanceID int, file []byte, tag, category string, upLimit int64) error
+	AddTorrent(ctx context.Context, instanceID int, file []byte, tag, category string, upLimit, dlLimit int64) error
 	Reannounce(ctx context.Context, instanceID int, hashes []string) error
 	DeleteTorrent(ctx context.Context, instanceID int, hash string, withFiles bool) error
 }

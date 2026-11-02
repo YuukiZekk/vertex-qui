@@ -98,6 +98,7 @@ export function BrushFeedsCard() {
                       feed.category && t("feeds.categoryValue", { category: feed.category }),
                       t("feeds.windowValue", { minutes: feed.windowSeconds / 60 }),
                       site?.torrentUploadLimit ? t("sites.uploadLimitValue", { value: bytesPerSecondToMBs(site.torrentUploadLimit) }) : "",
+                      site?.torrentDownloadLimit ? t("sites.downloadLimitValue", { value: bytesPerSecondToMBs(site.torrentDownloadLimit) }) : "",
                     ]
                       .filter(Boolean)
                       .join(" · ")}

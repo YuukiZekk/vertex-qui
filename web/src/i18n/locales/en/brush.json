@@ -47,7 +47,10 @@
     "uploadLimit": "Per-torrent upload limit (MB/s)",
     "uploadLimitPlaceholder": "e.g. 100",
     "uploadLimitHelp": "The fastest the site lets one torrent upload. It is set as the upload limit of every torrent brush adds. Leave empty for none.",
-    "uploadLimitValue": "{{value}} MB/s per torrent"
+    "uploadLimitValue": "{{value}} MB/s per torrent",
+    "downloadLimit": "Per-torrent download limit (MB/s)",
+    "downloadLimitHelp": "Set as the download limit of every torrent brush adds, to keep downloads from filling the bandwidth or the disk. Leave empty for none.",
+    "downloadLimitValue": "{{value}} MB/s download per torrent"
   },
   "feeds": {
     "title": "Feeds",

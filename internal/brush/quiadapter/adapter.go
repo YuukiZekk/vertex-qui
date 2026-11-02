@@ -87,8 +87,9 @@ func (a *Adapter) HasTorrent(ctx context.Context, instanceID int, infoHash strin
 // because qBittorrent renamed "paused" to "stopped" in WebAPI 2.11 and ignores the
 // one it does not know, so the instance's "add stopped" default never applies.
 // category is the qBittorrent category, empty for none. upLimit is the torrent's
-// upload limit in bytes per second; zero leaves it unlimited.
-func (a *Adapter) AddTorrent(ctx context.Context, instanceID int, file []byte, tag, category string, upLimit int64) error {
+// upload limit and dlLimit its download limit, in bytes per second; zero leaves
+// them unlimited.
+func (a *Adapter) AddTorrent(ctx context.Context, instanceID int, file []byte, tag, category string, upLimit, dlLimit int64) error {
 	options := map[string]string{
 		"tags":    tag,
 		"paused":  "false",
@@ -99,6 +100,9 @@ func (a *Adapter) AddTorrent(ctx context.Context, instanceID int, file []byte, t
 	}
 	if upLimit > 0 {
 		options["upLimit"] = strconv.FormatInt(upLimit, 10)
+	}
+	if dlLimit > 0 {
+		options["dlLimit"] = strconv.FormatInt(dlLimit, 10)
 	}
 	_, err := a.sync.AddTorrent(ctx, instanceID, file, options)
 	return err

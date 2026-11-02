@@ -36,6 +36,7 @@ type fakeQB struct {
 	added      map[int]int
 	upLimits   []int64
 	categories []string
+	dlLimits   []int64
 	// listed is what Torrents returns; deletions remove from it.
 	listed      map[int][]qbt.Torrent
 	reannounced []string
@@ -86,7 +87,7 @@ func (f *fakeQB) Transfer(context.Context, int) (quiadapter.Transfer, bool, erro
 
 func (f *fakeQB) HasTorrent(context.Context, int, string) (bool, error) { return false, nil }
 
-func (f *fakeQB) AddTorrent(_ context.Context, id int, _ []byte, tag, category string, upLimit int64) error {
+func (f *fakeQB) AddTorrent(_ context.Context, id int, _ []byte, tag, category string, upLimit, dlLimit int64) error {
 	if tag != Tag {
 		return fmt.Errorf("unexpected tag %q", tag)
 	}
@@ -94,6 +95,7 @@ func (f *fakeQB) AddTorrent(_ context.Context, id int, _ []byte, tag, category s
 	defer f.mu.Unlock()
 	f.upLimits = append(f.upLimits, upLimit)
 	f.categories = append(f.categories, category)
+	f.dlLimits = append(f.dlLimits, dlLimit)
 	if f.added == nil {
 		f.added = make(map[int]int)
 	}
@@ -200,7 +202,7 @@ func TestPipelineRacesOnlyFreshFreeTorrentsWithinCommittedSpace(t *testing.T) {
 	srv := httptest.NewServer(fs)
 	t.Cleanup(srv.Close)
 
-	siteID, err := svc.store.CreateSite(ctx, store.Site{Name: "pt", BaseURL: srv.URL, Cookie: "c=1"})
+	siteID, err := svc.store.CreateSite(ctx, store.Site{Name: "pt", BaseURL: srv.URL, Cookie: "c=1", TorrentDownloadLimit: 50 << 20})
 	require.NoError(t, err)
 	feedID, err := svc.store.CreateFeed(ctx, store.Feed{SiteID: siteID, Name: "all", URL: srv.URL + "/rss.php",
 		IntervalSeconds: 15, MinSizeBytes: 5 * gib, MaxSizeBytes: 50 * gib, FreeOnly: true, WindowSeconds: 300,
@@ -257,6 +259,7 @@ func TestPipelineRacesOnlyFreshFreeTorrentsWithinCommittedSpace(t *testing.T) {
 	}
 	require.Equal(t, 1, qb.addCount())
 	require.Equal(t, []string{"brush"}, qb.categories, "torrents carry the feed's category")
+	require.Equal(t, []int64{50 << 20}, qb.dlLimits, "and the site's download limit")
 }
 
 func TestCommittedSpaceCountsReservationsUntilListed(t *testing.T) {

@@ -47,7 +47,10 @@
     "uploadLimit": "单种上传上限（MB/s）",
     "uploadLimitPlaceholder": "例如 100",
     "uploadLimitHelp": "站点规定的每个种子最大上传速度，添加种子时直接设为这个种子的上传限速。留空表示不限。",
-    "uploadLimitValue": "单种限速 {{value}} MB/s"
+    "uploadLimitValue": "单种限速 {{value}} MB/s",
+    "downloadLimit": "单种下载上限（MB/s）",
+    "downloadLimitHelp": "添加种子时设为这个种子的下载限速，用来避免下载占满带宽或磁盘写入。留空表示不限。",
+    "downloadLimitValue": "单种下载限速 {{value}} MB/s"
   },
   "feeds": {
     "title": "订阅",

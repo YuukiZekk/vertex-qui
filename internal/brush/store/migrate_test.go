@@ -94,13 +94,14 @@ func TestSecretsAreSealedAndKeptOnBlankUpdate(t *testing.T) {
 			require.False(t, strings.Contains(cookie, "abc"))
 			require.False(t, strings.Contains(feedURL, "secret"))
 
-			require.NoError(t, s.UpdateSite(ctx, Site{ID: siteID, Name: "pt2", BaseURL: "https://pt.example"}))
+			require.NoError(t, s.UpdateSite(ctx, Site{ID: siteID, Name: "pt2", BaseURL: "https://pt.example", TorrentDownloadLimit: 7}))
 			require.NoError(t, s.UpdateFeed(ctx, Feed{ID: feedID, SiteID: siteID, Name: "all2", IntervalSeconds: 20,
 				WindowSeconds: 300, InstanceIDs: []int{1, 3}, AgeFromFirstSeen: true, Category: "brush"}))
 
 			site, err := s.GetSite(ctx, siteID)
 			require.NoError(t, err)
 			require.Equal(t, "c_secure_pass=abc", site.Cookie)
+			require.Equal(t, int64(7), site.TorrentDownloadLimit)
 			feed, err := s.GetFeed(ctx, feedID)
 			require.NoError(t, err)
 			require.Equal(t, "https://pt.example/rss?passkey=secret", feed.URL)
