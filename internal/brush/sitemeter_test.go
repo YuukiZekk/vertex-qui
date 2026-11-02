@@ -124,6 +124,7 @@ func TestSiteTotals(t *testing.T) {
 	require.Equal(t, int64(7), views[0].UploadSpeed)
 	require.Equal(t, int64(40), views[0].SizeBytes)
 	require.Equal(t, 1, views[0].Torrents)
+	require.Equal(t, []string{"tracker.hdsky.me"}, views[0].TrackerHosts)
 	require.Equal(t, 1, views[1].Torrents, "the brush torrent belongs to its feed's site")
 	require.Equal(t, 1, views[1].Feeds)
 	require.Equal(t, "nexusphp", views[1].Rule)

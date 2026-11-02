@@ -6,7 +6,9 @@ package brush
 import (
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -29,6 +31,9 @@ type siteView struct {
 	DownloadSpeed   int64  `json:"downloadSpeed"`
 	Torrents        int    `json:"torrents"`
 	SizeBytes       int64  `json:"sizeBytes"`
+	// TrackerHosts are the tracker hosts its torrents announce to, most used first,
+	// so the page can show the icon qui keeps for a tracker.
+	TrackerHosts []string `json:"trackerHosts"`
 }
 
 func (s *Service) handleListSites(w http.ResponseWriter, r *http.Request) {
@@ -68,6 +73,7 @@ func (s *Service) handleListSites(w http.ResponseWriter, r *http.Request) {
 		out = append(out, v)
 	}
 	matcher := newSiteMatcher(sites)
+	hosts := make(map[int64]map[string]int)
 	for id := range configs {
 		torrents, err := s.qui.Torrents(ctx, id)
 		if err != nil {
@@ -82,9 +88,33 @@ func (s *Service) handleListSites(w http.ResponseWriter, r *http.Request) {
 			v.SizeBytes += t.Size
 			v.UploadSpeed += t.UpSpeed
 			v.DownloadSpeed += t.DlSpeed
+			if host := hostOf(t.Tracker); host != "" {
+				if hosts[v.ID] == nil {
+					hosts[v.ID] = make(map[string]int)
+				}
+				hosts[v.ID][host]++
+			}
 		}
 	}
+	for _, v := range out {
+		v.TrackerHosts = mostUsed(hosts[v.ID])
+	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// mostUsed lists the keys by count, highest first, ties by name.
+func mostUsed(counts map[string]int) []string {
+	keys := make([]string, 0, len(counts))
+	for k := range counts {
+		keys = append(keys, k)
+	}
+	slices.SortFunc(keys, func(a, b string) int {
+		if counts[a] != counts[b] {
+			return counts[b] - counts[a]
+		}
+		return strings.Compare(a, b)
+	})
+	return keys
 }
 
 // handleTestSite checks that the site accepts the stored cookie, or M-Team the

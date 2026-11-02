@@ -16,6 +16,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { EmptyState, Field, FormSection, SectionCard, StateBadge } from "./section"
+import { SiteIcon } from "./SiteIcon"
 import { sectionHeaderRowClass, sectionTableClass } from "./sectionStyles"
 import { bytesPerSecondToMBs, mbsToBytesPerSecond } from "./units"
 
@@ -96,7 +97,10 @@ export function BrushSitesCard() {
             {sorted.map((s) => (
               <div key={s.id} className="flex items-center gap-2 px-6 py-2">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{s.name}</div>
+                  <div className="flex items-center gap-2">
+                    <SiteIcon site={s} />
+                    <span className="truncate text-sm font-medium">{s.name}</span>
+                  </div>
                   <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground tabular-nums">
                     <span className="flex items-center gap-0.5"><ChevronUp className="h-3 w-3" />{formatBytes(s.todayUploaded)}</span>
                     <span className="flex items-center gap-0.5"><ChevronDown className="h-3 w-3" />{formatBytes(s.todayDownloaded)}</span>
@@ -129,6 +133,7 @@ export function BrushSitesCard() {
                 <TableRow key={s.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
+                      <SiteIcon site={s} />
                       <span className="font-medium">{s.name}</span>
                       {!s.hasCookie && <StateBadge tone="error">{t("sites.cookieMissing")}</StateBadge>}
                     </div>

@@ -42,6 +42,8 @@ export interface BrushSite {
   downloadSpeed: number
   torrents: number
   sizeBytes: number
+  // Tracker hosts its torrents announce to, most used first; qui keeps icons by tracker host.
+  trackerHosts: string[]
 }
 
 export interface BrushSiteTest {

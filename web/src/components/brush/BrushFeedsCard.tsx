@@ -19,6 +19,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { EmptyState, Field, FormSection, SectionCard, StateBadge, ToggleRow } from "./section"
+import { SiteIcon } from "./SiteIcon"
 import { sectionHeaderRowClass, sectionTableClass } from "./sectionStyles"
 import { bytesPerSecondToMBs, bytesToGB, gbToBytes } from "./units"
 
@@ -79,7 +80,14 @@ export function BrushFeedsCard() {
                       {site && !site.hasCookie && <StateBadge tone="error">{t("sites.cookieMissing")}</StateBadge>}
                     </div>
                   </TableCell>
-                  <TableCell>{site?.name ?? "-"}</TableCell>
+                  <TableCell>
+                    {site ? (
+                      <div className="flex items-center gap-2">
+                        <SiteIcon site={site} />
+                        <span>{site.name}</span>
+                      </div>
+                    ) : "-"}
+                  </TableCell>
                   <TableCell>{instanceNames(feed.instanceIds)}</TableCell>
                   <TableCell>{t("feeds.sizeRangeValue", { min: bytesToGB(feed.minSizeBytes), max: bytesToGB(feed.maxSizeBytes) })}</TableCell>
                   <TableCell className="text-muted-foreground">
