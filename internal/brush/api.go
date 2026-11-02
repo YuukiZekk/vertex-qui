@@ -229,17 +229,18 @@ func (s *Service) handleDeleteSite(w http.ResponseWriter, r *http.Request) {
 }
 
 type feedBody struct {
-	SiteID          int64  `json:"siteId"`
-	Name            string `json:"name"`
-	URL             string `json:"url"`
-	IntervalSeconds int    `json:"intervalSeconds"`
-	MinSizeBytes    int64  `json:"minSizeBytes"`
-	MaxSizeBytes    int64  `json:"maxSizeBytes"`
-	FreeOnly        bool   `json:"freeOnly"`
-	SkipHR          bool   `json:"skipHr"`
-	WindowSeconds   int    `json:"windowSeconds"`
-	InstanceIDs     []int  `json:"instanceIds"`
-	Enabled         bool   `json:"enabled"`
+	SiteID           int64  `json:"siteId"`
+	Name             string `json:"name"`
+	URL              string `json:"url"`
+	IntervalSeconds  int    `json:"intervalSeconds"`
+	MinSizeBytes     int64  `json:"minSizeBytes"`
+	MaxSizeBytes     int64  `json:"maxSizeBytes"`
+	FreeOnly         bool   `json:"freeOnly"`
+	SkipHR           bool   `json:"skipHr"`
+	WindowSeconds    int    `json:"windowSeconds"`
+	AgeFromFirstSeen bool   `json:"ageFromFirstSeen"`
+	InstanceIDs      []int  `json:"instanceIds"`
+	Enabled          bool   `json:"enabled"`
 }
 
 func (s *Service) handleListFeeds(w http.ResponseWriter, r *http.Request) {
@@ -262,7 +263,7 @@ func (s *Service) handleSaveFeed(w http.ResponseWriter, r *http.Request) {
 	f := store.Feed{
 		SiteID: body.SiteID, Name: strings.TrimSpace(body.Name), URL: strings.TrimSpace(body.URL),
 		IntervalSeconds: body.IntervalSeconds, MinSizeBytes: body.MinSizeBytes, MaxSizeBytes: body.MaxSizeBytes,
-		FreeOnly: body.FreeOnly, SkipHR: body.SkipHR, WindowSeconds: body.WindowSeconds,
+		FreeOnly: body.FreeOnly, SkipHR: body.SkipHR, WindowSeconds: body.WindowSeconds, AgeFromFirstSeen: body.AgeFromFirstSeen,
 		InstanceIDs: normalizeIDs(body.InstanceIDs), Enabled: body.Enabled,
 	}
 	create := chi.URLParam(r, "id") == ""
@@ -359,7 +360,7 @@ func (s *Service) handleTestFeed(w http.ResponseWriter, r *http.Request) {
 	window := time.Duration(f.WindowSeconds) * time.Second
 	out := make([]testItem, 0, len(items))
 	for _, item := range items {
-		age := raceAge(item.Published, now, now)
+		age := feedAge(f, item.Published, now, now)
 		ti := testItem{
 			Title: item.Title, SizeBytes: item.Size, PublishedAt: unixOrZero(item.Published),
 			AgeSeconds: int64(age / time.Second), InWindow: age <= window, SizeOK: item.Size == 0 || sizeAllowed(f, item.Size),

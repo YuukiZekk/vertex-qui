@@ -173,7 +173,7 @@ func (s *Service) process(ctx context.Context, f store.Feed, client *site.NexusP
 	}
 
 	window := time.Duration(f.WindowSeconds) * time.Second
-	age := raceAge(item.Published, firstSeen, s.now())
+	age := feedAge(f, item.Published, firstSeen, s.now())
 	if age > window {
 		reject(reasonWindow, age.Truncate(time.Second).String())
 		return
@@ -286,4 +286,13 @@ func unixOrZero(t time.Time) int64 {
 		return 0
 	}
 	return t.Unix()
+}
+
+// feedAge is raceAge, or for a feed that counts age from first sight, like a revival
+// section of old torrents, the time since the feed first listed the torrent.
+func feedAge(f store.Feed, published, firstSeen, now time.Time) time.Duration {
+	if f.AgeFromFirstSeen {
+		return max(now.Sub(firstSeen), 0)
+	}
+	return raceAge(published, firstSeen, now)
 }

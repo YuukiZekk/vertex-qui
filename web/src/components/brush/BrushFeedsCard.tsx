@@ -88,6 +88,7 @@ export function BrushFeedsCard() {
                     {[
                       feed.freeOnly && t("feeds.freeOnly"),
                       feed.skipHr && t("feeds.skipHr"),
+                      feed.ageFromFirstSeen && t("feeds.ageFromFirstSeenShort"),
                       t("feeds.windowValue", { minutes: feed.windowSeconds / 60 }),
                       site?.torrentUploadLimit ? t("sites.uploadLimitValue", { value: bytesPerSecondToMBs(site.torrentUploadLimit) }) : "",
                     ]
@@ -152,6 +153,7 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
     windowMinutes: String((feed?.windowSeconds ?? 300) / 60),
     freeOnly: feed?.freeOnly ?? true,
     skipHr: feed?.skipHr ?? false,
+    ageFromFirstSeen: feed?.ageFromFirstSeen ?? false,
     enabled: feed?.enabled ?? true,
   })
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((prev) => ({ ...prev, [key]: value }))
@@ -189,6 +191,7 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
           windowSeconds: Math.round(Number(form.windowMinutes) * 60),
           freeOnly: form.freeOnly,
           skipHr: form.skipHr,
+          ageFromFirstSeen: form.ageFromFirstSeen,
           enabled: form.enabled,
         })
       } catch (err) {
@@ -314,6 +317,13 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
           <div className="flex items-center gap-2">
             <Checkbox id="feed-hr" checked={form.skipHr} onCheckedChange={(v) => set("skipHr", v === true)} />
             <Label htmlFor="feed-hr">{t("feeds.skipHr")}</Label>
+          </div>
+          <div className="col-span-2 space-y-1">
+            <div className="flex items-center gap-2">
+              <Checkbox id="feed-first-seen" checked={form.ageFromFirstSeen} onCheckedChange={(v) => set("ageFromFirstSeen", v === true)} />
+              <Label htmlFor="feed-first-seen">{t("feeds.ageFromFirstSeen")}</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">{t("feeds.ageFromFirstSeenHelp")}</p>
           </div>
           <div className="col-span-2 flex items-center gap-2">
             <Switch id="feed-enabled" checked={form.enabled} onCheckedChange={(v) => set("enabled", v)} />

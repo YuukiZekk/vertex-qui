@@ -271,4 +271,9 @@ func TestRaceAge(t *testing.T) {
 	require.Equal(t, 20*time.Second, raceAge(time.Time{}, firstSeen, now), "no pubDate falls back to first seen")
 	require.Equal(t, 20*time.Second, raceAge(now.Add(time.Hour), firstSeen, now), "a pubDate far in the future is not trusted")
 	require.Equal(t, time.Duration(0), raceAge(now.Add(time.Minute), firstSeen, now), "small clock skew counts as brand new")
+
+	revival := store.Feed{AgeFromFirstSeen: true}
+	upload := now.Add(-15 * 24 * time.Hour)
+	require.Equal(t, 20*time.Second, feedAge(revival, upload, firstSeen, now), "a revived torrent is as old as its listing")
+	require.Equal(t, 15*24*time.Hour, feedAge(store.Feed{}, upload, firstSeen, now))
 }
