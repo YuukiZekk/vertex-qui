@@ -12,31 +12,24 @@
     "cancel": "Cancel"
   },
   "status": {
-    "title": "Servers",
-    "description": "Space, upload and safety floor of each downloader.",
     "enabled": "Brushing on",
     "disabled": "Brushing off",
     "loading": "Loading…",
     "loadFailed": "Could not load the brush status: {{message}}",
     "saveFailed": "Could not change the brush switch",
-    "info": "Brush adds a torrent only while the space left after every download finishes stays above the safety floor. A new instance gets 10% of its disk as the floor, estimated from qBittorrent's free space plus what its torrents hold; you can change it any time."
+    "badgeTitle": "{{free}} free, {{committed}} after downloads, floor {{floor}}",
+    "settingsHint": "Set the safety floor and upload capacity in Settings → Instances → Brush"
   },
   "instances": {
-    "name": "Instance",
     "torrents": "Torrents",
     "freeSpace": "Free space",
     "committed": "Free after downloads",
     "floor": "Safety floor (GB)",
     "floorPlaceholder": "e.g. 50",
-    "floorSaved": "Safety floor saved",
-    "floorSaveFailed": "Could not save the safety floor",
     "upload": "Upload (last minute)",
     "mbpsValue": "{{value}} Mbps",
     "capacity": "Upload capacity (Mbps)",
     "capacityPlaceholder": "e.g. 2000",
-    "capacitySaved": "Upload capacity saved",
-    "capacitySaveFailed": "Could not save the upload capacity",
-    "state": "State",
     "ok": "Ready",
     "noFloor": "Reading the disk; the floor is set shortly",
     "belowFloor": "Below the safety floor, adds paused",
@@ -227,5 +220,16 @@
   "log": {
     "title": "Brush log",
     "description": "What brush decided for each new torrent, and the torrents it deleted to make room."
+  },
+  "instanceTab": {
+    "tab": "Brush",
+    "limitsTitle": "Brush settings",
+    "limitsDescription": "Brush adds torrents only while the space left after every download stays above the safety floor; the upload capacity tells how busy this downloader is.",
+    "floorHelp": "A new instance starts at 10% of its disk; change it any time.",
+    "capacityHelp": "The upload bandwidth the host sells, e.g. 2000 Mbps; empty means placement ignores how busy the upload is.",
+    "nowTitle": "Now",
+    "nowDescription": "The space and upload brush reads for this downloader, updated every 5 seconds.",
+    "saved": "Brush settings saved",
+    "saveFailed": "Could not save the brush settings"
   }
 }

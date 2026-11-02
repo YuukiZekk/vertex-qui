@@ -12,31 +12,24 @@
     "cancel": "取消"
   },
   "status": {
-    "title": "服务器",
-    "description": "各下载器的空间、上传和安全底线。",
     "enabled": "刷流已开启",
     "disabled": "刷流未开启",
     "loading": "加载中…",
     "loadFailed": "无法加载刷流状态：{{message}}",
     "saveFailed": "无法切换刷流开关",
-    "info": "只有在所有下载完成后剩余空间仍高于安全底线时，刷流才会添加种子。新实例的安全底线自动设为磁盘总空间的 10%（按 qBittorrent 的剩余空间加上种子已占用的空间估算），可以随时修改。"
+    "badgeTitle": "剩余 {{free}}，下载完成后剩余 {{committed}}，安全底线 {{floor}}",
+    "settingsHint": "安全底线和上传能力在 设置 → 实例 → 刷流 中修改"
   },
   "instances": {
-    "name": "实例",
     "torrents": "种子数",
     "freeSpace": "剩余空间",
     "committed": "下载完成后剩余",
     "floor": "安全底线（GB）",
     "floorPlaceholder": "例如 50",
-    "floorSaved": "安全底线已保存",
-    "floorSaveFailed": "无法保存安全底线",
     "upload": "上传（近 1 分钟）",
     "mbpsValue": "{{value}} Mbps",
     "capacity": "上传能力（Mbps）",
     "capacityPlaceholder": "例如 2000",
-    "capacitySaved": "上传能力已保存",
-    "capacitySaveFailed": "无法保存上传能力",
-    "state": "状态",
     "ok": "就绪",
     "noFloor": "正在读取空间，稍后自动设置安全底线",
     "belowFloor": "低于安全底线，暂停进种",
@@ -227,5 +220,16 @@
   "log": {
     "title": "刷流日志",
     "description": "刷流对每个新种的处理结果，以及为了腾出空间删掉的种子。"
+  },
+  "instanceTab": {
+    "tab": "刷流",
+    "limitsTitle": "刷流设置",
+    "limitsDescription": "刷流只在所有下载完成后剩余空间仍高于安全底线时进种；上传能力用来判断这台下载器有多忙。",
+    "floorHelp": "新实例自动设为磁盘总空间的 10%，可以随时修改。",
+    "capacityHelp": "服务商标的上传带宽，例如 2000 Mbps；留空表示不按上传繁忙程度分配。",
+    "nowTitle": "当前",
+    "nowDescription": "刷流读到的这台下载器的空间和上传，每 5 秒更新。",
+    "saved": "刷流设置已保存",
+    "saveFailed": "无法保存刷流设置"
   }
 }

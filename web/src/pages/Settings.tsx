@@ -16,6 +16,7 @@ import { GazelleSettingsCard } from "@/components/settings/GazelleSettingsCard"
 import { supportedLanguages, languageNames, changeLanguage, type AppLanguage } from "@/i18n"
 import { ExternalProgramsManager } from "@/components/settings/ExternalProgramsManager"
 import { LogSettingsPanel } from "@/components/settings/LogSettingsPanel"
+import { SortableInstanceGrid } from "@/components/instances/SortableInstanceGrid"
 import { BrushLogPanel } from "@/components/brush/BrushLogPanel"
 import { NotificationsManager } from "@/components/settings/NotificationsManager"
 import { InstallUpdateButton } from "@/components/settings/InstallUpdateButton"
@@ -594,8 +595,17 @@ function InstancesManager({ search, onSearchChange }: InstancesManagerProps) {
         ) : (
           <>
             {instances && instances.length > 0 ? (
-              <div className="grid gap-4 lg:grid-cols-2">
-                {instances.map((instance, index) => (
+              <SortableInstanceGrid
+                instances={instances}
+                disabled={isReordering}
+                onReorder={(orderedIds) => reorderInstances(orderedIds, {
+                  onError: (error) => {
+                    toast.error(t("instances.toasts.reorderFailed"), {
+                      description: error instanceof Error ? error.message : undefined,
+                    })
+                  },
+                })}
+                renderItem={(instance, index) => (
                   <InstanceCard
                     key={instance.id}
                     instance={instance}
@@ -605,8 +615,8 @@ function InstancesManager({ search, onSearchChange }: InstancesManagerProps) {
                     disableMoveUp={isReordering}
                     disableMoveDown={isReordering}
                   />
-                ))}
-              </div>
+                )}
+              />
             ) : (
               <div className="rounded-lg border border-dashed p-12 text-center">
                 <p className="text-muted-foreground">{t("instances.empty")}</p>

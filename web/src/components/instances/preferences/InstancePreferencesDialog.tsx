@@ -27,11 +27,13 @@ import { useInstances } from "@/hooks/useInstances"
 import { formatErrorMessage } from "@/lib/format-error-message"
 import { cn } from "@/lib/utils"
 import type { Instance, PreferenceField } from "@/types"
-import { Cog, Download, Gauge, Globe, MoreVertical, Power, Radar, RefreshCw, Rss, Server, Settings, SlidersHorizontal, Trash2, Wifi, type LucideIcon } from "lucide-react"
+import { Cog, Download, Flame, Gauge, Globe, MoreVertical, Power, Radar, RefreshCw, Rss, Server, Settings, SlidersHorizontal, Trash2, Wifi, type LucideIcon } from "lucide-react"
 import { lazy, Suspense, useState } from "react"
 
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+
+import { BrushInstanceTab } from "@/components/brush/BrushInstanceTab"
 
 import { InstanceSettingsPanel } from "./InstanceSettingsPanel"
 import { preferenceTabLabels } from "./labels"
@@ -85,6 +87,11 @@ function PreferenceTabs({ instanceId, instance, defaultTab }: { instanceId: numb
               </TabsTrigger>
             )
           })}
+          {/* vertex-qui: the brush module's settings for this instance */}
+          <TabsTrigger value="brush" className="flex items-center gap-1.5 shrink-0">
+            <Flame className="h-4 w-4" />
+            <span className="text-xs sm:text-sm">{t("brush:instanceTab.tab")}</span>
+          </TabsTrigger>
           {!fields && (view.isError ? (
             <span className="flex shrink-0 items-center gap-2 px-2 text-xs text-muted-foreground sm:text-sm" role="alert">
               {t("preferences.dialog.errorFallback")}
@@ -116,6 +123,8 @@ function PreferenceTabs({ instanceId, instance, defaultTab }: { instanceId: numb
           )}
         </div>
       </TabsContent>
+
+      <BrushInstanceTab instanceId={instanceId} />
 
       {fields && (
         <Suspense>
