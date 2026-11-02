@@ -12,7 +12,7 @@
   },
   "status": {
     "title": "服务器",
-    "description": "只有在所有下载完成后剩余空间仍高于安全底线时，刷流才会添加种子。",
+    "description": "只有在所有下载完成后剩余空间仍高于安全底线时，刷流才会添加种子。新实例的安全底线自动设为磁盘总空间的 10%（按 qBittorrent 的剩余空间加上种子已占用的空间估算），可以随时修改。",
     "enabled": "刷流已开启",
     "disabled": "刷流未开启",
     "loading": "加载中…",
@@ -36,7 +36,7 @@
     "capacitySaveFailed": "无法保存上传能力",
     "state": "状态",
     "ok": "就绪",
-    "noFloor": "请先设置安全底线",
+    "noFloor": "正在读取空间，稍后自动设置安全底线",
     "belowFloor": "低于安全底线，暂停进种",
     "inactive": "已在 qui 中停用",
     "error": "错误：{{message}}",

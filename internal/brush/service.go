@@ -48,6 +48,8 @@ type Service struct {
 	reaper *reaper
 	// lastPrediction is only touched by the sampler goroutine.
 	lastPrediction time.Time
+	// lastFloorCheck is only touched by the sampler goroutine.
+	lastFloorCheck time.Time
 
 	// admitMu serialises admission across all feeds and instances.
 	admitMu sync.Mutex

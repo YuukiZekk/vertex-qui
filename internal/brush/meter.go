@@ -105,9 +105,10 @@ func (s *Service) runSampler(ctx context.Context) {
 	}
 }
 
-// sample reads every instance brush has a floor for, then stores and checks
-// predictions against what it read.
+// sample gives new instances their default floor, reads every instance brush has a
+// floor for, then stores and checks predictions against what it read.
 func (s *Service) sample(ctx context.Context) {
+	s.ensureFloors(ctx, s.now())
 	configs, err := s.store.InstanceConfigs(ctx)
 	if err != nil {
 		s.log.Error().Err(err).Msg("read brush instances for sampling")

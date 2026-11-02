@@ -12,7 +12,7 @@
   },
   "status": {
     "title": "Servers",
-    "description": "Brush adds a torrent only while the space left after every download finishes stays above the safety floor.",
+    "description": "Brush adds a torrent only while the space left after every download finishes stays above the safety floor. A new instance gets 10% of its disk as the floor, estimated from qBittorrent's free space plus what its torrents hold; you can change it any time.",
     "enabled": "Brushing on",
     "disabled": "Brushing off",
     "loading": "Loading…",
@@ -36,7 +36,7 @@
     "capacitySaveFailed": "Could not save the upload capacity",
     "state": "State",
     "ok": "Ready",
-    "noFloor": "Set a safety floor first",
+    "noFloor": "Reading the disk; the floor is set shortly",
     "belowFloor": "Below the safety floor, adds paused",
     "inactive": "Disabled in qui",
     "error": "Error: {{message}}",
