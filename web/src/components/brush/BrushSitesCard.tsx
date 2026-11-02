@@ -4,9 +4,8 @@
  */
 
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { api } from "@/lib/api"
 import { formatBytes } from "@/lib/utils"
@@ -16,7 +15,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronUp, Pencil, Plug, 
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { EmptyState, SectionCard, StateBadge } from "./section"
+import { EmptyState, Field, FormSection, SectionCard, StateBadge } from "./section"
 import { sectionHeaderRowClass, sectionTableClass } from "./sectionStyles"
 import { bytesPerSecondToMBs, mbsToBytesPerSecond } from "./units"
 
@@ -204,48 +203,59 @@ function SiteDialog({ site, onClose }: { site: BrushSite | null, onClose: () => 
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[90dvh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>{site ? t("sitesPage.editTitle") : t("sitesPage.addTitle")}</DialogTitle>
+          <DialogDescription>{site ? site.name : t("sitesPage.dialogDescription")}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="site-name">{t("sitesPage.site")}</Label>
-            <Input id="site-name" value={form.name} onChange={(e) => set("name", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="site-url">{t("sites.baseUrl")}</Label>
-            <Input id="site-url" value={form.baseUrl} placeholder={t("sites.baseUrlPlaceholder")} onChange={(e) => set("baseUrl", e.target.value)} />
-            <p className="text-xs text-muted-foreground">{t("sitesPage.baseUrlHelp")}</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="site-cookie">{t("sites.cookie")}</Label>
-            <Input
-              id="site-cookie"
-              type="password"
-              autoComplete="off"
-              value={form.cookie}
-              placeholder={site?.hasCookie ? t("sites.cookieKeep") : ""}
-              onChange={(e) => set("cookie", e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">{t("sites.cookieHelp")}</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="site-limit">{t("sites.uploadLimit")}</Label>
-            <Input
-              id="site-limit"
-              className="w-40"
-              type="number"
-              min="0"
-              step="any"
-              value={form.uploadLimitMBs}
-              placeholder={t("sites.uploadLimitPlaceholder")}
-              onChange={(e) => set("uploadLimitMBs", e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">{t("sites.uploadLimitHelp")}</p>
-          </div>
+        <div className="flex-1 overflow-y-auto min-h-0 pr-1 space-y-6">
+          <FormSection title={t("sitesPage.sectionSite")}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="site-name" label={t("sitesPage.site")}>
+                <Input id="site-name" value={form.name} onChange={(e) => set("name", e.target.value)} />
+              </Field>
+              <Field id="site-url" label={t("sites.baseUrl")}>
+                <Input id="site-url" value={form.baseUrl} placeholder={t("sites.baseUrlPlaceholder")} onChange={(e) => set("baseUrl", e.target.value)} />
+              </Field>
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-lg border p-3 bg-muted/40">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium">{t("sitesPage.rule")}</p>
+                <p className="text-sm text-muted-foreground">{t("sitesPage.baseUrlHelp")}</p>
+              </div>
+              {site && <StateBadge tone="neutral">{site.rule}</StateBadge>}
+            </div>
+          </FormSection>
+
+          <FormSection title={t("sitesPage.sectionLogin")}>
+            <Field id="site-cookie" label={t("sites.cookie")} help={t("sites.cookieHelp")}>
+              <Input
+                id="site-cookie"
+                type="password"
+                autoComplete="off"
+                value={form.cookie}
+                placeholder={site?.hasCookie ? t("sites.cookieKeep") : ""}
+                onChange={(e) => set("cookie", e.target.value)}
+              />
+            </Field>
+          </FormSection>
+
+          <FormSection title={t("sitesPage.sectionLimits")}>
+            <Field id="site-limit" label={t("sites.uploadLimit")} help={t("sites.uploadLimitHelp")}>
+              <Input
+                id="site-limit"
+                className="sm:w-48"
+                type="number"
+                min="0"
+                step="any"
+                value={form.uploadLimitMBs}
+                placeholder={t("sites.uploadLimitPlaceholder")}
+                onChange={(e) => set("uploadLimitMBs", e.target.value)}
+              />
+            </Field>
+          </FormSection>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0 border-t pt-4">
           <Button variant="outline" onClick={onClose}>{t("actions.cancel")}</Button>
           <Button disabled={save.isPending || !form.name.trim() || !form.baseUrl.trim()} onClick={() => save.mutate()}>
             {t("actions.save")}

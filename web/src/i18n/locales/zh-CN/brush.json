@@ -96,7 +96,14 @@
     "deleteFailed": "无法删除订阅",
     "noSite": "还没有站点，请先到站点页添加。",
     "siteHelp": "Cookie、上传上限等站点信息在站点页修改，同一站点的订阅共用。前往",
-    "info": "勾选「只要免费」或「跳过 H&R」时，会先到站点详情页检查；判断规则按站点地址自动选择，可在站点页查看。"
+    "info": "勾选「只要免费」或「跳过 H&R」时，会先到站点详情页检查；判断规则按站点地址自动选择，可在站点页查看。",
+    "dialogDescription": "从一个 RSS 抢新种，放进勾选的下载器。",
+    "sectionFeed": "订阅",
+    "sectionFilters": "大小与节奏",
+    "sectionRules": "规则",
+    "freeOnlyHelp": "到站点详情页确认是免费种才添加。",
+    "skipHrHelp": "到站点详情页检查，带 H&R 或检查失败的都跳过。",
+    "enabledHelp": "关闭后不再拉取这个订阅。"
   },
   "test": {
     "title": "测试 {{name}}",
@@ -214,6 +221,10 @@
     "deleteHasFeeds": "请先删除这个站点的订阅",
     "confirmDelete": "删除站点 {{name}}？",
     "empty": "还没有站点。",
-    "footnote": "统计所有设置了安全底线的下载器里的种子：刷流添加的按订阅归到站点，其他种子按 tracker 域名归到站点。今日流量每分钟写入一次，速度、种子数和体积是实时的。"
+    "footnote": "统计所有设置了安全底线的下载器里的种子：刷流添加的按订阅归到站点，其他种子按 tracker 域名归到站点。今日流量每分钟写入一次，速度、种子数和体积是实时的。",
+    "dialogDescription": "站点地址、登录凭据和上传上限，同一站点的订阅共用。",
+    "sectionSite": "站点",
+    "sectionLogin": "登录",
+    "sectionLimits": "限速"
   }
 }

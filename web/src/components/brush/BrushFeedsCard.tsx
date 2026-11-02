@@ -5,11 +5,9 @@
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { api } from "@/lib/api"
 import { formatBytes } from "@/lib/utils"
@@ -20,7 +18,7 @@ import { FlaskConical, Pencil, Plus, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { EmptyState, SectionCard, StateBadge } from "./section"
+import { EmptyState, Field, FormSection, SectionCard, StateBadge, ToggleRow } from "./section"
 import { sectionHeaderRowClass, sectionTableClass } from "./sectionStyles"
 import { bytesPerSecondToMBs, bytesToGB, gbToBytes } from "./units"
 
@@ -187,48 +185,53 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[90dvh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>{feed ? t("feeds.editTitle") : t("feeds.addTitle")}</DialogTitle>
+          <DialogDescription>{feed ? feed.name : t("feeds.dialogDescription")}</DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2 space-y-2">
-            <Label htmlFor="feed-name">{t("feeds.name")}</Label>
-            <Input id="feed-name" value={form.name} onChange={(e) => set("name", e.target.value)} />
-          </div>
-          <div className="col-span-2 space-y-2">
-            <Label htmlFor="feed-url">{t("feeds.url")}</Label>
-            <Input
-              id="feed-url"
-              type="password"
-              autoComplete="off"
-              value={form.url}
-              placeholder={feed ? t("feeds.urlKeep") : ""}
-              onChange={(e) => set("url", e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">{t("feeds.urlHelp")}</p>
-          </div>
-          <div className="col-span-2 space-y-2">
-            <Label>{t("feeds.site")}</Label>
-            {(sites?.length ?? 0) > 0 ? (
-              <Select value={form.siteId} onValueChange={(v) => set("siteId", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {sites?.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            ) : (
-              <p className="text-sm text-destructive">{t("feeds.noSite")}</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              {t("feeds.siteHelp")} <Link to="/sites" className="underline">{t("sitesNav")}</Link>
-            </p>
-          </div>
-          <div className="col-span-2 space-y-2">
-            <Label>{t("feeds.instances")}</Label>
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
+        <div className="flex-1 overflow-y-auto min-h-0 pr-1 space-y-6">
+          <FormSection title={t("feeds.sectionFeed")}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="feed-name" label={t("feeds.name")}>
+                <Input id="feed-name" value={form.name} onChange={(e) => set("name", e.target.value)} />
+              </Field>
+              <Field
+                label={t("feeds.site")}
+                help={<>{t("feeds.siteHelp")} <Link to="/sites" className="underline">{t("sitesNav")}</Link></>}
+              >
+                {(sites?.length ?? 0) > 0 ? (
+                  <Select value={form.siteId} onValueChange={(v) => set("siteId", v)}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {sites?.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-sm text-destructive">{t("feeds.noSite")}</p>
+                )}
+              </Field>
+            </div>
+            <Field id="feed-url" label={t("feeds.url")} help={t("feeds.urlHelp")}>
+              <Input
+                id="feed-url"
+                type="password"
+                autoComplete="off"
+                value={form.url}
+                placeholder={feed ? t("feeds.urlKeep") : ""}
+                onChange={(e) => set("url", e.target.value)}
+              />
+            </Field>
+          </FormSection>
+
+          <FormSection title={t("feeds.instances")}>
+            <div className="grid gap-2 sm:grid-cols-2">
               {status?.instances.map((i) => (
-                <div key={i.id} className="flex items-center gap-2">
+                <label
+                  key={i.id}
+                  htmlFor={`feed-instance-${i.id}`}
+                  className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 bg-muted/40"
+                >
                   <Checkbox
                     id={`feed-instance-${i.id}`}
                     checked={form.instanceIds.includes(i.id)}
@@ -236,52 +239,65 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
                       ? [...form.instanceIds, i.id].sort((a, b) => a - b)
                       : form.instanceIds.filter((id) => id !== i.id))}
                   />
-                  <Label htmlFor={`feed-instance-${i.id}`}>
-                    {i.name}
-                    {i.floorBytes === null && <span className="ml-1 text-xs text-muted-foreground">({t("instances.noFloor")})</span>}
-                  </Label>
-                </div>
+                  <span className="min-w-0 truncate text-sm font-medium">{i.name}</span>
+                  {i.floorBytes === null && <StateBadge tone="warn">{t("instances.noFloor")}</StateBadge>}
+                </label>
               ))}
             </div>
             <p className="text-xs text-muted-foreground">{t("feeds.instancesHelp")}</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="feed-min">{t("feeds.minSize")}</Label>
-            <Input id="feed-min" type="number" min="0" step="any" value={form.minGB} onChange={(e) => set("minGB", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="feed-max">{t("feeds.maxSize")}</Label>
-            <Input id="feed-max" type="number" min="0" step="any" value={form.maxGB} onChange={(e) => set("maxGB", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="feed-interval">{t("feeds.interval")}</Label>
-            <Input id="feed-interval" type="number" min="10" value={form.intervalSeconds} onChange={(e) => set("intervalSeconds", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="feed-window">{t("feeds.window")}</Label>
-            <Input id="feed-window" type="number" min="1" step="any" value={form.windowMinutes} onChange={(e) => set("windowMinutes", e.target.value)} />
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox id="feed-free" checked={form.freeOnly} onCheckedChange={(v) => set("freeOnly", v === true)} />
-            <Label htmlFor="feed-free">{t("feeds.freeOnly")}</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox id="feed-hr" checked={form.skipHr} onCheckedChange={(v) => set("skipHr", v === true)} />
-            <Label htmlFor="feed-hr">{t("feeds.skipHr")}</Label>
-          </div>
-          <div className="col-span-2 space-y-1">
-            <div className="flex items-center gap-2">
-              <Checkbox id="feed-first-seen" checked={form.ageFromFirstSeen} onCheckedChange={(v) => set("ageFromFirstSeen", v === true)} />
-              <Label htmlFor="feed-first-seen">{t("feeds.ageFromFirstSeen")}</Label>
+          </FormSection>
+
+          <FormSection title={t("feeds.sectionFilters")}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="feed-min" label={t("feeds.minSize")}>
+                <Input id="feed-min" type="number" min="0" step="any" value={form.minGB} onChange={(e) => set("minGB", e.target.value)} />
+              </Field>
+              <Field id="feed-max" label={t("feeds.maxSize")}>
+                <Input id="feed-max" type="number" min="0" step="any" value={form.maxGB} onChange={(e) => set("maxGB", e.target.value)} />
+              </Field>
+              <Field id="feed-interval" label={t("feeds.interval")}>
+                <Input id="feed-interval" type="number" min="10" value={form.intervalSeconds} onChange={(e) => set("intervalSeconds", e.target.value)} />
+              </Field>
+              <Field id="feed-window" label={t("feeds.window")}>
+                <Input id="feed-window" type="number" min="1" step="any" value={form.windowMinutes} onChange={(e) => set("windowMinutes", e.target.value)} />
+              </Field>
             </div>
-            <p className="text-xs text-muted-foreground">{t("feeds.ageFromFirstSeenHelp")}</p>
-          </div>
-          <div className="col-span-2 flex items-center gap-2">
-            <Switch id="feed-enabled" checked={form.enabled} onCheckedChange={(v) => set("enabled", v)} />
-            <Label htmlFor="feed-enabled">{t("feeds.enabled")}</Label>
-          </div>
+          </FormSection>
+
+          <FormSection title={t("feeds.sectionRules")}>
+            <div className="space-y-3">
+              <ToggleRow
+                id="feed-free"
+                label={t("feeds.freeOnly")}
+                description={t("feeds.freeOnlyHelp")}
+                checked={form.freeOnly}
+                onCheckedChange={(v) => set("freeOnly", v)}
+              />
+              <ToggleRow
+                id="feed-hr"
+                label={t("feeds.skipHr")}
+                description={t("feeds.skipHrHelp")}
+                checked={form.skipHr}
+                onCheckedChange={(v) => set("skipHr", v)}
+              />
+              <ToggleRow
+                id="feed-first-seen"
+                label={t("feeds.ageFromFirstSeen")}
+                description={t("feeds.ageFromFirstSeenHelp")}
+                checked={form.ageFromFirstSeen}
+                onCheckedChange={(v) => set("ageFromFirstSeen", v)}
+              />
+              <ToggleRow
+                id="feed-enabled"
+                label={t("feeds.enabled")}
+                description={t("feeds.enabledHelp")}
+                checked={form.enabled}
+                onCheckedChange={(v) => set("enabled", v)}
+              />
+            </div>
+          </FormSection>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0 border-t pt-4">
           <Button variant="outline" onClick={onClose}>{t("actions.cancel")}</Button>
           <Button disabled={save.isPending || form.instanceIds.length === 0 || !selectedSite} onClick={() => save.mutate()}>{t("actions.save")}</Button>
         </DialogFooter>

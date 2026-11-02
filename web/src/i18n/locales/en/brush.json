@@ -96,7 +96,14 @@
     "deleteFailed": "Could not delete the feed",
     "noSite": "No site yet. Add one on the sites page first.",
     "siteHelp": "The cookie, upload limit and other site settings are edited on the sites page and shared by the site's feeds. Go to",
-    "info": "With Free only or Skip H&R on, brush checks the details page first; the rule is picked from the site's address and shown on the sites page."
+    "info": "With Free only or Skip H&R on, brush checks the details page first; the rule is picked from the site's address and shown on the sites page.",
+    "dialogDescription": "Race new torrents from one RSS feed onto the checked downloaders.",
+    "sectionFeed": "Feed",
+    "sectionFilters": "Size and pace",
+    "sectionRules": "Rules",
+    "freeOnlyHelp": "Adds a torrent only when its details page shows it free.",
+    "skipHrHelp": "Checks the details page and skips torrents with H&R, or when the check fails.",
+    "enabledHelp": "When off, the feed is not polled."
   },
   "test": {
     "title": "Test {{name}}",
@@ -214,6 +221,10 @@
     "deleteHasFeeds": "Delete this site's feeds first",
     "confirmDelete": "Delete site {{name}}?",
     "empty": "No sites yet.",
-    "footnote": "Counts the torrents on every downloader with a safety floor: the ones brush added belong to their feed's site, the others to the site their tracker's domain matches. Today's totals are written once a minute; speed, torrents and size are live."
+    "footnote": "Counts the torrents on every downloader with a safety floor: the ones brush added belong to their feed's site, the others to the site their tracker's domain matches. Today's totals are written once a minute; speed, torrents and size are live.",
+    "dialogDescription": "The site's address, login and upload limit, shared by its feeds.",
+    "sectionSite": "Site",
+    "sectionLogin": "Login",
+    "sectionLimits": "Limits"
   }
 }
