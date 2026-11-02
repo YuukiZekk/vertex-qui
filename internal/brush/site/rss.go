@@ -72,11 +72,20 @@ func ParseFeed(feedURL string, body []byte) ([]Item, error) {
 
 	items := make([]Item, 0, len(doc.Items))
 	for _, raw := range doc.Items {
+		link := strings.TrimSpace(raw.Link)
 		item := Item{
 			Title:       strings.TrimSpace(raw.Title),
-			Link:        strings.TrimSpace(raw.Link),
+			Link:        link,
 			DownloadURL: strings.TrimSpace(raw.Enclosure.URL),
 			GUID:        strings.TrimSpace(raw.GUID),
+		}
+		// A feed made with linktype=dl links each item to its download, which carries
+		// the passkey and is no page to check; the details page has the same id.
+		if details, ok := detailsLink(link); ok {
+			item.Link = details
+			if item.DownloadURL == "" {
+				item.DownloadURL = link
+			}
 		}
 		if item.DownloadURL == "" {
 			continue
@@ -137,4 +146,19 @@ func parsePubDate(s string) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+// detailsLink turns a NexusPHP download link, download.php?id=N, into the details
+// page of the same torrent on the same site.
+func detailsLink(link string) (string, bool) {
+	u, err := url.Parse(link)
+	if err != nil || !strings.HasSuffix(u.Path, "/download.php") {
+		return "", false
+	}
+	id := u.Query().Get("id")
+	if id == "" {
+		return "", false
+	}
+	details := url.URL{Scheme: u.Scheme, Host: u.Host, Path: strings.TrimSuffix(u.Path, "download.php") + "details.php", RawQuery: "id=" + url.QueryEscape(id)}
+	return details.String(), true
 }

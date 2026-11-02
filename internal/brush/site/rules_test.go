@@ -63,6 +63,20 @@ func TestParseFeedQuirks(t *testing.T) {
 		require.Equal(t, int64(10), items[0].Size)
 	})
 
+	t.Run("linktype=dl points the link at the details page", func(t *testing.T) {
+		body := []byte(`<?xml version="1.0"?><rss version="2.0"><channel>
+<item><title>A</title><link>https://www.pt.example/download.php?id=77&amp;passkey=secret</link><guid>g77</guid>
+<enclosure url="https://www.pt.example/download.php?id=77&amp;passkey=secret" length="5"/></item>
+<item><title>B</title><link>https://www.pt.example/download.php?id=78&amp;passkey=secret</link><guid>g78</guid></item>
+</channel></rss>`)
+		items, err := ParseFeed("https://www.pt.example/torrentrss.php?rows=50&linktype=dl", body)
+		require.NoError(t, err)
+		require.Len(t, items, 2)
+		require.Equal(t, "https://www.pt.example/details.php?id=77", items[0].Link)
+		require.Equal(t, "https://www.pt.example/download.php?id=77&passkey=secret", items[0].DownloadURL)
+		require.Equal(t, "https://www.pt.example/download.php?id=78&passkey=secret", items[1].DownloadURL, "the link is the download when there is no enclosure")
+	})
+
 	t.Run("putao link and title size", func(t *testing.T) {
 		body := []byte(`<?xml version="1.0"?><rss version="2.0"><channel>
 <item><title>Some.Movie.2160p [12.50 GB]</title>
