@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"sync"
 	"time"
 
 	qbt "github.com/autobrr/go-qbittorrent"
@@ -79,8 +80,10 @@ type reapState struct {
 	Replacement replacement
 }
 
-// reaper is only touched by the reaper goroutine.
+// reaper is touched by the reaper goroutine, except deleted, which admission also
+// uses when it makes room and which mu guards.
 type reaper struct {
+	mu     sync.Mutex
 	streak map[int]int
 	// deleted remembers what was just deleted, so a read that still lists it cannot
 	// pick it again.
@@ -267,11 +270,13 @@ func (s *Service) reap(ctx context.Context) {
 	for _, tv := range s.values.values(now) {
 		byInstance[tv.InstanceID] = append(byInstance[tv.InstanceID], tv)
 	}
+	s.reaper.mu.Lock()
 	for key, at := range s.reaper.deleted {
 		if now.Sub(at) > deletedMemory {
 			delete(s.reaper.deleted, key)
 		}
 	}
+	s.reaper.mu.Unlock()
 
 	ids := make([]int, 0, len(configs))
 	for id := range configs {
@@ -318,11 +323,11 @@ func (s *Service) reap(ctx context.Context) {
 // one by one. A torrent whose files another torrent shares, like a cross-seed, is
 // removed with its files kept. A failed deletion is logged and the rest go on; the
 // next round picks again if space is still short.
-func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrentValue) {
+func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrentValue) int64 {
 	torrents, err := s.qui.Torrents(ctx, st.InstanceID)
 	if err != nil {
 		s.log.Error().Err(err).Int("instance", st.InstanceID).Msg("read torrents before deleting")
-		return
+		return 0
 	}
 	listed := make(map[string]qbt.Torrent, len(torrents))
 	users := make(map[string]int)
@@ -335,7 +340,10 @@ func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrent
 	var targets []torrentValue
 	var hashes []string
 	for _, tv := range picks {
-		if _, done := s.reaper.deleted[reapKey(st.InstanceID, tv.Hash)]; done {
+		s.reaper.mu.Lock()
+		_, done := s.reaper.deleted[reapKey(st.InstanceID, tv.Hash)]
+		s.reaper.mu.Unlock()
+		if done {
 			continue
 		}
 		if _, ok := listed[tv.Hash]; ok {
@@ -344,10 +352,11 @@ func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrent
 		}
 	}
 	if len(targets) == 0 {
-		return
+		return 0
 	}
 
-	if st.Mode != reapEmergency {
+	// An emergency and a new torrent waiting for room cannot spare the wait.
+	if st.Mode != reapEmergency && st.Mode != store.ReapMakeRoom {
 		if err := s.qui.Reannounce(ctx, st.InstanceID, hashes); err != nil {
 			s.log.Warn().Err(err).Int("instance", st.InstanceID).Msg("reannounce before deleting")
 		} else {
@@ -355,12 +364,13 @@ func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrent
 			select {
 			case <-ctx.Done():
 				timer.Stop()
-				return
+				return 0
 			case <-timer.C:
 			}
 		}
 	}
 
+	var freed int64
 	for _, tv := range targets {
 		t := listed[tv.Hash]
 		kept := t.ContentPath != "" && users[t.ContentPath] > 1
@@ -369,10 +379,13 @@ func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrent
 			continue
 		}
 		now := s.now()
+		s.reaper.mu.Lock()
 		s.reaper.deleted[reapKey(st.InstanceID, tv.Hash)] = now
+		s.reaper.mu.Unlock()
 		if kept {
 			users[t.ContentPath]--
 		}
+		freed += tv.SizeBytes
 		_, err := s.store.InsertReap(ctx, store.Reap{
 			InstanceID: st.InstanceID, InfoHash: tv.Hash, Name: t.Name, SizeBytes: tv.SizeBytes, Reason: st.Mode,
 			DeletedAt: now.Unix(), AgeSeconds: tv.AgeSeconds, Predicted: tv.Predicted, Density: tv.Density,
@@ -385,6 +398,7 @@ func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrent
 		s.log.Info().Int("instance", st.InstanceID).Str("hash", tv.Hash).Str("reason", st.Mode).
 			Int64("shortfall", st.Shortfall).Bool("filesKept", kept).Msg("deleted brush torrent")
 	}
+	return freed
 }
 
 // handleDeletions returns the latest deletions, newest first.

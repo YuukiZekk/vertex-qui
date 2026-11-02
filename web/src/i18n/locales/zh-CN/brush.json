@@ -156,7 +156,8 @@
     "reason": "原因",
     "reasons": {
       "need_space": "腾出空间给新种",
-      "emergency": "低于安全底线"
+      "emergency": "低于安全底线",
+      "make_room": "为新种腾位"
     },
     "filesKept": "保留文件",
     "empty": "还没有删除过种子。",

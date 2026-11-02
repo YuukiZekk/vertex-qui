@@ -151,7 +151,7 @@ export interface BrushDeletion {
   infoHash: string
   name: string
   sizeBytes: number
-  reason: "need_space" | "emergency"
+  reason: "need_space" | "emergency" | "make_room"
   deletedAt: number
   ageSeconds: number
   // Null when the torrent's value was still unknown, which only an emergency deletes.

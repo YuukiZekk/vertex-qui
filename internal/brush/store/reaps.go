@@ -19,6 +19,8 @@ const (
 	ReapNeedSpace = "need_space"
 	// ReapEmergency means committed space was already below the floor.
 	ReapEmergency = "emergency"
+	// ReapMakeRoom means a new torrent needed the space and no instance had it.
+	ReapMakeRoom = "make_room"
 )
 
 // Reap is one torrent brush deleted, with the numbers it decided on. Rows written

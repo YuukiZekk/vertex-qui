@@ -156,7 +156,8 @@
     "reason": "Reason",
     "reasons": {
       "need_space": "Room for new torrents",
-      "emergency": "Below the safety floor"
+      "emergency": "Below the safety floor",
+      "make_room": "Room for a new torrent"
     },
     "filesKept": "files kept",
     "empty": "No torrent deleted yet.",

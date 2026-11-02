@@ -59,8 +59,8 @@ type placement struct {
 // torrent would take, plus how busy its upload is: the measured average plus the
 // expected pull of torrents brush sent in the last freshPeriod (capped by their
 // sites' per-torrent limits), over its capacity.
-// The lowest cost wins. Freeing space by deleting torrents is not part of the cost
-// until brush can delete.
+// The lowest cost wins. When none has the space, makeRoom may delete low-value
+// torrents on one of them to take the torrent.
 func (s *Service) admit(ctx context.Context, f store.Feed, entryID int64, tf site.TorrentFile) (int, string, string) {
 	s.admitMu.Lock()
 	defer s.admitMu.Unlock()
@@ -107,6 +107,16 @@ func (s *Service) admit(ctx context.Context, f store.Feed, entryID int64, tf sit
 		}
 	}
 
+	if best < 0 {
+		if c, ok := s.makeRoom(ctx, p.Candidates, tf); ok {
+			for i := range p.Candidates {
+				if p.Candidates[i].InstanceID == c.InstanceID {
+					p.Candidates[i] = c
+					best = i
+				}
+			}
+		}
+	}
 	if best < 0 {
 		s.recordPlacement(ctx, entryID, p)
 		code, detail := refusal(p.Candidates)
