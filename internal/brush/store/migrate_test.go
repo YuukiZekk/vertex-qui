@@ -18,8 +18,10 @@ import (
 
 func dialects() map[string]func(*testing.T) *database.DB {
 	return map[string]func(*testing.T) *database.DB{
-		"sqlite":   func(t *testing.T) *database.DB { return testdb.NewMigratedSQLite(t, t.Name()) },
-		"postgres": func(t *testing.T) *database.DB { return testdb.NewMigratedPostgres(t, t.Name()) },
+		"sqlite": func(t *testing.T) *database.DB { return testdb.NewMigratedSQLite(t, t.Name()) },
+		// Postgres folds the unquoted search path to lower case, so the schema the
+		// helper names after the test must be lower case too.
+		"postgres": func(t *testing.T) *database.DB { return testdb.NewMigratedPostgres(t, strings.ToLower(t.Name())) },
 	}
 }
 
