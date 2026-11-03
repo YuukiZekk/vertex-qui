@@ -73,7 +73,7 @@ func TestSampleFlows(t *testing.T) {
 	peers["5.6.7.8:6000"] = qbt.TorrentPeer{IP: "5.6.7.8", CountryCode: "jp", Uploaded: 40}
 	now = now.Add(flowInterval)
 	svc.sampleFlows(ctx)
-	require.Equal(t, []flowCountry{{InstanceID: 1, Country: "de", Uploaded: 300, Downloaded: 7}}, svc.flow.Today,
+	require.Equal(t, []flowCountry{{InstanceID: 1, SiteID: siteID, Country: "de", Uploaded: 300, Downloaded: 7}}, svc.flow.Today,
 		"today counts what is not written yet")
 	// The next day's first read writes what the day before still had pending.
 	now = now.Add(24 * time.Hour)

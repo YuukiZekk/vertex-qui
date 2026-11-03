@@ -284,12 +284,14 @@ export interface BrushFlows {
   sampledAt: number
   instances: BrushFlowInstance[]
   peers: BrushFlowPeer[]
-  // What each instance moved with each country's peers today, in bytes.
+  // What each instance moved with each country's peers for each site today, in bytes.
   today: BrushFlowCountry[]
 }
 
 export interface BrushFlowCountry {
   instanceId: number
+  // 0 for torrents of no known site.
+  siteId: number
   // Lower-case ISO code, empty when qBittorrent named no country.
   country: string
   uploaded: number

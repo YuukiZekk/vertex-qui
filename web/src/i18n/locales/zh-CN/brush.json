@@ -302,7 +302,7 @@
     "download": "下载",
     "session": "本次流量",
     "mapTitle": "实时连线",
-    "mapInfo": "水管是服务器和对端国家之间的连线：越粗当前速度越快，光点沿管子跑的方向就是数据流向，只画最快的 40 条。按方向着色时青色是上传出去、琥珀色是下载进来；按服务器着色时每台服务器一种颜色。水池是对端国家：光柱高度、波纹大小和国家颜色都表示今天和它传了多少数据，越亮越多。白点是服务器，位置取自实例设置里的地区。每 15 秒读取一次各服务器最忙的 15 个种子的对端。",
+    "mapInfo": "水管是服务器和对端国家之间的连线：越粗当前速度越快，管里的粒子越密、跑得越快，流向就是粒子的方向，只画最快的 40 条。按方向着色时青色是上传出去、琥珀色是下载进来；按服务器着色时每台服务器一种颜色。水池是对端国家本身：今天和它传的数据越多，国家越亮、在 3D 地球上隆起越高。白点是服务器，位置取自实例设置里的地区。每 15 秒读取一次各服务器最忙的 15 个种子的对端。",
     "mapLabel": "服务器与对端国家之间的实时连线地图",
     "sampledAt": "读取于 {{time}}",
     "legendUpload": "上传",
@@ -339,7 +339,25 @@
     "groupsHint": "在 设置 → 实例 → 刷流 里给实例分配集群后，这里会按集群分组。",
     "countryToday": "{{country}}：今日上传 {{uploaded}}，下载 {{downloaded}}；当前 {{count}} 个连接，上传 {{upload}}，下载 {{download}}",
     "legendPipe": "水管粗细 = 当前速度，最粗 {{speed}}",
-    "legendPool": "水池 = 今日流量"
+    "legendPool": "水池 = 今日流量",
+    "summaryTitle": "今日分析",
+    "summaryTotal": "今天共传输 {{total}}，其中上传 {{uploaded}}（{{share}}）。",
+    "summaryConcentrated": "流量集中在{{region}}，占 {{share}}。",
+    "summarySpread": "流量分布较分散，最多的是{{region}}，占 {{share}}。",
+    "summaryTopCountries": "前三个国家 {{countries}} 合计 {{share}}。",
+    "summaryBySite": "各站点的主要对端",
+    "summaryByServer": "各服务器的主要对端",
+    "summaryBest": "{{region}} {{share}} · {{country}} {{countryShare}}",
+    "noSite": "未识别站点",
+    "regions": {
+      "asia": "亚洲",
+      "europe": "欧洲",
+      "americas": "美洲",
+      "africa": "非洲",
+      "oceania": "大洋洲",
+      "antarctic": "南极洲",
+      "unknown": "未知"
+    }
   },
   "groups": {
     "title": "集群",

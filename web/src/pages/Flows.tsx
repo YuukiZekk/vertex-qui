@@ -8,7 +8,8 @@ import { FlowGlobe } from "@/components/brush/FlowGlobe"
 import { FlowMap } from "@/components/brush/FlowMap"
 import { countryName, downloadText, serverColor, uploadText, type FlowColorBy } from "@/components/brush/flowStyle"
 import { EmptyState, SectionCard } from "@/components/brush/section"
-import { sectionHeaderRowClass, sectionTableClass } from "@/components/brush/sectionStyles"
+import { FlowSummary } from "@/components/brush/FlowSummary"
+import { readOpen, sectionHeaderRowClass, sectionTableClass, writeOpen } from "@/components/brush/sectionStyles"
 import { SiteIcon } from "@/components/brush/SiteIcon"
 import { useBrushGroups } from "@/components/brush/useBrushGroups"
 import { Button } from "@/components/ui/button"
@@ -30,6 +31,7 @@ const ROWS_SHOWN = 100
 const HIDDEN_KEY = "brush.flows.hidden"
 const COLOR_KEY = "brush.flows.colorBy"
 const VIEW_KEY = "brush.flows.view"
+const TABLE_OPEN_KEY = "brush.flows.tableOpen"
 
 type FlowView = "globe" | "flat"
 
@@ -114,6 +116,7 @@ export function Flows() {
   const [colorBy, setColorBy] = useState<FlowColorBy>(() => readStored<FlowColorBy>(COLOR_KEY, "direction"))
   const [view, setView] = useState<FlowView>(() => readStored<FlowView>(VIEW_KEY, "globe"))
   const [showIPs, setShowIPs] = useState(false)
+  const [tableOpen, setTableOpen] = useState(() => readOpen(TABLE_OPEN_KEY))
   const names = useMemo(() => {
     try {
       return new Intl.DisplayNames([i18n.language], { type: "region" })
@@ -271,12 +274,20 @@ export function Flows() {
                   ))}
                 </ul>
               )}
+              <div className="mt-5 border-t pt-4">
+                <FlowSummary today={today} instances={allInstances} sites={sites ?? []} />
+              </div>
             </div>
           </div>
         )}
       </SectionCard>
 
       <SectionCard
+        open={tableOpen}
+        onOpenChange={(open) => {
+          setTableOpen(open)
+          writeOpen(TABLE_OPEN_KEY, open)
+        }}
         title={t("flows.tableTitle")}
         description={t("flows.tableDescription", { count: peers.length })}
         actions={

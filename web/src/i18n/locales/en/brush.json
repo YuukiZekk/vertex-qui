@@ -302,7 +302,7 @@
     "download": "Download",
     "session": "This visit",
     "mapTitle": "Live flows",
-    "mapInfo": "Pipes join servers and peer countries: wider ones move more now, the pulse runs the way the data goes, and only the 40 fastest are drawn. Coloured by direction, cyan pipes carry uploads out and amber ones downloads in; coloured by server, each server has its own colour. Pools are peer countries: the column, its ripples and the country’s shade all show how much it exchanged today, paler for more. White dots are servers, placed by the region in their instance settings. The peers of each server’s 15 busiest torrents are read every 15 seconds.",
+    "mapInfo": "Pipes join servers and peer countries: a wider pipe moves more now, and its particles run denser and faster, the way the data goes. Only the 40 fastest are drawn. Coloured by direction, cyan pipes carry uploads out and amber ones downloads in; coloured by server, each server has its own colour. Pools are the peer countries themselves: the more a country exchanged today, the paler it is and the higher it rises on the globe. White dots are servers, placed by the region in their instance settings. The peers of each server’s 15 busiest torrents are read every 15 seconds.",
     "mapLabel": "Live map of flows between servers and peer countries",
     "sampledAt": "Read at {{time}}",
     "legendUpload": "Upload",
@@ -339,7 +339,25 @@
     "groupsHint": "Give instances groups under Settings → Instances → Brush and they are grouped here.",
     "countryToday": "{{country}}: today up {{uploaded}}, down {{downloaded}}; now {{count}} connections, up {{upload}}, down {{download}}",
     "legendPipe": "pipe width = speed now, widest {{speed}}",
-    "legendPool": "pools = today’s traffic"
+    "legendPool": "pools = today’s traffic",
+    "summaryTitle": "Today’s analysis",
+    "summaryTotal": "{{total}} exchanged today, {{uploaded}} of it uploaded ({{share}}).",
+    "summaryConcentrated": "Traffic is concentrated in {{region}}: {{share}}.",
+    "summarySpread": "Traffic is spread out; {{region}} leads with {{share}}.",
+    "summaryTopCountries": "The top three countries, {{countries}}, take {{share}}.",
+    "summaryBySite": "Where each site’s peers are",
+    "summaryByServer": "Where each server’s peers are",
+    "summaryBest": "{{region}} {{share}} · {{country}} {{countryShare}}",
+    "noSite": "Unknown site",
+    "regions": {
+      "asia": "Asia",
+      "europe": "Europe",
+      "americas": "Americas",
+      "africa": "Africa",
+      "oceania": "Oceania",
+      "antarctic": "Antarctica",
+      "unknown": "Unknown"
+    }
   },
   "groups": {
     "title": "Groups",

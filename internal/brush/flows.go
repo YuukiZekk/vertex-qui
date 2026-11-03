@@ -61,10 +61,12 @@ type flowInstance struct {
 	Connections int `json:"connections"`
 }
 
-// flowCountry is what one instance moved with one country's peers today, over
-// every site, including what is not written yet.
+// flowCountry is what one instance moved with one country's peers for one site
+// today, including what is not written yet. SiteID is zero for torrents of no
+// known site.
 type flowCountry struct {
 	InstanceID int    `json:"instanceId"`
+	SiteID     int64  `json:"siteId"`
 	Country    string `json:"country"`
 	Uploaded   int64  `json:"uploaded"`
 	Downloaded int64  `json:"downloaded"`
@@ -257,18 +259,19 @@ func (s *Service) sampleFlows(ctx context.Context) {
 }
 
 // todayByCountry adds up today's stored totals and what the meter has not written
-// yet, per instance and country, across sites.
+// yet, per instance, site and country.
 func (s *Service) todayByCountry(ctx context.Context, m *peerMeter) []flowCountry {
 	type key struct {
 		instance int
+		site     int64
 		country  string
 	}
 	sums := make(map[key]*flowCountry)
 	add := func(t store.PeerTransfer) {
-		k := key{t.InstanceID, t.CountryCode}
+		k := key{t.InstanceID, t.SiteID, t.CountryCode}
 		c := sums[k]
 		if c == nil {
-			c = &flowCountry{InstanceID: t.InstanceID, Country: t.CountryCode}
+			c = &flowCountry{InstanceID: t.InstanceID, SiteID: t.SiteID, Country: t.CountryCode}
 			sums[k] = c
 		}
 		c.Uploaded += t.Uploaded
@@ -291,7 +294,7 @@ func (s *Service) todayByCountry(ctx context.Context, m *peerMeter) []flowCountr
 		out = append(out, *c)
 	}
 	slices.SortFunc(out, func(a, b flowCountry) int {
-		return cmp.Or(cmp.Compare(a.InstanceID, b.InstanceID), strings.Compare(a.Country, b.Country))
+		return cmp.Or(cmp.Compare(a.InstanceID, b.InstanceID), cmp.Compare(a.SiteID, b.SiteID), strings.Compare(a.Country, b.Country))
 	})
 	return out
 }

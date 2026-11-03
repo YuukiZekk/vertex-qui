@@ -17,7 +17,9 @@ import { countryName, DOWNLOAD_COLOR, heatColor, heatGradient, heatShare, UPLOAD
 const LABELLED_COUNTRIES = 12
 const OCEAN = "#061423"
 const LAND = "#10253a"
-const BORDER = "rgba(110,160,210,0.55)"
+const BORDER = "rgba(110,160,210,0.28)"
+// The busiest country rises this far off the globe, in globe radii.
+const MAX_RISE = 0.07
 
 function escapeHTML(text: string) {
   return text.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`)
@@ -30,8 +32,9 @@ function withAlpha(hex: string, alpha: number) {
 }
 
 // A country outline on the globe. The objects are made once and keep their
-// identity, so a new reading only recolours them instead of rebuilding the
-// detailed shapes; share and label are rewritten in place.
+// identity, so a new reading only recolours and raises the countries whose share
+// changed instead of rebuilding every detailed shape; share and label are
+// rewritten in place.
 interface CountryShape {
   geometry: { type: string, coordinates: number[] }
   code: string
@@ -47,6 +50,9 @@ interface GlobeArc {
   colors: [string, string]
   stroke: number
   altitudeScale: number
+  dashLength: number
+  dashGap: number
+  initialGap: number
   dashTime: number
   label: string
 }
@@ -136,12 +142,12 @@ export function FlowGlobe({ instances, peers, today, colorBy, colorOf, fallback 
         .showGraticules(true)
         .polygonsData(shapes.current)
         .polygonGeoJsonGeometry("geometry")
-        .polygonAltitude(0.004)
-        .polygonSideColor(() => "rgba(0,0,0,0)")
+        .polygonAltitude((d: object) => rise(d as CountryShape))
+        .polygonSideColor((d: object) => sideColor(d as CountryShape))
         .polygonStrokeColor(() => BORDER)
         .polygonCapColor((d: object) => capColor(d as CountryShape))
         .polygonLabel((d: object) => (d as CountryShape).label)
-        .polygonsTransitionDuration(0)
+        .polygonsTransitionDuration(still ? 0 : 900)
         .arcStartLat("startLat")
         .arcStartLng("startLng")
         .arcEndLat("endLat")
@@ -149,9 +155,9 @@ export function FlowGlobe({ instances, peers, today, colorBy, colorOf, fallback 
         .arcColor("colors")
         .arcStroke("stroke")
         .arcAltitudeAutoScale("altitudeScale")
-        .arcDashLength(0.45)
-        .arcDashGap(0.12)
-        .arcDashInitialGap(() => Math.random())
+        .arcDashLength("dashLength")
+        .arcDashGap("dashGap")
+        .arcDashInitialGap("initialGap")
         .arcDashAnimateTime(still ? 0 : "dashTime")
         .arcLabel("label")
         .arcsTransitionDuration(0)
@@ -220,45 +226,46 @@ export function FlowGlobe({ instances, peers, today, colorBy, colorOf, fallback 
       count: c.connections, upload: speed(c.upload), download: speed(c.download),
     }))
 
-    // Countries: shade each by what it moved today.
+    // Pools: each country rises and is shaded by what it moved today.
     const byCode = new Map(model.countries.map((c) => [c.code, c]))
     for (const s of shapes.current) {
       const c = byCode.get(s.code)
       s.share = c && c.total > 0 ? heatShare(c.total, maxTotal) : 0
       s.label = c ? countryTitle(c) : ""
     }
-    // A new accessor makes the globe recolour the same shapes.
+    // New accessors make the globe recolour and raise the same shapes.
     g.polygonCapColor((d: object) => capColor(d as CountryShape))
+      .polygonSideColor((d: object) => sideColor(d as CountryShape))
+      .polygonAltitude((d: object) => rise(d as CountryShape))
 
-    // Pipes: as wide as what moves through them now.
+    // Pipes: a faint tube as wide as what moves through it now, and a stream of
+    // particles inside it that runs the way the data goes. A busier pipe carries
+    // more particles, closer together and faster.
     const colorOfArc = (a: FlowArc) => colorBy === "server" ? colorOf(a.server.id) : a.direction === "up" ? UPLOAD_COLOR : DOWNLOAD_COLOR
-    const arcs: GlobeArc[] = model.arcs.map((a) => {
+    const arcs: GlobeArc[] = model.arcs.flatMap((a) => {
       const up = a.direction === "up"
       const [from, to] = up ? [a.serverAt, a.peerAt] : [a.peerAt, a.serverAt]
       const color = colorOfArc(a)
       const country = countryName(names, a.country)
       const share = a.speed / maxSpeed
-      return {
+      const width = 0.15 + 0.95 * Math.pow(share, 0.7)
+      const base = {
         startLat: from[1], startLng: from[0], endLat: to[1], endLng: to[0],
-        colors: [withAlpha(color, 0.35), color],
-        stroke: 0.15 + 1.05 * Math.pow(share, 0.7),
         altitudeScale: 0.32 + 0.05 * (a.order % 4) + (up ? 0 : 0.06),
-        dashTime: 3200 - 1600 * share,
         label: escapeHTML(up ? `${a.server.name} → ${country}  ${speed(a.speed)}` : `${country} → ${a.server.name}  ${speed(a.speed)}`),
       }
+      return [
+        { ...base, colors: [withAlpha(color, 0.12), withAlpha(color, 0.35)], stroke: width, dashLength: 1, dashGap: 0, initialGap: 0, dashTime: 0 },
+        {
+          ...base, colors: [withAlpha(color, 0.6), "#ffffff"], stroke: width * 0.9 + 0.1,
+          dashLength: 0.012 + 0.01 * share, dashGap: 0.11 - 0.07 * share, initialGap: Math.random(), dashTime: 4200 - 2400 * share,
+        },
+      ]
     })
 
-    // Pools: a column as tall and wide as what the country moved today.
     const serverColor = (servers: BrushFlowInstance[]) => colorBy === "server" && servers.length === 1 ? colorOf(servers[0].id) : "#ffffff"
     const pools = model.countries.filter((c) => c.total > 0)
     const points = [
-      ...pools.map((c) => {
-        const share = heatShare(c.total, maxTotal)
-        return {
-          lat: c.at[1], lng: c.at[0], color: heatColor(share, 0.9), radius: 0.3 + 0.9 * share,
-          altitude: 0.01 + 0.22 * share, label: countryTitle(c),
-        }
-      }),
       ...model.clusters.map((c) => ({
         lat: c.at[1], lng: c.at[0], color: serverColor(c.servers), radius: 0.42, altitude: 0.006,
         label: c.servers.map((s) => escapeHTML(t("flows.serverTitle", { name: s.name, upload: speed(s.uploadSpeed), download: speed(s.downloadSpeed) }))).join("<br>"),
@@ -267,7 +274,7 @@ export function FlowGlobe({ instances, peers, today, colorBy, colorOf, fallback 
     const rings: GlobeRing[] = [
       ...pools.map((c) => {
         const share = heatShare(c.total, maxTotal)
-        return { lat: c.at[1], lng: c.at[0], tint: (alpha: number) => heatColor(share, alpha), maxRadius: 1.2 + 4 * share, speed: 0.8, period: 2600 }
+        return { lat: c.at[1], lng: c.at[0], tint: (alpha: number) => heatColor(share, alpha * 0.7), maxRadius: 1 + 3 * share, speed: 0.7, period: 3000 }
       }),
       ...model.clusters.map((c) => {
         const color = serverColor(c.servers)
@@ -320,7 +327,15 @@ export function FlowGlobe({ instances, peers, today, colorBy, colorOf, fallback 
 }
 
 function capColor(d: CountryShape) {
-  return d.share > 0 ? heatColor(d.share, 0.75) : LAND
+  return d.share > 0 ? heatColor(d.share, 0.85) : LAND
+}
+
+function sideColor(d: CountryShape) {
+  return d.share > 0 ? heatColor(d.share * 0.8, 0.55) : "rgba(0,0,0,0)"
+}
+
+function rise(d: CountryShape) {
+  return 0.004 + MAX_RISE * d.share
 }
 
 function Legend({ color, label }: { color: string, label: string }) {

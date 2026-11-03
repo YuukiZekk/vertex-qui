@@ -175,13 +175,13 @@ export function FlowMap({ instances, peers, today, colorBy, colorOf }: {
           </filter>
         </defs>
         <style>{`
-          .flow-pulse { stroke-dasharray: 7 93; animation: flow-run 2.6s linear infinite; }
+          .flow-particles { animation: flow-run 4s linear infinite; }
           .flow-ping { animation: flow-ping 2.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
           @keyframes flow-run { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
           @keyframes flow-ping { from { transform: scale(1); opacity: .7; } to { transform: scale(3.4); opacity: 0; } }
           .flow-pool { animation: flow-pool 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
           @keyframes flow-pool { 50% { transform: scale(1.08); } }
-          @media (prefers-reduced-motion: reduce) { .flow-pulse, .flow-ping, .flow-pool { animation: none; } }
+          @media (prefers-reduced-motion: reduce) { .flow-particles, .flow-ping, .flow-pool { animation: none; } }
         `}</style>
         <g transform={`translate(${view.x},${view.y}) scale(${k})`}>
           <path d={gridPath} fill="none" stroke={GRID} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
@@ -189,20 +189,27 @@ export function FlowMap({ instances, peers, today, colorBy, colorOf }: {
           {dots.map((d) => countryPaths.has(d.code) && d.total > 0 && (
             <path key={`shade:${d.code}`} d={countryPaths.get(d.code)} fill={heatColor(pool(d), 0.55)} />
           ))}
-          <path d={borderPath} fill="none" stroke={BORDER} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+          <path d={borderPath} fill="none" stroke={BORDER} strokeOpacity={0.6} strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
 
           <g filter="url(#flow-glow)">
             {lines.map((l) => (
-              <path key={l.key} d={l.d} fill="none" stroke={l.color} strokeOpacity={0.45}
+              <path key={l.key} d={l.d} fill="none" stroke={l.color} strokeOpacity={0.22}
                 strokeWidth={width(l.speed)} strokeLinecap="round" vectorEffect="non-scaling-stroke">
                 <title>{l.title}</title>
               </path>
             ))}
-            {lines.map((l, i) => (
-              <path key={`${l.key}:pulse`} d={l.d} pathLength={100} fill="none" stroke={l.color}
-                strokeWidth={width(l.speed) + 0.8} strokeLinecap="round" vectorEffect="non-scaling-stroke"
-                className="flow-pulse" style={{ animationDelay: `${-(i * 0.37) % 2.6}s` }} pointerEvents="none" />
-            ))}
+            {lines.map((l, i) => {
+              // Particles: a busier pipe carries more of them, faster. The count divides
+              // the path evenly, so the stream loops without a jump.
+              const share = l.speed / maxSpeed
+              const count = Math.round(14 + 30 * share)
+              return (
+                <path key={`${l.key}:particles`} d={l.d} pathLength={100} fill="none" stroke={l.color}
+                  strokeWidth={width(l.speed) + 1} strokeLinecap="round" vectorEffect="non-scaling-stroke"
+                  strokeDasharray={`0.01 ${100 / count - 0.01}`} className="flow-particles" pointerEvents="none"
+                  style={{ animationDuration: `${6 - 3 * share}s`, animationDelay: `${-(i * 0.37) % 3}s` }} />
+              )
+            })}
           </g>
 
           {dots.map((d) => (
