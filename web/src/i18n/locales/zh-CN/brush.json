@@ -332,6 +332,9 @@
     "legendWidth": "最粗 {{speed}}",
     "zoomIn": "放大",
     "zoomOut": "缩小",
-    "resetView": "复位"
+    "resetView": "复位",
+    "viewGlobe": "3D",
+    "viewFlat": "平面",
+    "globeHint": "拖动旋转，滚轮缩放"
   }
 }

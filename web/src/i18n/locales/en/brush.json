@@ -332,6 +332,9 @@
     "legendWidth": "thickest {{speed}}",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
-    "resetView": "Reset"
+    "resetView": "Reset",
+    "viewGlobe": "3D",
+    "viewFlat": "Flat",
+    "globeHint": "Drag to turn, scroll to zoom"
   }
 }

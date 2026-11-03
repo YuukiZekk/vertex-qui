@@ -13,13 +13,11 @@ import { useTranslation } from "react-i18next"
 import { feature, mesh } from "topojson-client"
 import type { GeometryCollection, Topology } from "topojson-specification"
 import countries110 from "world-atlas/countries-110m.json"
-import { countryPoints } from "./countryPoints"
+import { buildFlows } from "./flowModel"
 import { countryName, DOWNLOAD_COLOR, UPLOAD_COLOR, type FlowColorBy } from "./flowStyle"
 
 const WIDTH = 960
 const HEIGHT = 540
-// Arcs past this many, the slowest ones, are left out so the map stays readable.
-const MAX_ARCS = 40
 const LABELLED_COUNTRIES = 12
 const MAX_ZOOM = 6
 
@@ -36,12 +34,6 @@ const topology = countries110 as unknown as Topology<{ countries: GeometryCollec
 const landPath = path(feature(topology, topology.objects.land)) ?? ""
 const borderPath = path(mesh(topology, topology.objects.countries, (a, b) => a !== b)) ?? ""
 const gridPath = path(geoGraticule10()) ?? ""
-
-function place(code: string): [number, number] | null {
-  const lonLat = countryPoints[code]
-  if (!lonLat) return null
-  return projection(lonLat)
-}
 
 // arc rises from one point to another by bend times their distance, always
 // upward, so arcs between the same places stack instead of crossing.
@@ -63,15 +55,6 @@ interface Line {
   color: string
   speed: number
   title: string
-}
-
-interface CountryDot {
-  code: string
-  at: [number, number]
-  speed: number
-  connections: number
-  upload: number
-  download: number
 }
 
 // FlowMap draws each server at its region with glowing arcs to the countries its
@@ -97,72 +80,34 @@ export function FlowMap({ instances, peers, colorBy, colorOf }: {
   const svgRef = useRef<SVGSVGElement>(null)
 
   const { clusters, lines, dots } = useMemo(() => {
-    // Servers in one country share its point and one label.
-    const clusterMap = new Map<string, { code: string, at: [number, number], servers: BrushFlowInstance[] }>()
-    for (const inst of instances) {
-      const at = place(inst.country)
-      if (!at) continue
-      const c = clusterMap.get(inst.country) ?? { code: inst.country, at, servers: [] }
-      c.servers.push(inst)
-      clusterMap.set(inst.country, c)
-    }
-
+    const model = buildFlows(instances, peers)
     const speed = (bytes: number) => `${formatBytes(bytes)}/s`
-    const flows = new Map<string, { inst: BrushFlowInstance, country: string, upload: number, download: number }>()
-    const dotMap = new Map<string, CountryDot>()
-    for (const p of peers) {
-      const to = place(p.country)
-      if (!to) continue
-      const dot = dotMap.get(p.country) ?? { code: p.country, at: to, speed: 0, connections: 0, upload: 0, download: 0 }
-      dot.speed += p.uploadSpeed + p.downloadSpeed
-      dot.upload += p.uploadSpeed
-      dot.download += p.downloadSpeed
-      dot.connections++
-      dotMap.set(p.country, dot)
-      const inst = instances.find((i) => i.id === p.instanceId)
-      if (!inst || !clusterMap.has(inst.country) || inst.country === p.country) continue
-      const key = `${inst.id}:${p.country}`
-      const flow = flows.get(key) ?? { inst, country: p.country, upload: 0, download: 0 }
-      flow.upload += p.uploadSpeed
-      flow.download += p.downloadSpeed
-      flows.set(key, flow)
-    }
-
-    const all: Line[] = []
-    // Each server bends its arcs a little differently, so arcs from servers in one
-    // country fan out instead of lying on top of each other.
-    const order = new Map(instances.map((inst, i) => [inst.id, i]))
-    for (const f of flows.values()) {
-      const from = clusterMap.get(f.inst.country)!.at
-      const to = place(f.country)!
-      const fan = 0.22 + 0.035 * ((order.get(f.inst.id) ?? 0) % 4)
-      const country = countryName(names, f.country)
-      if (f.upload > 0) {
-        all.push({
-          key: `${f.inst.id}:${f.country}:up`, d: arc(from, to, fan), speed: f.upload,
-          color: colorBy === "server" ? colorOf(f.inst.id) : UPLOAD_COLOR,
-          title: `${f.inst.name} → ${country}  ${speed(f.upload)}`,
-        })
+    const lines: Line[] = model.arcs.map((a) => {
+      const from = projection(a.serverAt)!
+      const to = projection(a.peerAt)!
+      // Each server bends its arcs a little differently, so arcs from servers in one
+      // country fan out instead of lying on top of each other.
+      const fan = 0.22 + 0.035 * (a.order % 4)
+      const country = countryName(names, a.country)
+      const up = a.direction === "up"
+      return {
+        key: a.key,
+        d: up ? arc(from, to, fan) : arc(to, from, fan + 0.06),
+        speed: a.speed,
+        color: colorBy === "server" ? colorOf(a.server.id) : up ? UPLOAD_COLOR : DOWNLOAD_COLOR,
+        title: up ? `${a.server.name} → ${country}  ${speed(a.speed)}` : `${country} → ${a.server.name}  ${speed(a.speed)}`,
       }
-      if (f.download > 0) {
-        all.push({
-          key: `${f.inst.id}:${f.country}:down`, d: arc(to, from, fan + 0.06), speed: f.download,
-          color: colorBy === "server" ? colorOf(f.inst.id) : DOWNLOAD_COLOR,
-          title: `${country} → ${f.inst.name}  ${speed(f.download)}`,
-        })
-      }
-    }
-    all.sort((a, b) => b.speed - a.speed)
+    })
     return {
-      clusters: [...clusterMap.values()],
-      lines: all.slice(0, MAX_ARCS),
-      dots: [...dotMap.values()].sort((a, b) => b.speed - a.speed),
+      clusters: model.clusters.map((c) => ({ ...c, at: projection(c.at)! })),
+      lines,
+      dots: model.countries.map((c) => ({ ...c, at: projection(c.at)! })),
     }
   }, [instances, peers, colorBy, colorOf, names])
 
   const maxSpeed = Math.max(1, ...lines.map((l) => l.speed))
   // Close to linear, so an arc moving twice as much looks clearly thicker.
-  const width = (s: number) => 1 + 8 * Math.pow(s / maxSpeed, 0.75)
+  const width = (s: number) => 0.6 + 3.4 * Math.pow(s / maxSpeed, 0.75)
   const labelled = new Set(dots.slice(0, LABELLED_COUNTRIES).map((d) => d.code))
   const clusterCodes = new Set(clusters.map((c) => c.code))
   const k = view.k
@@ -216,7 +161,7 @@ export function FlowMap({ instances, peers, colorBy, colorOf }: {
       >
         <defs>
           <filter id="flow-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="2.4" result="blur" />
+            <feGaussianBlur stdDeviation="1.6" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
         </defs>
@@ -241,7 +186,7 @@ export function FlowMap({ instances, peers, colorBy, colorOf }: {
             ))}
             {lines.map((l, i) => (
               <path key={`${l.key}:pulse`} d={l.d} pathLength={100} fill="none" stroke={l.color}
-                strokeWidth={width(l.speed) + 1.5} strokeLinecap="round" vectorEffect="non-scaling-stroke"
+                strokeWidth={width(l.speed) + 0.8} strokeLinecap="round" vectorEffect="non-scaling-stroke"
                 className="flow-pulse" style={{ animationDelay: `${-(i * 0.37) % 2.6}s` }} pointerEvents="none" />
             ))}
           </g>

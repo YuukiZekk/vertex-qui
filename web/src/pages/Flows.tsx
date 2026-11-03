@@ -4,6 +4,7 @@
  */
 
 import { CountryFlag } from "@/components/brush/CountryFlag"
+import { FlowGlobe } from "@/components/brush/FlowGlobe"
 import { FlowMap } from "@/components/brush/FlowMap"
 import { countryName, downloadText, serverColor, uploadText, type FlowColorBy } from "@/components/brush/flowStyle"
 import { EmptyState, SectionCard } from "@/components/brush/section"
@@ -27,6 +28,9 @@ const POLL_MS = 15000
 const ROWS_SHOWN = 100
 const HIDDEN_KEY = "brush.flows.hidden"
 const COLOR_KEY = "brush.flows.colorBy"
+const VIEW_KEY = "brush.flows.view"
+
+type FlowView = "globe" | "flat"
 
 // maskIP keeps the network part of an address: 1.2.*.* or 2001:db8:*.
 function maskIP(ip: string): string {
@@ -106,6 +110,7 @@ export function Flows() {
   const { data: sites } = useQuery({ queryKey: ["brush", "sites"], queryFn: () => api.getBrushSites() })
   const [hidden, setHidden] = useState(() => new Set(readStored<number[]>(HIDDEN_KEY, [])))
   const [colorBy, setColorBy] = useState<FlowColorBy>(() => readStored<FlowColorBy>(COLOR_KEY, "direction"))
+  const [view, setView] = useState<FlowView>(() => readStored<FlowView>(VIEW_KEY, "globe"))
   const [showIPs, setShowIPs] = useState(false)
   const names = useMemo(() => {
     try {
@@ -124,6 +129,10 @@ export function Flows() {
     writeStored(HIDDEN_KEY, [...next])
     return next
   })
+  const pickView = (v: FlowView) => {
+    setView(v)
+    writeStored(VIEW_KEY, v)
+  }
   const pickColor = (by: FlowColorBy) => {
     setColorBy(by)
     writeStored(COLOR_KEY, by)
@@ -208,19 +217,33 @@ export function Flows() {
         info={t("flows.mapInfo")}
         description={data?.sampledAt ? t("flows.sampledAt", { time: new Date(data.sampledAt * 1000).toLocaleTimeString(i18n.language) }) : undefined}
         actions={
-          <div className="flex rounded-md border p-0.5">
-            {(["direction", "server"] as const).map((by) => (
-              <Button key={by} size="sm" variant={colorBy === by ? "secondary" : "ghost"} className="h-7 px-3 text-xs" onClick={() => pickColor(by)}>
-                {by === "direction" ? t("flows.colorByDirection") : t("flows.colorByServer")}
-              </Button>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            <div className="flex rounded-md border p-0.5">
+              {(["globe", "flat"] as const).map((v) => (
+                <Button key={v} size="sm" variant={view === v ? "secondary" : "ghost"} className="h-7 px-3 text-xs" onClick={() => pickView(v)}>
+                  {v === "globe" ? t("flows.viewGlobe") : t("flows.viewFlat")}
+                </Button>
+              ))}
+            </div>
+            <div className="flex rounded-md border p-0.5">
+              {(["direction", "server"] as const).map((by) => (
+                <Button key={by} size="sm" variant={colorBy === by ? "secondary" : "ghost"} className="h-7 px-3 text-xs" onClick={() => pickColor(by)}>
+                  {by === "direction" ? t("flows.colorByDirection") : t("flows.colorByServer")}
+                </Button>
+              ))}
+            </div>
           </div>
         }
       >
         {loading ? <EmptyState>{t("flows.waiting")}</EmptyState> : (
-          <div className="grid gap-0 lg:grid-cols-[1fr_280px]">
-            <div className="p-4">
-              <FlowMap instances={instances} peers={peers} colorBy={colorBy} colorOf={colorOf} />
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="min-w-0 p-4">
+              {view === "globe" ? (
+                <FlowGlobe instances={instances} peers={peers} colorBy={colorBy} colorOf={colorOf}
+                  fallback={<FlowMap instances={instances} peers={peers} colorBy={colorBy} colorOf={colorOf} />} />
+              ) : (
+                <FlowMap instances={instances} peers={peers} colorBy={colorBy} colorOf={colorOf} />
+              )}
               {noCountry.length > 0 && (
                 <p className="mt-2 text-xs text-muted-foreground">{t("flows.noCountry", { names: noCountry.map((i) => i.name).join("、") })}</p>
               )}
