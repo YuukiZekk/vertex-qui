@@ -35,6 +35,7 @@ import {
   Check,
   Code,
   Copyright,
+  Earth,
   FileText,
   Gauge,
   GitBranch,
@@ -111,6 +112,12 @@ const navigation: NavItem[] = [
     titleKey: "brush:sitesNav",
     href: "/sites",
     icon: Globe,
+  },
+  {
+    id: "flows",
+    titleKey: "brush:flowsNav",
+    href: "/flows",
+    icon: Earth,
   },
   {
     id: "settings",

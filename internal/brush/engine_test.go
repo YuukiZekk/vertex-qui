@@ -38,7 +38,10 @@ type fakeQB struct {
 	categories []string
 	dlLimits   []int64
 	// listed is what Torrents returns; deletions remove from it.
-	listed      map[int][]qbt.Torrent
+	listed map[int][]qbt.Torrent
+	// peers is what Peers returns, by instance and hash.
+	peers       map[int]map[string]map[string]qbt.TorrentPeer
+	transfer    map[int]quiadapter.Transfer
 	reannounced []string
 	paused      []string
 	disks       map[int]int64
@@ -106,8 +109,13 @@ func (f *fakeQB) DeleteTorrent(_ context.Context, id int, hash string, withFiles
 
 func (f *fakeQB) FreeSpace(_ context.Context, id int) (int64, error) { return f.free[id], nil }
 
-func (f *fakeQB) Transfer(context.Context, int) (quiadapter.Transfer, bool, error) {
-	return quiadapter.Transfer{}, false, nil
+func (f *fakeQB) Transfer(_ context.Context, id int) (quiadapter.Transfer, bool, error) {
+	tr, ok := f.transfer[id]
+	return tr, ok, nil
+}
+
+func (f *fakeQB) Peers(_ context.Context, id int, hash string) (map[string]qbt.TorrentPeer, error) {
+	return f.peers[id][hash], nil
 }
 
 func (f *fakeQB) HasTorrent(context.Context, int, string) (bool, error) { return false, nil }

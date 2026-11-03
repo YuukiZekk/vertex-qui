@@ -1,0 +1,243 @@
+/*
+ * Copyright (c) 2026, vertex-qui contributors.
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+
+import { CountryFlag } from "@/components/brush/CountryFlag"
+import { FlowMap } from "@/components/brush/FlowMap"
+import { countryName, DOWNLOAD_COLOR, UPLOAD_COLOR } from "@/components/brush/flowStyle"
+import { EmptyState, SectionCard } from "@/components/brush/section"
+import { sectionHeaderRowClass, sectionTableClass } from "@/components/brush/sectionStyles"
+import { SiteIcon } from "@/components/brush/SiteIcon"
+import { Card, CardContent } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { api } from "@/lib/api"
+import { formatBytes } from "@/lib/utils"
+import type { BrushFlowPeer } from "@/types/brush"
+import { useQuery } from "@tanstack/react-query"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
+
+// The server reads peers every 15 seconds; polling at that pace shows each read.
+const POLL_MS = 15000
+const ROWS_SHOWN = 100
+
+// maskIP keeps the network part of an address: 1.2.*.* or 2001:db8:*.
+function maskIP(ip: string): string {
+  if (ip.includes(":")) return `${ip.split(":").slice(0, 2).join(":")}:*`
+  const parts = ip.split(".")
+  return parts.length === 4 ? `${parts[0]}.${parts[1]}.*.*` : ip
+}
+
+const speed = (bytes: number) => `${formatBytes(bytes)}/s`
+
+function Metric({ label, value, color }: { label: string, value: string, color?: string }) {
+  return (
+    <Card className="gap-0 py-0">
+      <CardContent className="space-y-1 p-4">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-2xl font-semibold tabular-nums" style={color ? { color } : undefined}>{value}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function Flows() {
+  const { t, i18n } = useTranslation("brush")
+  const { data } = useQuery({ queryKey: ["brush", "flows"], queryFn: () => api.getBrushFlows(), refetchInterval: POLL_MS })
+  const { data: sites } = useQuery({ queryKey: ["brush", "sites"], queryFn: () => api.getBrushSites() })
+  const [instanceFilter, setInstanceFilter] = useState("all")
+  const [showIPs, setShowIPs] = useState(false)
+  const names = useMemo(() => {
+    try {
+      return new Intl.DisplayNames([i18n.language], { type: "region" })
+    } catch {
+      return null
+    }
+  }, [i18n.language])
+
+  // This visit's traffic adds each instance's speed over the time between reads.
+  const lastRead = useRef<number>(0)
+  const [session, setSession] = useState<Record<number, { up: number, down: number }>>({})
+  useEffect(() => {
+    if (!data?.sampledAt || data.sampledAt <= lastRead.current) return
+    const seconds = lastRead.current ? data.sampledAt - lastRead.current : 0
+    lastRead.current = data.sampledAt
+    if (!seconds) return
+    setSession((prev) => {
+      const next = { ...prev }
+      for (const inst of data.instances) {
+        const was = next[inst.id] ?? { up: 0, down: 0 }
+        next[inst.id] = { up: was.up + inst.uploadSpeed * seconds, down: was.down + inst.downloadSpeed * seconds }
+      }
+      return next
+    })
+  }, [data])
+
+  const instances = useMemo(() => {
+    const all = data?.instances ?? []
+    return instanceFilter === "all" ? all : all.filter((i) => String(i.id) === instanceFilter)
+  }, [data, instanceFilter])
+  const peers = useMemo(() => {
+    const ids = new Set(instances.map((i) => i.id))
+    return (data?.peers ?? []).filter((p) => ids.has(p.instanceId))
+  }, [data, instances])
+
+  const totals = instances.reduce((sum, i) => ({
+    up: sum.up + i.uploadSpeed, down: sum.down + i.downloadSpeed, connections: sum.connections + i.connections,
+    session: sum.session + (session[i.id]?.up ?? 0) + (session[i.id]?.down ?? 0),
+  }), { up: 0, down: 0, connections: 0, session: 0 })
+
+  const countries = useMemo(() => {
+    const byCode = new Map<string, { code: string, upload: number, download: number, connections: number }>()
+    for (const p of peers) {
+      const row = byCode.get(p.country) ?? { code: p.country, upload: 0, download: 0, connections: 0 }
+      row.upload += p.uploadSpeed
+      row.download += p.downloadSpeed
+      row.connections++
+      byCode.set(p.country, row)
+    }
+    return [...byCode.values()].sort((a, b) => (b.upload + b.download) - (a.upload + a.download)).slice(0, 10)
+  }, [peers])
+
+  const instanceName = (id: number) => data?.instances.find((i) => i.id === id)
+  const siteOf = (p: BrushFlowPeer) => sites?.find((s) => s.id === p.siteId)
+  const noCountry = (data?.instances ?? []).filter((i) => !i.country)
+  const loading = !data || data.sampledAt === 0
+
+  return (
+    <div className="container mx-auto space-y-6 overflow-x-hidden px-6 py-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold">{t("flows.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("flows.description")}</p>
+        </div>
+        <Select value={instanceFilter} onValueChange={setInstanceFilter}>
+          <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("flows.allServers")}</SelectItem>
+            {(data?.instances ?? []).map((i) => (
+              <SelectItem key={i.id} value={String(i.id)}>{i.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Metric label={t("flows.connections")} value={String(totals.connections)} />
+        <Metric label={t("flows.upload")} value={speed(totals.up)} color={UPLOAD_COLOR} />
+        <Metric label={t("flows.download")} value={speed(totals.down)} color={DOWNLOAD_COLOR} />
+        <Metric label={t("flows.session")} value={formatBytes(totals.session)} />
+      </div>
+
+      <SectionCard
+        title={t("flows.mapTitle")}
+        info={t("flows.mapInfo")}
+        description={data?.sampledAt ? t("flows.sampledAt", { time: new Date(data.sampledAt * 1000).toLocaleTimeString(i18n.language) }) : undefined}
+        actions={
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded" style={{ background: UPLOAD_COLOR }} />{t("flows.legendUpload")}</span>
+            <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded" style={{ background: DOWNLOAD_COLOR }} />{t("flows.legendDownload")}</span>
+          </div>
+        }
+      >
+        {loading ? <EmptyState>{t("flows.waiting")}</EmptyState> : (
+          <div className="grid gap-0 lg:grid-cols-[1fr_280px]">
+            <div className="p-4">
+              <FlowMap instances={instances} peers={peers} />
+              {noCountry.length > 0 && (
+                <p className="mt-2 text-xs text-muted-foreground">{t("flows.noCountry", { names: noCountry.map((i) => i.name).join("、") })}</p>
+              )}
+            </div>
+            <div className="border-t p-4 lg:border-l lg:border-t-0">
+              <p className="mb-3 text-sm font-medium">{t("flows.topCountries")}</p>
+              {countries.length === 0 ? <p className="text-sm text-muted-foreground">{t("flows.idle")}</p> : (
+                <ul className="space-y-2 text-sm">
+                  {countries.map((c) => (
+                    <li key={c.code || "unknown"} className="flex items-center gap-2">
+                      <CountryFlag code={c.code} iconBox />
+                      <span className="min-w-0 flex-1 truncate">{c.code ? countryName(names, c.code) : t("flows.unknownCountry")}</span>
+                      <span className="tabular-nums text-xs" style={{ color: UPLOAD_COLOR }}>{speed(c.upload)}</span>
+                      <span className="tabular-nums text-xs" style={{ color: DOWNLOAD_COLOR }}>{speed(c.download)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title={t("flows.tableTitle")}
+        description={t("flows.tableDescription", { count: peers.length })}
+        actions={
+          <div className="flex items-center gap-2">
+            <Switch id="flows-show-ips" checked={showIPs} onCheckedChange={setShowIPs} />
+            <Label htmlFor="flows-show-ips" className="text-sm font-normal">{t("flows.showIPs")}</Label>
+          </div>
+        }
+      >
+        {peers.length === 0 ? <EmptyState>{loading ? t("flows.waiting") : t("flows.idle")}</EmptyState> : (
+          <div className="overflow-x-auto">
+            <Table className={sectionTableClass}>
+              <TableHeader>
+                <TableRow className={sectionHeaderRowClass}>
+                  <TableHead>{t("flows.server")}</TableHead>
+                  <TableHead>{t("flows.torrent")}</TableHead>
+                  <TableHead>{t("flows.peer")}</TableHead>
+                  <TableHead>{t("flows.client")}</TableHead>
+                  <TableHead className="text-right">{t("flows.uploadShort")}</TableHead>
+                  <TableHead className="text-right">{t("flows.downloadShort")}</TableHead>
+                  <TableHead className="text-right">{t("flows.progress")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {peers.slice(0, ROWS_SHOWN).map((p) => {
+                  const inst = instanceName(p.instanceId)
+                  const site = siteOf(p)
+                  return (
+                    <TableRow key={`${p.instanceId}:${p.hash}:${p.ip}:${p.port}`}>
+                      <TableCell>
+                        <div className="flex items-center gap-2 whitespace-nowrap">
+                          <CountryFlag code={inst?.country} iconBox />
+                          {inst?.name}
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[320px]">
+                        <div className="flex items-center gap-2">
+                          {site && <SiteIcon site={site} />}
+                          <span className="truncate" title={p.torrent}>{p.torrent}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 whitespace-nowrap font-mono text-xs">
+                          <CountryFlag code={p.country} iconBox />
+                          {showIPs ? `${p.ip}:${p.port}` : maskIP(p.ip)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[160px] truncate text-muted-foreground" title={p.client}>{p.client}</TableCell>
+                      <TableCell className="text-right tabular-nums" style={p.uploadSpeed ? { color: UPLOAD_COLOR } : undefined}>
+                        {p.uploadSpeed ? speed(p.uploadSpeed) : "-"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums" style={p.downloadSpeed ? { color: DOWNLOAD_COLOR } : undefined}>
+                        {p.downloadSpeed ? speed(p.downloadSpeed) : "-"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{Math.round(p.progress * 100)}%</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+            {peers.length > ROWS_SHOWN && (
+              <p className="px-6 py-3 text-xs text-muted-foreground">{t("flows.moreRows", { count: peers.length - ROWS_SHOWN })}</p>
+            )}
+          </div>
+        )}
+      </SectionCard>
+    </div>
+  )
+}

@@ -34,6 +34,7 @@ type qbittorrent interface {
 	Resume(ctx context.Context, instanceID int, hashes []string) error
 	DeleteTorrent(ctx context.Context, instanceID int, hash string, withFiles bool) error
 	DiskTotal(ctx context.Context, instanceID int, path string) (int64, bool)
+	Peers(ctx context.Context, instanceID int, hash string) (map[string]qbt.TorrentPeer, error)
 }
 
 type siteClientEntry struct {
@@ -58,6 +59,11 @@ type Service struct {
 	// uploading holds, per instance, the brush torrents already seen uploading, so
 	// their first upload is stored once. Only the sampler touches it.
 	uploading map[int]map[string]bool
+	// flowMeter is only touched by the flow goroutine.
+	flowMeter *peerMeter
+
+	flowMu sync.RWMutex
+	flow   flowSnapshot
 
 	// admitMu serialises admission across all feeds and instances.
 	admitMu sync.Mutex
@@ -83,6 +89,7 @@ func New(ctx context.Context, db dbinterface.Querier, cipher *models.CredentialC
 		alerts:    &alerter{sent: make(map[string]time.Time)},
 		sites:     newSiteMeter(),
 		uploading: make(map[int]map[string]bool),
+		flowMeter: newPeerMeter(),
 		baselined: make(map[int64]bool),
 		polling:   make(map[int64]bool),
 		clients:   make(map[int64]siteClientEntry),
@@ -98,5 +105,6 @@ func (s *Service) Start(ctx context.Context) error {
 	go s.runSampler(ctx)
 	go s.runTransferSampler(ctx)
 	go s.runReaper(ctx)
+	go s.runFlowSampler(ctx)
 	return nil
 }

@@ -53,6 +53,7 @@ func (s *Service) Routes(r chi.Router) {
 	r.Get("/deletions", s.handleDeletions)
 	r.Get("/performance", s.handlePerformance)
 	r.Get("/performance/entries", s.handlePerformanceEntries)
+	r.Get("/flows", s.handleFlows)
 }
 
 type instanceStatus struct {

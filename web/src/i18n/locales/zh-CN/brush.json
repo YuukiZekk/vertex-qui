@@ -1,6 +1,7 @@
 {
   "nav": "刷流",
   "sitesNav": "站点",
+  "flowsNav": "流量地图",
   "page": {
     "title": "刷流",
     "description": "从 RSS 抢新种，放进最空闲的服务器，并删除产出最低的种子。"
@@ -291,5 +292,38 @@
       "added": "加入 qB",
       "uploading": "开始上传"
     }
+  },
+  "flows": {
+    "title": "流量地图",
+    "description": "各服务器正在和哪些国家的对端传输数据，以及速度。只读取每台服务器最忙的种子，对端按 qBittorrent 识别的国家归类。",
+    "allServers": "全部服务器",
+    "connections": "活跃连接",
+    "upload": "上传",
+    "download": "下载",
+    "session": "本次流量",
+    "mapTitle": "实时连线",
+    "mapInfo": "每 15 秒读取一次各服务器最忙的 15 个种子的对端。绿色线是上传出去，蓝色线是下载进来，线越粗速度越快；橙色点是服务器，位置取自实例设置里的地区。",
+    "mapLabel": "服务器与对端国家之间的实时连线地图",
+    "sampledAt": "读取于 {{time}}",
+    "legendUpload": "上传",
+    "legendDownload": "下载",
+    "waiting": "正在等待第一次读取，大约 15 秒。",
+    "idle": "现在没有正在传输数据的连接。",
+    "noCountry": "这些服务器没有设置地区，地图上不画它们的连线：{{names}}。可在 设置 → 实例 → 刷流 里设置。",
+    "topCountries": "对端国家 Top 10",
+    "unknownCountry": "未知",
+    "countryTitle": "{{country}}：{{count}} 个连接，上传 {{upload}}，下载 {{download}}",
+    "serverTitle": "{{name}}：上传 {{upload}}，下载 {{download}}",
+    "tableTitle": "连接明细",
+    "tableDescription": "正在传输数据的 {{count}} 个连接，按速度排序。",
+    "showIPs": "显示完整 IP",
+    "server": "服务器",
+    "torrent": "种子",
+    "peer": "对端",
+    "client": "客户端",
+    "uploadShort": "上传",
+    "downloadShort": "下载",
+    "progress": "对端进度",
+    "moreRows": "还有 {{count}} 个较慢的连接没有列出。"
   }
 }

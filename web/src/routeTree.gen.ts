@@ -23,6 +23,7 @@ import { Route as AuthenticatedInstancesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedRssRouteImport } from './routes/_authenticated/rss'
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedFlowsRouteImport } from './routes/_authenticated/flows'
 import { Route as AuthenticatedSitesRouteImport } from './routes/_authenticated/sites'
 import { Route as AuthenticatedInstancesIndexRouteImport } from './routes/_authenticated/instances.index'
 import { Route as AuthenticatedInstancesInstanceIdRouteImport } from './routes/_authenticated/instances.$instanceId'
@@ -97,6 +98,11 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedFlowsRoute = AuthenticatedFlowsRouteImport.update({
+  id: '/flows',
+  path: '/flows',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedSitesRoute = AuthenticatedSitesRouteImport.update({
   id: '/sites',
   path: '/sites',
@@ -129,6 +135,7 @@ export interface FileRoutesByFullPath {
   '/rss': typeof AuthenticatedRssRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/flows': typeof AuthenticatedFlowsRoute
   '/sites': typeof AuthenticatedSitesRoute
   '/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/instances/': typeof AuthenticatedInstancesIndexRoute
@@ -146,6 +153,7 @@ export interface FileRoutesByTo {
   '/rss': typeof AuthenticatedRssRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/flows': typeof AuthenticatedFlowsRoute
   '/sites': typeof AuthenticatedSitesRoute
   '/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/instances': typeof AuthenticatedInstancesIndexRoute
@@ -166,6 +174,7 @@ export interface FileRoutesById {
   '/_authenticated/rss': typeof AuthenticatedRssRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/flows': typeof AuthenticatedFlowsRoute
   '/_authenticated/sites': typeof AuthenticatedSitesRoute
   '/_authenticated/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/_authenticated/instances/': typeof AuthenticatedInstancesIndexRoute
@@ -186,6 +195,7 @@ export interface FileRouteTypes {
     | '/rss'
     | '/search'
     | '/settings'
+    | '/flows'
     | '/sites'
     | '/instances/$instanceId'
     | '/instances/'
@@ -203,6 +213,7 @@ export interface FileRouteTypes {
     | '/rss'
     | '/search'
     | '/settings'
+    | '/flows'
     | '/sites'
     | '/instances/$instanceId'
     | '/instances'
@@ -222,6 +233,7 @@ export interface FileRouteTypes {
     | '/_authenticated/rss'
     | '/_authenticated/search'
     | '/_authenticated/settings'
+    | '/_authenticated/flows'
     | '/_authenticated/sites'
     | '/_authenticated/instances/$instanceId'
     | '/_authenticated/instances/'
@@ -335,6 +347,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/flows': {
+      id: '/_authenticated/flows'
+      path: '/flows'
+      fullPath: '/flows'
+      preLoaderRoute: typeof AuthenticatedFlowsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/sites': {
       id: '/_authenticated/sites'
       path: '/sites'
@@ -386,6 +405,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRssRoute: typeof AuthenticatedRssRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedFlowsRoute: typeof AuthenticatedFlowsRoute
   AuthenticatedSitesRoute: typeof AuthenticatedSitesRoute
 }
 
@@ -399,6 +419,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRssRoute: AuthenticatedRssRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedFlowsRoute: AuthenticatedFlowsRoute,
   AuthenticatedSitesRoute: AuthenticatedSitesRoute,
 }
 

@@ -238,3 +238,37 @@ export interface BrushPerfDetail {
   addedAt: number
   firstUploadAt: number
 }
+
+// A connection moving data now, from the latest read of the busiest torrents' peers.
+export interface BrushFlowPeer {
+  instanceId: number
+  hash: string
+  torrent: string
+  // 0 when the torrent belongs to no known site.
+  siteId: number
+  ip: string
+  port: number
+  client: string
+  // Lower-case ISO code, empty when qBittorrent named no country.
+  country: string
+  uploadSpeed: number
+  downloadSpeed: number
+  progress: number
+}
+
+export interface BrushFlowInstance {
+  id: number
+  name: string
+  country: string
+  // The whole instance's speeds, in bytes per second.
+  uploadSpeed: number
+  downloadSpeed: number
+  connections: number
+}
+
+export interface BrushFlows {
+  // Unix seconds of the read; 0 before the first one.
+  sampledAt: number
+  instances: BrushFlowInstance[]
+  peers: BrushFlowPeer[]
+}

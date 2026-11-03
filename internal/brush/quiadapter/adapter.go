@@ -176,3 +176,13 @@ func (a *Adapter) DiskTotal(ctx context.Context, instanceID int, path string) (i
 	}
 	return result.BytesTotal, true
 }
+
+// Peers lists a torrent's connected peers, keyed by address. qBittorrent names
+// each peer's country when its "resolve peer countries" option is on.
+func (a *Adapter) Peers(ctx context.Context, instanceID int, hash string) (map[string]qbt.TorrentPeer, error) {
+	resp, err := a.sync.GetTorrentPeers(ctx, instanceID, hash)
+	if err != nil || resp == nil {
+		return nil, err
+	}
+	return resp.Peers, nil
+}
