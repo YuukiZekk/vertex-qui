@@ -12,14 +12,22 @@ import { feature } from "topojson-client"
 import type { GeometryCollection, Topology } from "topojson-specification"
 import countries110 from "world-atlas/countries-110m.json"
 import { buildFlows, type FlowArc } from "./flowModel"
-import { countryName, DOWNLOAD_COLOR, UPLOAD_COLOR, type FlowColorBy } from "./flowStyle"
+import { countryOfNumeric } from "./countryPoints"
+import { countryName, DOWNLOAD_COLOR, heatColor, heatGradient, heatShare, UPLOAD_COLOR, type FlowColorBy } from "./flowStyle"
 
 const LABELLED_COUNTRIES = 12
-const GLOBE_COLOR = "#0a1828"
-const DOTS_COLOR = "#2c4a66"
+const GLOBE_COLOR = "#081626"
+const DOTS_COLOR = "#35587a"
 
 const topology = countries110 as unknown as Topology<{ countries: GeometryCollection }>
 const countryShapes = feature(topology, topology.objects.countries).features
+
+interface CountryShape {
+  shape: (typeof countryShapes)[number]
+  code: string
+  share: number
+  label: string
+}
 
 function escapeHTML(text: string) {
   return text.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`)
@@ -103,11 +111,12 @@ export function FlowGlobe({ instances, peers, colorBy, colorOf, fallback }: {
         .backgroundColor("rgba(0,0,0,0)")
         .globeMaterial(new MeshPhongMaterial({ color: GLOBE_COLOR, emissive: "#050d18", shininess: 6 }))
         .showAtmosphere(true)
-        .atmosphereColor("#3b82f6")
-        .atmosphereAltitude(0.16)
+        .atmosphereColor("#4f8ff7")
+        .atmosphereAltitude(0.2)
+        .showGraticules(true)
         .hexPolygonsData(countryShapes)
         .hexPolygonResolution(3)
-        .hexPolygonMargin(0.55)
+        .hexPolygonMargin(0.62)
         .hexPolygonUseDots(true)
         .hexPolygonColor(() => DOTS_COLOR)
         .arcStartLat("startLat")
@@ -136,6 +145,15 @@ export function FlowGlobe({ instances, peers, colorBy, colorOf, fallback }: {
         .ringMaxRadius(3.2)
         .ringPropagationSpeed(1.6)
         .ringRepeatPeriod(still ? 0 : 1600)
+        // world-atlas country shapes are Polygons and MultiPolygons, which is what the globe takes.
+        .polygonGeoJsonGeometry((d: object) => (d as CountryShape).shape.geometry as unknown as { type: string, coordinates: number[] })
+        .polygonCapColor((d: object) => heatColor((d as CountryShape).share, 0.55))
+        .polygonSideColor((d: object) => heatColor((d as CountryShape).share, 0.25))
+        .polygonStrokeColor((d: object) => heatColor((d as CountryShape).share, 0.9))
+        // Busier countries rise a little off the globe.
+        .polygonAltitude((d: object) => 0.006 + 0.045 * (d as CountryShape).share)
+        .polygonLabel("label")
+        .polygonsTransitionDuration(still ? 0 : 600)
         .htmlLat("lat")
         .htmlLng("lng")
         .htmlAltitude(0.01)
@@ -217,7 +235,19 @@ export function FlowGlobe({ instances, peers, colorBy, colorOf, fallback }: {
       ...model.countries.filter((c) => !serverCodes.has(c.code)).slice(0, LABELLED_COUNTRIES)
         .map((c) => ({ lat: c.at[1], lng: c.at[0], text: countryName(names, c.code), server: false })),
     ])
-    g.arcsData(arcs)
+    const maxCountry = Math.max(1, ...model.countries.map((c) => c.speed))
+    const byCode = new Map(model.countries.map((c) => [c.code, c]))
+    const shaded: CountryShape[] = countryShapes.flatMap((shape) => {
+      const code = countryOfNumeric[String(shape.id)]
+      const c = code ? byCode.get(code) : undefined
+      if (!c || c.speed <= 0) return []
+      return [{
+        shape, code, share: heatShare(c.speed, maxCountry),
+        label: escapeHTML(t("flows.countryTitle", { country: countryName(names, code), count: c.connections, upload: speed(c.upload), download: speed(c.download) })),
+      }]
+    })
+    g.polygonsData(shaded)
+      .arcsData(arcs)
       .pointsData(points)
       .ringsData(model.clusters.map((c) => ({ lat: c.at[1], lng: c.at[0], color: serverColor(c.servers) })))
       .htmlElementsData(labels)
@@ -241,6 +271,13 @@ export function FlowGlobe({ instances, peers, colorBy, colorOf, fallback }: {
           </>
         ) : model.clusters.flatMap((c) => c.servers).map((s) => <Legend key={s.id} color={colorOf(s.id)} label={s.name} />)}
         {model.arcs.length > 0 && <span>{t("flows.legendWidth", { speed: `${formatBytes(maxSpeed)}/s` })}</span>}
+        {model.countries.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            {t("flows.heatLow")}
+            <span className="h-1.5 w-16 rounded-full" style={{ background: heatGradient }} />
+            {t("flows.heatHigh")}
+          </span>
+        )}
       </div>
       <p className="pointer-events-none absolute right-3 top-3 text-xs text-[#9fb3c8]/70">{t("flows.globeHint")}</p>
     </div>

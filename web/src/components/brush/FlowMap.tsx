@@ -13,8 +13,9 @@ import { useTranslation } from "react-i18next"
 import { feature, mesh } from "topojson-client"
 import type { GeometryCollection, Topology } from "topojson-specification"
 import countries110 from "world-atlas/countries-110m.json"
+import { countryOfNumeric } from "./countryPoints"
 import { buildFlows } from "./flowModel"
-import { countryName, DOWNLOAD_COLOR, UPLOAD_COLOR, type FlowColorBy } from "./flowStyle"
+import { countryName, DOWNLOAD_COLOR, heatColor, heatGradient, heatShare, UPLOAD_COLOR, type FlowColorBy } from "./flowStyle"
 
 const WIDTH = 960
 const HEIGHT = 540
@@ -34,6 +35,11 @@ const topology = countries110 as unknown as Topology<{ countries: GeometryCollec
 const landPath = path(feature(topology, topology.objects.land)) ?? ""
 const borderPath = path(mesh(topology, topology.objects.countries, (a, b) => a !== b)) ?? ""
 const gridPath = path(geoGraticule10()) ?? ""
+// Each country's outline by its ISO code, to shade the countries peers are in.
+const countryPaths = new Map(feature(topology, topology.objects.countries).features.flatMap((shape) => {
+  const code = countryOfNumeric[String(shape.id)]
+  return code ? [[code, path(shape) ?? ""] as const] : []
+}))
 
 // arc rises from one point to another by bend times their distance, always
 // upward, so arcs between the same places stack instead of crossing.
@@ -106,6 +112,7 @@ export function FlowMap({ instances, peers, colorBy, colorOf }: {
   }, [instances, peers, colorBy, colorOf, names])
 
   const maxSpeed = Math.max(1, ...lines.map((l) => l.speed))
+  const maxCountry = Math.max(1, ...dots.map((d) => d.speed))
   // Close to linear, so an arc moving twice as much looks clearly thicker.
   const width = (s: number) => 0.6 + 3.4 * Math.pow(s / maxSpeed, 0.75)
   const labelled = new Set(dots.slice(0, LABELLED_COUNTRIES).map((d) => d.code))
@@ -175,6 +182,9 @@ export function FlowMap({ instances, peers, colorBy, colorOf }: {
         <g transform={`translate(${view.x},${view.y}) scale(${k})`}>
           <path d={gridPath} fill="none" stroke={GRID} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
           <path d={landPath} fill={LAND} />
+          {dots.map((d) => countryPaths.has(d.code) && d.speed > 0 && (
+            <path key={`shade:${d.code}`} d={countryPaths.get(d.code)} fill={heatColor(heatShare(d.speed, maxCountry), 0.6)} />
+          ))}
           <path d={borderPath} fill="none" stroke={BORDER} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
 
           <g filter="url(#flow-glow)">
@@ -243,6 +253,13 @@ export function FlowMap({ instances, peers, colorBy, colorOf }: {
               <span key={share} className="w-4 rounded-full bg-slate-300" style={{ height: width(share * maxSpeed) }} />
             ))}
             {t("flows.legendWidth", { speed: `${formatBytes(maxSpeed)}/s` })}
+          </span>
+        )}
+        {dots.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            {t("flows.heatLow")}
+            <span className="h-1.5 w-16 rounded-full" style={{ background: heatGradient }} />
+            {t("flows.heatHigh")}
           </span>
         )}
       </div>
