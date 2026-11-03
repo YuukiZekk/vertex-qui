@@ -296,13 +296,12 @@
   "flows": {
     "title": "Flow map",
     "description": "Which countries each server is exchanging data with right now, and how fast. Only each server’s busiest torrents are read; peers are grouped by the country qBittorrent resolves.",
-    "allServers": "All servers",
     "connections": "Active connections",
     "upload": "Upload",
     "download": "Download",
     "session": "This visit",
     "mapTitle": "Live flows",
-    "mapInfo": "Every 15 seconds the peers of each server’s 15 busiest torrents are read. Green arcs are uploads going out, blue arcs downloads coming in, and thicker arcs move more. Orange dots are servers, placed by the region in their instance settings.",
+    "mapInfo": "Every 15 seconds the peers of each server’s 15 busiest torrents are read. Coloured by direction, cyan arcs are uploads going out and amber arcs downloads coming in; coloured by server, each server has its own colour. The pulse runs the way the data goes, thicker arcs move more, and only the 40 fastest are drawn. White dots are servers, placed by the region in their instance settings.",
     "mapLabel": "Live map of flows between servers and peer countries",
     "sampledAt": "Read at {{time}}",
     "legendUpload": "Upload",
@@ -324,6 +323,15 @@
     "uploadShort": "Up",
     "downloadShort": "Down",
     "progress": "Peer progress",
-    "moreRows": "{{count}} slower connections are not listed."
+    "moreRows": "{{count}} slower connections are not listed.",
+    "brushServers": "Brushing",
+    "seedServers": "Seeding",
+    "colorByDirection": "By direction",
+    "colorByServer": "By server",
+    "serverCluster": "{{country}} · {{count}} servers",
+    "legendWidth": "thickest {{speed}}",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "resetView": "Reset"
   }
 }

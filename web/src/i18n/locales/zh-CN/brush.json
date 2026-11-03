@@ -296,13 +296,12 @@
   "flows": {
     "title": "流量地图",
     "description": "各服务器正在和哪些国家的对端传输数据，以及速度。只读取每台服务器最忙的种子，对端按 qBittorrent 识别的国家归类。",
-    "allServers": "全部服务器",
     "connections": "活跃连接",
     "upload": "上传",
     "download": "下载",
     "session": "本次流量",
     "mapTitle": "实时连线",
-    "mapInfo": "每 15 秒读取一次各服务器最忙的 15 个种子的对端。绿色线是上传出去，蓝色线是下载进来，线越粗速度越快；橙色点是服务器，位置取自实例设置里的地区。",
+    "mapInfo": "每 15 秒读取一次各服务器最忙的 15 个种子的对端。按方向着色时青色是上传出去、琥珀色是下载进来；按服务器着色时每台服务器一种颜色。光点沿线跑的方向就是数据流向，线越粗速度越快，只画最快的 40 条。白点是服务器，位置取自实例设置里的地区。",
     "mapLabel": "服务器与对端国家之间的实时连线地图",
     "sampledAt": "读取于 {{time}}",
     "legendUpload": "上传",
@@ -324,6 +323,15 @@
     "uploadShort": "上传",
     "downloadShort": "下载",
     "progress": "对端进度",
-    "moreRows": "还有 {{count}} 个较慢的连接没有列出。"
+    "moreRows": "还有 {{count}} 个较慢的连接没有列出。",
+    "brushServers": "刷流",
+    "seedServers": "保种",
+    "colorByDirection": "按方向",
+    "colorByServer": "按服务器",
+    "serverCluster": "{{country}} · {{count}} 台",
+    "legendWidth": "最粗 {{speed}}",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "resetView": "复位"
   }
 }

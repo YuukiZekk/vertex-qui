@@ -260,6 +260,8 @@ export interface BrushFlowInstance {
   id: number
   name: string
   country: string
+  // True when an enabled feed may add torrents to it; the others only seed.
+  brush: boolean
   // The whole instance's speeds, in bytes per second.
   uploadSpeed: number
   downloadSpeed: number

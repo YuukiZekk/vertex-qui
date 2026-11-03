@@ -5,25 +5,28 @@
 
 import { CountryFlag } from "@/components/brush/CountryFlag"
 import { FlowMap } from "@/components/brush/FlowMap"
-import { countryName, DOWNLOAD_COLOR, UPLOAD_COLOR } from "@/components/brush/flowStyle"
+import { countryName, downloadText, serverColor, uploadText, type FlowColorBy } from "@/components/brush/flowStyle"
 import { EmptyState, SectionCard } from "@/components/brush/section"
 import { sectionHeaderRowClass, sectionTableClass } from "@/components/brush/sectionStyles"
 import { SiteIcon } from "@/components/brush/SiteIcon"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { api } from "@/lib/api"
-import { formatBytes } from "@/lib/utils"
-import type { BrushFlowPeer } from "@/types/brush"
+import { cn, formatBytes } from "@/lib/utils"
+import type { BrushFlowInstance, BrushFlowPeer } from "@/types/brush"
 import { useQuery } from "@tanstack/react-query"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 // The server reads peers every 15 seconds; polling at that pace shows each read.
 const POLL_MS = 15000
 const ROWS_SHOWN = 100
+const HIDDEN_KEY = "brush.flows.hidden"
+const COLOR_KEY = "brush.flows.colorBy"
 
 // maskIP keeps the network part of an address: 1.2.*.* or 2001:db8:*.
 function maskIP(ip: string): string {
@@ -34,14 +37,66 @@ function maskIP(ip: string): string {
 
 const speed = (bytes: number) => `${formatBytes(bytes)}/s`
 
-function Metric({ label, value, color }: { label: string, value: string, color?: string }) {
+// The servers left out and the arc colouring are remembered per browser.
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) as T : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function writeStored(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Storage can be unavailable; the choice still holds for this visit.
+  }
+}
+
+function Metric({ label, value, className }: { label: string, value: string, className?: string }) {
   return (
     <Card className="gap-0 py-0">
       <CardContent className="space-y-1 p-4">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-2xl font-semibold tabular-nums" style={color ? { color } : undefined}>{value}</p>
+        <p className={cn("text-2xl font-semibold tabular-nums", className)}>{value}</p>
       </CardContent>
     </Card>
+  )
+}
+
+// ServerGroup is one row of the server picker: a box for the whole group, then
+// one per server.
+function ServerGroup({ label, servers, hidden, onChange, colorOf, colorBy }: {
+  label: string
+  servers: BrushFlowInstance[]
+  hidden: Set<number>
+  onChange: (ids: number[], show: boolean) => void
+  colorOf: (id: number) => string
+  colorBy: FlowColorBy
+}) {
+  if (servers.length === 0) return null
+  const shown = servers.filter((s) => !hidden.has(s.id)).length
+  const all = servers.map((s) => s.id)
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <label className="flex w-24 shrink-0 cursor-pointer items-center gap-2 text-sm font-medium">
+        <Checkbox
+          checked={shown === servers.length ? true : shown === 0 ? false : "indeterminate"}
+          onCheckedChange={(v) => onChange(all, v === true)}
+        />
+        {label}
+      </label>
+      {servers.map((s) => (
+        <label key={s.id} className="flex cursor-pointer items-center gap-2 text-sm">
+          <Checkbox checked={!hidden.has(s.id)} onCheckedChange={(v) => onChange([s.id], v === true)} />
+          {colorBy === "server" && <span className="h-2 w-2 rounded-full" style={{ background: colorOf(s.id) }} />}
+          <CountryFlag code={s.country} />
+          <span className={cn(hidden.has(s.id) && "text-muted-foreground")}>{s.name}</span>
+        </label>
+      ))}
+    </div>
   )
 }
 
@@ -49,7 +104,8 @@ export function Flows() {
   const { t, i18n } = useTranslation("brush")
   const { data } = useQuery({ queryKey: ["brush", "flows"], queryFn: () => api.getBrushFlows(), refetchInterval: POLL_MS })
   const { data: sites } = useQuery({ queryKey: ["brush", "sites"], queryFn: () => api.getBrushSites() })
-  const [instanceFilter, setInstanceFilter] = useState("all")
+  const [hidden, setHidden] = useState(() => new Set(readStored<number[]>(HIDDEN_KEY, [])))
+  const [colorBy, setColorBy] = useState<FlowColorBy>(() => readStored<FlowColorBy>(COLOR_KEY, "direction"))
   const [showIPs, setShowIPs] = useState(false)
   const names = useMemo(() => {
     try {
@@ -58,6 +114,20 @@ export function Flows() {
       return null
     }
   }, [i18n.language])
+
+  const toggle = (ids: number[], show: boolean) => setHidden((prev) => {
+    const next = new Set(prev)
+    for (const id of ids) {
+      if (show) next.delete(id)
+      else next.add(id)
+    }
+    writeStored(HIDDEN_KEY, [...next])
+    return next
+  })
+  const pickColor = (by: FlowColorBy) => {
+    setColorBy(by)
+    writeStored(COLOR_KEY, by)
+  }
 
   // This visit's traffic adds each instance's speed over the time between reads.
   const lastRead = useRef<number>(0)
@@ -77,10 +147,10 @@ export function Flows() {
     })
   }, [data])
 
-  const instances = useMemo(() => {
-    const all = data?.instances ?? []
-    return instanceFilter === "all" ? all : all.filter((i) => String(i.id) === instanceFilter)
-  }, [data, instanceFilter])
+  const allInstances = useMemo(() => data?.instances ?? [], [data])
+  // Each server keeps its colour whichever servers are shown.
+  const colorOf = useCallback((id: number) => serverColor(Math.max(0, allInstances.findIndex((i) => i.id === id))), [allInstances])
+  const instances = useMemo(() => allInstances.filter((i) => !hidden.has(i.id)), [allInstances, hidden])
   const peers = useMemo(() => {
     const ids = new Set(instances.map((i) => i.id))
     return (data?.peers ?? []).filter((p) => ids.has(p.instanceId))
@@ -103,33 +173,33 @@ export function Flows() {
     return [...byCode.values()].sort((a, b) => (b.upload + b.download) - (a.upload + a.download)).slice(0, 10)
   }, [peers])
 
-  const instanceName = (id: number) => data?.instances.find((i) => i.id === id)
+  const instanceOf = (id: number) => allInstances.find((i) => i.id === id)
   const siteOf = (p: BrushFlowPeer) => sites?.find((s) => s.id === p.siteId)
-  const noCountry = (data?.instances ?? []).filter((i) => !i.country)
+  const noCountry = instances.filter((i) => !i.country)
   const loading = !data || data.sampledAt === 0
 
   return (
     <div className="container mx-auto space-y-6 overflow-x-hidden px-6 py-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold">{t("flows.title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("flows.description")}</p>
-        </div>
-        <Select value={instanceFilter} onValueChange={setInstanceFilter}>
-          <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("flows.allServers")}</SelectItem>
-            {(data?.instances ?? []).map((i) => (
-              <SelectItem key={i.id} value={String(i.id)}>{i.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold">{t("flows.title")}</h1>
+        <p className="text-sm text-muted-foreground">{t("flows.description")}</p>
       </div>
+
+      {allInstances.length > 0 && (
+        <Card className="gap-0 py-0">
+          <CardContent className="space-y-3 p-4">
+            <ServerGroup label={t("flows.brushServers")} servers={allInstances.filter((i) => i.brush)}
+              hidden={hidden} onChange={toggle} colorOf={colorOf} colorBy={colorBy} />
+            <ServerGroup label={t("flows.seedServers")} servers={allInstances.filter((i) => !i.brush)}
+              hidden={hidden} onChange={toggle} colorOf={colorOf} colorBy={colorBy} />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Metric label={t("flows.connections")} value={String(totals.connections)} />
-        <Metric label={t("flows.upload")} value={speed(totals.up)} color={UPLOAD_COLOR} />
-        <Metric label={t("flows.download")} value={speed(totals.down)} color={DOWNLOAD_COLOR} />
+        <Metric label={t("flows.upload")} value={speed(totals.up)} className={uploadText} />
+        <Metric label={t("flows.download")} value={speed(totals.down)} className={downloadText} />
         <Metric label={t("flows.session")} value={formatBytes(totals.session)} />
       </div>
 
@@ -138,16 +208,19 @@ export function Flows() {
         info={t("flows.mapInfo")}
         description={data?.sampledAt ? t("flows.sampledAt", { time: new Date(data.sampledAt * 1000).toLocaleTimeString(i18n.language) }) : undefined}
         actions={
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded" style={{ background: UPLOAD_COLOR }} />{t("flows.legendUpload")}</span>
-            <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded" style={{ background: DOWNLOAD_COLOR }} />{t("flows.legendDownload")}</span>
+          <div className="flex rounded-md border p-0.5">
+            {(["direction", "server"] as const).map((by) => (
+              <Button key={by} size="sm" variant={colorBy === by ? "secondary" : "ghost"} className="h-7 px-3 text-xs" onClick={() => pickColor(by)}>
+                {by === "direction" ? t("flows.colorByDirection") : t("flows.colorByServer")}
+              </Button>
+            ))}
           </div>
         }
       >
         {loading ? <EmptyState>{t("flows.waiting")}</EmptyState> : (
           <div className="grid gap-0 lg:grid-cols-[1fr_280px]">
             <div className="p-4">
-              <FlowMap instances={instances} peers={peers} />
+              <FlowMap instances={instances} peers={peers} colorBy={colorBy} colorOf={colorOf} />
               {noCountry.length > 0 && (
                 <p className="mt-2 text-xs text-muted-foreground">{t("flows.noCountry", { names: noCountry.map((i) => i.name).join("、") })}</p>
               )}
@@ -160,8 +233,8 @@ export function Flows() {
                     <li key={c.code || "unknown"} className="flex items-center gap-2">
                       <CountryFlag code={c.code} iconBox />
                       <span className="min-w-0 flex-1 truncate">{c.code ? countryName(names, c.code) : t("flows.unknownCountry")}</span>
-                      <span className="tabular-nums text-xs" style={{ color: UPLOAD_COLOR }}>{speed(c.upload)}</span>
-                      <span className="tabular-nums text-xs" style={{ color: DOWNLOAD_COLOR }}>{speed(c.download)}</span>
+                      <span className={cn("tabular-nums text-xs", uploadText)}>{speed(c.upload)}</span>
+                      <span className={cn("tabular-nums text-xs", downloadText)}>{speed(c.download)}</span>
                     </li>
                   ))}
                 </ul>
@@ -197,7 +270,7 @@ export function Flows() {
               </TableHeader>
               <TableBody>
                 {peers.slice(0, ROWS_SHOWN).map((p) => {
-                  const inst = instanceName(p.instanceId)
+                  const inst = instanceOf(p.instanceId)
                   const site = siteOf(p)
                   return (
                     <TableRow key={`${p.instanceId}:${p.hash}:${p.ip}:${p.port}`}>
@@ -220,10 +293,10 @@ export function Flows() {
                         </div>
                       </TableCell>
                       <TableCell className="max-w-[160px] truncate text-muted-foreground" title={p.client}>{p.client}</TableCell>
-                      <TableCell className="text-right tabular-nums" style={p.uploadSpeed ? { color: UPLOAD_COLOR } : undefined}>
+                      <TableCell className={cn("text-right tabular-nums", p.uploadSpeed > 0 && uploadText)}>
                         {p.uploadSpeed ? speed(p.uploadSpeed) : "-"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums" style={p.downloadSpeed ? { color: DOWNLOAD_COLOR } : undefined}>
+                      <TableCell className={cn("text-right tabular-nums", p.downloadSpeed > 0 && downloadText)}>
                         {p.downloadSpeed ? speed(p.downloadSpeed) : "-"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{Math.round(p.progress * 100)}%</TableCell>

@@ -51,6 +51,9 @@ type flowInstance struct {
 	ID      int    `json:"id"`
 	Name    string `json:"name"`
 	Country string `json:"country"`
+	// Brush is true when an enabled feed may add torrents to the instance; the
+	// others only seed.
+	Brush bool `json:"brush"`
 	// UploadSpeed and DownloadSpeed are the whole instance's, not only the torrents
 	// whose peers were read.
 	UploadSpeed   int64 `json:"uploadSpeed"`
@@ -187,6 +190,19 @@ func (s *Service) sampleFlows(ctx context.Context) {
 		s.log.Error().Err(err).Msg("read brush torrent sites for flows")
 		return
 	}
+	feeds, err := s.store.ListFeeds(ctx)
+	if err != nil {
+		s.log.Error().Err(err).Msg("read brush feeds for flows")
+		return
+	}
+	brushing := make(map[int]bool)
+	for _, f := range feeds {
+		if f.Enabled {
+			for _, id := range f.InstanceIDs {
+				brushing[id] = true
+			}
+		}
+	}
 	matcher := newSiteMatcher(sites)
 	m := s.flowMeter
 	m.day = now.Format(time.DateOnly)
@@ -200,7 +216,7 @@ func (s *Service) sampleFlows(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		fi := flowInstance{ID: inst.ID, Name: inst.Name, Country: configs[inst.ID].CountryCode}
+		fi := flowInstance{ID: inst.ID, Name: inst.Name, Country: configs[inst.ID].CountryCode, Brush: brushing[inst.ID]}
 		if tr, ok, err := s.qui.Transfer(ctx, inst.ID); err == nil && ok {
 			fi.UploadSpeed, fi.DownloadSpeed = tr.ULSpeed, tr.DLSpeed
 		}

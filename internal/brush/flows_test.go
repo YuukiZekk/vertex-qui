@@ -56,10 +56,13 @@ func TestSampleFlows(t *testing.T) {
 	require.NoError(t, svc.store.SetCountry(ctx, 1, "nl"))
 	siteID, err := svc.store.CreateSite(ctx, store.Site{Name: "pt", BaseURL: "https://pt.example"})
 	require.NoError(t, err)
+	_, err = svc.store.CreateFeed(ctx, store.Feed{SiteID: siteID, Name: "a", URL: "https://pt.example/a",
+		IntervalSeconds: 60, WindowSeconds: 300, InstanceIDs: []int{1}, Enabled: true})
+	require.NoError(t, err)
 
 	svc.sampleFlows(ctx)
 	snap := svc.flow
-	require.Equal(t, []flowInstance{{ID: 1, Name: "vps-1", Country: "nl", UploadSpeed: 6 << 20, DownloadSpeed: 1 << 20, Connections: 1}}, snap.Instances)
+	require.Equal(t, []flowInstance{{ID: 1, Name: "vps-1", Country: "nl", Brush: true, UploadSpeed: 6 << 20, DownloadSpeed: 1 << 20, Connections: 1}}, snap.Instances)
 	require.Len(t, snap.Peers, 1, "only connections moving data")
 	require.Equal(t, flowPeer{InstanceID: 1, Hash: "busy", Torrent: "Busy", SiteID: siteID, IP: "1.2.3.4", Port: 5000,
 		Country: "de", UploadSpeed: 4 << 20}, snap.Peers[0])
