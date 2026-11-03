@@ -301,6 +301,18 @@ func (s *Service) handleSaveFeed(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New(msg))
 		return
 	}
+	// Skipping H&R on a site brush cannot read it on would refuse every torrent.
+	if f.SkipHR {
+		st, err := s.store.GetSite(r.Context(), f.SiteID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if !site.ReadsHR(hostOf(st.BaseURL)) {
+			writeError(w, http.StatusBadRequest, errors.New("brush cannot read H&R on this site, so skipping H&R would refuse every torrent; turn it off"))
+			return
+		}
+	}
 	s.saveAndRespond(w, r, func(id int64, create bool) (int64, error) {
 		if create {
 			return s.store.CreateFeed(r.Context(), f)

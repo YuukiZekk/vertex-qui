@@ -75,7 +75,7 @@ func (n *NexusPHP) inspectMTeam(ctx context.Context, detailsURL string) (Inspect
 		if detail.Data == nil {
 			return Inspection{}, fmt.Errorf("M-Team API refused the request, check the API key: %s", detail.Message)
 		}
-		return Inspection{Free: strings.Contains(detail.Data.Status.Discount, "FREE"), Rule: "m-team"}, nil
+		return Inspection{Free: strings.Contains(detail.Data.Status.Discount, "FREE"), HRUnknown: true, Rule: "m-team"}, nil
 	}
 	return Inspection{}, fmt.Errorf("M-Team API failed %d times: %s", mteamAttempts, last)
 }

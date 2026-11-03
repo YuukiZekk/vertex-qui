@@ -26,13 +26,17 @@ func TestSiteRules(t *testing.T) {
 	}{
 		{"generic site uses the title", "zmpt.cc", `<h1 id="top">x <b><font class="free">免费</font></b></h1>`, true, false, "nexusphp"},
 		{"listed NexusPHP site uses the title", "hdsky.me", `<h1 id="top">x <font class="halfdown">50%</font></h1>`, false, false, "nexusphp"},
+		// Vertex reads only the first classed font or span of the title; a tag before the promotion does not hide it here.
+		{"a tag before the promotion", "springsunday.net", `<h1 id="top">x <span class="tags">国语</span><font class="free">免费</font></h1>`, true, false, "nexusphp"},
 		{"hit and run is an image", "ourbits.club", `<h1 id="top">x</h1><span class="hitandrun">legend</span>`, false, false, "nexusphp"},
+		{"hit and run image", "hdhome.org", `<h1 id="top">x <font class="free">免费</font></h1><img class="hitandrun" src="pic/trans.gif">`, true, true, "nexusphp"},
 		{"opencd free icon", "open.cd", `<div class="title">x <img class="pro_free" src="t.gif"></div>`, true, false, "opencd"},
 		{"opencd first icon is not free", "www.open.cd", `<div class="title">x <img class="pro_50pctdown"><img class="pro_free"></div>`, false, false, "opencd"},
 		{"ttg free and hr", "totheglory.im", `<img src="/pic/ico_free.gif" class="topic"><img src="/pic/hit_run.gif" alt="Hit & Run">`, true, true, "totheglory"},
 		{"ttg not free", "totheglory.im", `<img src="/pic/ico_half.gif" class="topic">`, false, false, "totheglory"},
 		{"u2 free icon", "u2.dmhy.org", `<table><tr><td valign="top"><img class="pro_free2up"></td></tr></table>`, true, false, "u2"},
-		{"u2 custom zero download", "u2.dmhy.org", `<table><tr><td valign="top"><img class="arrowdown"> <b>0.00X</b></td></tr></table>`, true, false, "u2"},
+		{"u2 custom zero download", "u2.dmhy.org", `<table><tr><td valign="top"><img class="arrowdown"><b>0.00X</b></td></tr></table>`, true, false, "u2"},
+		{"u2 zero download after a space", "u2.dmhy.org", `<table><tr><td valign="top"><img class="arrowdown"> <b>0.00X</b></td></tr></table>`, true, false, "u2"},
 		{"u2 custom half download", "u2.dmhy.org", `<table><tr><td valign="top"><img class="arrowdown"><b>0.50X</b></td></tr></table>`, false, false, "u2"},
 		{"hares bold font", "club.hares.top", `<b><font class="twoupfree">2xFree</font></b>`, true, false, "bold-font"},
 		{"putao bold font", "pt.sjtu.edu.cn", `<b><font class="halfdown">50%</font></b><b><font class="free">x</font></b>`, false, false, "bold-font"},
@@ -40,6 +44,9 @@ func TestSiteRules(t *testing.T) {
 		{"hhanclub tag", "hhanclub.net", `<span class="promotion-tag promotion-tag-free">Free</span>`, true, false, "hhanclub"},
 		{"hudbt minor list", "hudbt.hust.edu.cn", `<div class="minor-list"><img class="twoupfree"></div>`, true, false, "hudbt"},
 		{"hdcity font", "hdcity.city", `<font class="free">Free</font>`, true, false, "hdcity"},
+		{"hdarea title font", "hdarea.club", `<h1 id="top">x <span class="tags">t</span><font class="free">Free</font></h1>`, true, false, "hdarea"},
+		{"hdbits freeleech tag", "hdbits.org", `<span class="tag freeleech">FL</span>`, true, false, "hdbits"},
+		{"bitporn sticker", "bitporn.eu", `<span class="stic2"> 2X Free </span>`, true, false, "bitporn"},
 		{"chdbits text hr", "ptchdbits.co", `<h1 id="top">x <font class="free">Free</font></h1><table><tr><td><b>H&amp;R:&nbsp;</b>5day</td></tr></table>`, true, true, "chdbits"},
 		// The basic info row as the source writes it: a raw "&", line breaks, and the row left open.
 		{"chdbits revival hr in the info row", "ptchdbits.co", "<h1 id=\"top\">x <font class=\"free\">Free</font></h1><table><tr><td class=\"rowhead\">基本信息</td>\n" +
@@ -47,11 +54,18 @@ func TestSiteRules(t *testing.T) {
 		{"chdbits without hr", "ptchdbits.co", `<h1 id="top">x</h1><table><tr><td><b>制作组:&nbsp;</b>压制组</td></tr></table>`, false, false, "chdbits"},
 		{"chdbits h&r of another length is not hr", "ptchdbits.co", `<h1 id="top">x</h1><table><tr><td><b>H&amp;R:&nbsp;</b>0day</td></tr></table>`, false, false, "chdbits"},
 	}
+	// Luminance sites show the user as nav_userinfo, not a userdetails link.
+	got, err := InspectPage("www.empornium.is", []byte(`<div id="nav_userinfo">me</div><img alt="Freeleech">`))
+	require.NoError(t, err)
+	require.Equal(t, Inspection{Free: true, HRUnknown: true, Rule: "luminance"}, got)
+	_, err = InspectPage("www.empornium.is", []byte(user+`<img alt="Freeleech">`))
+	require.ErrorIs(t, err, ErrNotLoggedIn)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := InspectPage(tt.host, []byte(user+tt.page))
 			require.NoError(t, err)
-			require.Equal(t, Inspection{Free: tt.free, HR: tt.hr, Rule: tt.rule}, got)
+			require.Equal(t, Inspection{Free: tt.free, HR: tt.hr, HRUnknown: !ReadsHR(tt.host), Rule: tt.rule}, got)
 		})
 	}
 }
@@ -124,7 +138,7 @@ func TestInspectMTeam(t *testing.T) {
 	n := NewNexusPHP("key-123")
 	got, err := n.Inspect(context.Background(), "https://kp.m-team.cc/detail/987")
 	require.NoError(t, err)
-	require.Equal(t, Inspection{Free: true, Rule: "m-team"}, got)
+	require.Equal(t, Inspection{Free: true, HRUnknown: true, Rule: "m-team"}, got)
 	require.Equal(t, int32(3), calls.Load())
 
 	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -218,7 +232,7 @@ func TestColapt(t *testing.T) {
 	for id, free := range map[string]bool{"1": true, "2": false, "3": false} {
 		got, err := n.inspectColapt(context.Background(), srv.URL+"/details.php?id="+id)
 		require.NoError(t, err)
-		require.Equal(t, Inspection{Free: free, Rule: "colapt"}, got, id)
+		require.Equal(t, Inspection{Free: free, HRUnknown: true, Rule: "colapt"}, got, id)
 	}
 	_, err = NewNexusPHP("bad").inspectColapt(context.Background(), srv.URL+"/details.php?id=1")
 	require.ErrorIs(t, err, ErrNotLoggedIn)

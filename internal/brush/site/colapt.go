@@ -71,7 +71,7 @@ func (n *NexusPHP) inspectColapt(ctx context.Context, detailsURL string) (Inspec
 		return Inspection{}, errors.New("colapt API returned an unreadable torrent")
 	}
 	free := t.Promotion != nil && t.Promotion.Download.Num == 0
-	return Inspection{Free: free, Rule: "colapt"}, nil
+	return Inspection{Free: free, HRUnknown: true, Rule: "colapt"}, nil
 }
 
 // colaptGet requests one API address with the session cookie. 401 and 403 mean the

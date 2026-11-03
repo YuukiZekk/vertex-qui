@@ -12,14 +12,18 @@ import (
 )
 
 // rule reads one site's details page. The per-site rules follow the original
-// Vertex's scrape.js; every other host gets the generic NexusPHP rule.
+// Vertex's scrape.js; every other host gets the generic NexusPHP free rule. Only
+// the hosts Vertex reads H&R on have an H&R rule: on any other the H&R markers
+// are unknown, so a page without one proves nothing, and hr is nil.
 type rule struct {
 	name string
 	free func(doc *html.Node) (bool, error)
-	hr   func(doc *html.Node, page []byte) bool
+	hr   func(doc *html.Node) bool
+	// login is the text a logged-in page always has; empty means "userdetails".
+	login string
 }
 
-var genericRule = rule{name: "nexusphp", free: freeInTitle, hr: hrImage}
+var genericRule = rule{name: "nexusphp", free: freeInTitle}
 
 var hostRules = func() map[string]rule {
 	rules := map[string]rule{}
@@ -28,15 +32,23 @@ var hostRules = func() map[string]rule {
 			rules[h] = r
 		}
 	}
-	add(rule{name: "opencd", free: freeOpencd, hr: hrImage}, "open.cd", "www.open.cd")
+	add(rule{name: "opencd", free: freeOpencd}, "open.cd", "www.open.cd")
 	add(rule{name: "totheglory", free: freeTTG, hr: hrTTG}, "totheglory.im")
-	add(rule{name: "u2", free: freeU2, hr: hrImage}, "u2.dmhy.org")
-	add(rule{name: "bold-font", free: freeBoldFont, hr: hrImage}, "club.hares.top", "pt.sjtu.edu.cn")
-	add(rule{name: "byr", free: freeBYR, hr: hrImage}, "byr.pt")
+	add(rule{name: "u2", free: freeU2}, "u2.dmhy.org")
+	add(rule{name: "bold-font", free: freeBoldFont}, "club.hares.top", "pt.sjtu.edu.cn")
+	add(rule{name: "byr", free: freeBYR}, "byr.pt")
 	add(rule{name: "hhanclub", free: freeHHan, hr: hrImage}, "hhanclub.net")
-	add(rule{name: "hudbt", free: freeHUDBT, hr: hrImage}, "zeus.hamsters.space", "hudbt.hust.edu.cn")
-	add(rule{name: "hdcity", free: freeHDCity, hr: hrImage}, "hdcity.leniter.org", "hdcity.city")
+	add(rule{name: "hudbt", free: freeHUDBT}, "zeus.hamsters.space", "hudbt.hust.edu.cn")
+	add(rule{name: "hdcity", free: freeHDCity}, "hdcity.leniter.org", "hdcity.city")
+	add(rule{name: "hdarea", free: freeInTitle}, "www.hdarea.co", "www.hdarea.club", "hdarea.club")
+	add(rule{name: "hdbits", free: freeHDBits}, "hdbits.org")
+	add(rule{name: "bitporn", free: freeBitPorn}, "bitporn.eu")
+	add(rule{name: "luminance", free: freeLuminance, login: "nav_userinfo"},
+		"www.empornium.is", "www.empornium.sx", "www.pixelcove.me", "www.cathode-ray.tube")
 	add(rule{name: "chdbits", free: freeInTitle, hr: hrCHDBits}, "chdbits.co", "ptchdbits.co")
+	// The NexusPHP sites Vertex reads H&R on, as the hitandrun image.
+	add(rule{name: "nexusphp", free: freeInTitle, hr: hrImage},
+		"www.hddolby.com", "hdhome.org", "ourbits.club", "piggo.me", "sharkpt.net", "audiences.me")
 	return rules
 }()
 
@@ -55,13 +67,33 @@ var (
 
 // freeInTitle looks for a promotion class only inside the title (#top), because the
 // rest of the page can carry the same classes for other torrents or site notices.
+// Vertex reads only the title's first classed font or span, which a tag such as
+// 热门 placed before the promotion hides; any element of the title counts here.
 // A page without #top cannot be read, so it is an error, never "not free".
 func freeInTitle(doc *html.Node) (bool, error) {
 	top := findByID(doc, "top")
 	if top == nil {
 		return false, errors.New("details page has no #top title")
 	}
-	return hasClass(top, titleFreeClasses...), nil
+	return first(top, func(n *html.Node) bool { return hasClassToken(n, titleFreeClasses...) }) != nil, nil
+}
+
+func freeHDBits(doc *html.Node) (bool, error) {
+	return first(doc, func(n *html.Node) bool { return isTag(n, "span") && attr(n, "class") == "tag freeleech" }) != nil, nil
+}
+
+func freeBitPorn(doc *html.Node) (bool, error) {
+	return first(doc, func(n *html.Node) bool {
+		if !isTag(n, "span") || !hasClassToken(n, "stic2") {
+			return false
+		}
+		t := strings.TrimSpace(text(n))
+		return t == "2X Free" || t == "Free"
+	}) != nil, nil
+}
+
+func freeLuminance(doc *html.Node) (bool, error) {
+	return first(doc, func(n *html.Node) bool { return isTag(n, "img") && attr(n, "alt") == "Freeleech" }) != nil, nil
 }
 
 // freeOpencd is the first icon in div.title: div[class=title] img[class].
@@ -135,11 +167,11 @@ func freeHDCity(doc *html.Node) (bool, error) {
 	return first(doc, func(n *html.Node) bool { return isTag(n, "font") && hasClassToken(n, fontFreeClasses...) }) != nil, nil
 }
 
-func hrImage(doc *html.Node, _ []byte) bool {
+func hrImage(doc *html.Node) bool {
 	return first(doc, func(n *html.Node) bool { return isTag(n, "img") && attr(n, "class") == "hitandrun" }) != nil
 }
 
-func hrTTG(doc *html.Node, _ []byte) bool {
+func hrTTG(doc *html.Node) bool {
 	return first(doc, func(n *html.Node) bool {
 		return isTag(n, "img") && attr(n, "src") == "/pic/hit_run.gif" && attr(n, "alt") == "Hit & Run"
 	}) != nil
@@ -149,7 +181,7 @@ func hrTTG(doc *html.Node, _ []byte) bool {
 // row: <b>H&R:&nbsp;</b>3day or 5day. Vertex matched that string in the page as
 // the browser re-serializes it, so the raw source, whose escaping and whitespace
 // differ, is not compared byte for byte; the parsed nodes are read instead.
-func hrCHDBits(doc *html.Node, _ []byte) bool {
+func hrCHDBits(doc *html.Node) bool {
 	return first(doc, func(n *html.Node) bool {
 		if !isTag(n, "b") || squash(text(n)) != "H&R:" {
 			return false

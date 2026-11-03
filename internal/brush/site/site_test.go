@@ -58,22 +58,22 @@ func TestInspectPage(t *testing.T) {
 		{
 			name: "free in title",
 			page: user + `<h1 id="top">Name <b>[<font class="free">Free</font>]</b></h1>`,
-			want: Inspection{Free: true, Rule: "nexusphp"},
+			want: Inspection{Free: true, HRUnknown: true, Rule: "nexusphp"},
 		},
 		{
 			name: "2x free icon in title",
 			page: user + `<h1 id="top">Name <img class="pro_free2up" src="pic/trans.gif"></h1>`,
-			want: Inspection{Free: true, Rule: "nexusphp"},
+			want: Inspection{Free: true, HRUnknown: true, Rule: "nexusphp"},
 		},
 		{
 			name: "free class outside title is ignored",
 			page: user + `<h1 id="top">Name</h1><div><span class="free">site-wide notice</span></div>`,
-			want: Inspection{Rule: "nexusphp"},
+			want: Inspection{HRUnknown: true, Rule: "nexusphp"},
 		},
 		{
-			name: "hit and run",
+			name: "hit and run image is not read on a site Vertex has no H&R rule for",
 			page: user + `<h1 id="top">Name</h1><img class="hitandrun" src="pic/hr.png">`,
-			want: Inspection{HR: true, Rule: "nexusphp"},
+			want: Inspection{HRUnknown: true, Rule: "nexusphp"},
 		},
 		{
 			name:    "logged out",

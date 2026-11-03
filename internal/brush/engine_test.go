@@ -295,6 +295,44 @@ func TestPipelineRacesOnlyFreshFreeTorrentsWithinCommittedSpace(t *testing.T) {
 	require.Equal(t, []int64{50 << 20}, qb.dlLimits, "and the site's download limit")
 }
 
+// A feed that skips H&R on a site with no H&R rule refuses its torrents, as Vertex
+// did, since a page without a known marker proves nothing.
+func TestSkipHROnUnreadableSiteRefuses(t *testing.T) {
+	ctx := t.Context()
+	db := testdb.NewMigratedSQLite(t, t.Name())
+	cipher, err := models.NewCredentialCipher(make([]byte, 32))
+	require.NoError(t, err)
+	qb := &fakeQB{free: map[int]int64{1: 100 * gib}}
+	svc, err := New(ctx, db, cipher, qb)
+	require.NoError(t, err)
+
+	fs := &fakeSite{files: map[int][]byte{}}
+	srv := httptest.NewServer(fs)
+	t.Cleanup(srv.Close)
+	siteID, err := svc.store.CreateSite(ctx, store.Site{Name: "pt", BaseURL: srv.URL, Cookie: "c=1"})
+	require.NoError(t, err)
+	feedID, err := svc.store.CreateFeed(ctx, store.Feed{SiteID: siteID, Name: "hr", URL: srv.URL + "/rss.php",
+		IntervalSeconds: 15, MaxSizeBytes: 50 * gib, SkipHR: true, WindowSeconds: 300, InstanceIDs: []int{1}, Enabled: true})
+	require.NoError(t, err)
+	require.NoError(t, svc.store.SetFloor(ctx, 1, 10*gib))
+	feed, err := svc.store.GetFeed(ctx, feedID)
+	require.NoError(t, err)
+
+	now := time.Now()
+	svc.poll(ctx, feed)
+	fs.set(t, fakeTorrent{id: 1, published: now.Add(-time.Minute), size: 10 * gib, free: true})
+	svc.poll(ctx, feed)
+
+	var entries []store.Entry
+	require.Eventually(t, func() bool {
+		entries, err = svc.store.RecentEntries(ctx, "", 10)
+		require.NoError(t, err)
+		return len(entries) == 1 && entries[0].Status == store.StatusRejected
+	}, 10*time.Second, 50*time.Millisecond)
+	require.True(t, strings.HasPrefix(entries[0].Reason, reasonInspect), entries[0].Reason)
+	require.Zero(t, qb.addCount())
+}
+
 func TestCommittedSpaceCountsReservationsUntilListed(t *testing.T) {
 	torrents := []qbt.Torrent{{Hash: "listed", AmountLeft: 30 * gib}, {Hash: "done", AmountLeft: 0}}
 	reservations := []store.Reservation{{InfoHash: "listed", SizeBytes: 40 * gib}, {InfoHash: "pending", SizeBytes: 10 * gib}}

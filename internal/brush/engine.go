@@ -213,6 +213,12 @@ func (s *Service) process(ctx context.Context, f store.Feed, client *site.NexusP
 			reject(reasonNotFree, "")
 			return
 		}
+		// Like Vertex, a site whose H&R markers brush cannot read refuses the torrent
+		// rather than letting an H&R one through.
+		if f.SkipHR && insp.HRUnknown {
+			reject(reasonInspect, "this site's H&R markers cannot be read")
+			return
+		}
 		if f.SkipHR && insp.HR {
 			reject(reasonHR, "")
 			return

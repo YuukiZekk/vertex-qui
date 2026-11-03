@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +30,8 @@ var ErrNotLoggedIn = errors.New("site page has no user link; the cookie is proba
 type Inspection struct {
 	Free bool
 	HR   bool
+	// HRUnknown is set when the site has no H&R rule, so HR false proves nothing.
+	HRUnknown bool
 	// Rule names the site rule that read the page.
 	Rule string
 }
@@ -117,19 +118,34 @@ func (n *NexusPHP) Inspect(ctx context.Context, detailsURL string) (Inspection, 
 
 // InspectPage finds the promotion and H&R markers in a details page of the host.
 func InspectPage(host string, page []byte) (Inspection, error) {
-	if !bytes.Contains(page, []byte("userdetails")) {
+	r := ruleFor(host)
+	login := r.login
+	if login == "" {
+		login = "userdetails"
+	}
+	if !bytes.Contains(page, []byte(login)) {
 		return Inspection{}, ErrNotLoggedIn
 	}
 	doc, err := html.Parse(bytes.NewReader(page))
 	if err != nil {
 		return Inspection{}, fmt.Errorf("parse details page: %w", err)
 	}
-	r := ruleFor(host)
 	free, err := r.free(doc)
 	if err != nil {
 		return Inspection{}, err
 	}
-	return Inspection{Free: free, HR: r.hr(doc, page), Rule: r.name}, nil
+	insp := Inspection{Free: free, Rule: r.name, HRUnknown: r.hr == nil}
+	if r.hr != nil {
+		insp.HR = r.hr(doc)
+	}
+	return insp, nil
+}
+
+// ReadsHR reports whether brush knows how the host marks H&R torrents. Like Vertex,
+// it reads H&R only on the sites Vertex does, so skipping H&R elsewhere refuses
+// every torrent rather than letting an unrecognised H&R one through.
+func ReadsHR(host string) bool {
+	return !isMTeam(host) && !isColapt(host) && ruleFor(host).hr != nil
 }
 
 func (n *NexusPHP) Download(ctx context.Context, rawURL string) ([]byte, error) {
@@ -218,24 +234,6 @@ func findByID(n *html.Node, id string) *html.Node {
 		}
 	}
 	return nil
-}
-
-func hasClass(n *html.Node, classes ...string) bool {
-	if n.Type == html.ElementNode {
-		for _, have := range strings.Fields(attr(n, "class")) {
-			for _, want := range classes {
-				if have == want {
-					return true
-				}
-			}
-		}
-	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		if hasClass(c, classes...) {
-			return true
-		}
-	}
-	return false
 }
 
 func attr(n *html.Node, key string) string {
