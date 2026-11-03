@@ -41,6 +41,11 @@ func TestSiteRules(t *testing.T) {
 		{"hudbt minor list", "hudbt.hust.edu.cn", `<div class="minor-list"><img class="twoupfree"></div>`, true, false, "hudbt"},
 		{"hdcity font", "hdcity.city", `<font class="free">Free</font>`, true, false, "hdcity"},
 		{"chdbits text hr", "ptchdbits.co", `<h1 id="top">x <font class="free">Free</font></h1><table><tr><td><b>H&amp;R:&nbsp;</b>5day</td></tr></table>`, true, true, "chdbits"},
+		// The basic info row as the source writes it: a raw "&", line breaks, and the row left open.
+		{"chdbits revival hr in the info row", "ptchdbits.co", "<h1 id=\"top\">x <font class=\"free\">Free</font></h1><table><tr><td class=\"rowhead\">基本信息</td>\n" +
+			"<td class=\"rowfollow\"><b>大小：</b>23.36 GB&nbsp;&nbsp;&nbsp;<b>制作组:&nbsp;</b>压制组&nbsp;&nbsp;&nbsp;<b>H&R:&nbsp;</b>3day\n</table>", true, true, "chdbits"},
+		{"chdbits without hr", "ptchdbits.co", `<h1 id="top">x</h1><table><tr><td><b>制作组:&nbsp;</b>压制组</td></tr></table>`, false, false, "chdbits"},
+		{"chdbits h&r of another length is not hr", "ptchdbits.co", `<h1 id="top">x</h1><table><tr><td><b>H&amp;R:&nbsp;</b>0day</td></tr></table>`, false, false, "chdbits"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

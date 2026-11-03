@@ -4,7 +4,6 @@
 package site
 
 import (
-	"bytes"
 	"errors"
 	"slices"
 	"strings"
@@ -146,10 +145,35 @@ func hrTTG(doc *html.Node, _ []byte) bool {
 	}) != nil
 }
 
-// hrCHDBits reads the H&R row of the details table, which CHDBits writes as text.
-func hrCHDBits(_ *html.Node, page []byte) bool {
-	return bytes.Contains(page, []byte("<b>H&amp;R:&nbsp;</b>5day</td></tr>")) ||
-		bytes.Contains(page, []byte("<b>H&amp;R:&nbsp;</b>3day</td></tr>"))
+// hrCHDBits reads the H&R field CHDBits writes as text at the end of the basic info
+// row: <b>H&R:&nbsp;</b>3day or 5day. Vertex matched that string in the page as
+// the browser re-serializes it, so the raw source, whose escaping and whitespace
+// differ, is not compared byte for byte; the parsed nodes are read instead.
+func hrCHDBits(doc *html.Node, _ []byte) bool {
+	return first(doc, func(n *html.Node) bool {
+		if !isTag(n, "b") || squash(text(n)) != "H&R:" {
+			return false
+		}
+		days := n.NextSibling
+		if days == nil || days.Type != html.TextNode {
+			return false
+		}
+		if d := squash(days.Data); d != "3day" && d != "5day" {
+			return false
+		}
+		// Only whitespace may follow it up to the end of the row.
+		for after := days.NextSibling; after != nil; after = after.NextSibling {
+			if after.Type != html.TextNode || squash(after.Data) != "" {
+				return false
+			}
+		}
+		return isTag(n.Parent, "td")
+	}) != nil
+}
+
+// squash trims a text, no-break spaces included.
+func squash(s string) string {
+	return strings.TrimSpace(strings.ReplaceAll(s, " ", " "))
 }
 
 // first returns the first node in document order that matches, n included.
