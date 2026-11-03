@@ -236,7 +236,9 @@
   },
   "log": {
     "title": "刷流日志",
-    "description": "刷流对每个新种的处理结果，以及为了腾出空间删掉的种子。"
+    "description": "刷流对每个新种的处理结果，以及为了腾出空间删掉的种子。",
+    "searchPlaceholder": "搜索种子名、订阅、hash 或原因",
+    "noMatch": "没有匹配的记录。"
   },
   "instanceTab": {
     "tab": "刷流",

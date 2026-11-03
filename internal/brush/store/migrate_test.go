@@ -187,9 +187,17 @@ func TestEntriesDedupeAndReservations(t *testing.T) {
 			res, err = s.Reservations(ctx, 1, time.Now().Add(-time.Minute))
 			require.NoError(t, err)
 			require.Empty(t, res)
-			entries, err := s.RecentEntries(ctx, 10)
+			entries, err := s.RecentEntries(ctx, "", 10)
 			require.NoError(t, err)
 			require.Equal(t, StatusUnknown, entries[len(entries)-1].Status)
+
+			found, err := s.RecentEntries(ctx, "HASH1", 10)
+			require.NoError(t, err)
+			require.Len(t, found, 1, "search matches the info hash, ignoring case")
+			require.Equal(t, idA, found[0].ID)
+			found, err = s.RecentEntries(ctx, "no such torrent", 10)
+			require.NoError(t, err)
+			require.Empty(t, found)
 		})
 	}
 }

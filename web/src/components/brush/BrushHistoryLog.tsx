@@ -45,13 +45,20 @@ const PAGE_SIZE = 10
 const statusTone: Record<string, Tone> = { added: "ok", rejected: "neutral", pending: "neutral", adding: "warn" }
 
 // BrushHistoryLog is what brush decided for each new torrent, newest first, in the
-// brush log under qui's logs.
-export function BrushHistoryLog() {
+// brush log under qui's logs, only those matching the search when there is one.
+export function BrushHistoryLog({ search }: { search: string }) {
   const { t } = useTranslation("brush")
   const [page, setPage] = useState(0)
+  const [searched, setSearched] = useState(search)
+  // A new search starts again from its first page.
+  if (searched !== search) {
+    setSearched(search)
+    setPage(0)
+  }
   const { data: entries } = useQuery({
-    queryKey: ["brush", "entries"],
-    queryFn: () => api.getBrushEntries(),
+    queryKey: ["brush", "entries", search],
+    queryFn: () => api.getBrushEntries(search),
+    placeholderData: (previous) => previous,
     refetchInterval: 5000,
   })
   const pageCount = Math.max(1, Math.ceil((entries?.length ?? 0) / PAGE_SIZE))
@@ -62,7 +69,7 @@ export function BrushHistoryLog() {
   return (
     <>
       <p className="px-6 py-3 text-sm text-muted-foreground">{t("history.description")}</p>
-      {entries?.length === 0 && <EmptyState>{t("history.empty")}</EmptyState>}
+      {entries?.length === 0 && <EmptyState>{search ? t("log.noMatch") : t("history.empty")}</EmptyState>}
       {(entries?.length ?? 0) > 0 && (
         <Table className={sectionTableClass}>
           <TableHeader>

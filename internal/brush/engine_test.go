@@ -262,7 +262,7 @@ func TestPipelineRacesOnlyFreshFreeTorrentsWithinCommittedSpace(t *testing.T) {
 
 	var entries []store.Entry
 	require.Eventually(t, func() bool {
-		entries, err = svc.store.RecentEntries(ctx, 20)
+		entries, err = svc.store.RecentEntries(ctx, "", 20)
 		require.NoError(t, err)
 		for _, e := range entries {
 			if e.Status == store.StatusPending || e.Status == store.StatusAdding {

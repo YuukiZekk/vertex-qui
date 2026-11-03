@@ -403,7 +403,7 @@ func (s *Service) deletePicks(ctx context.Context, st reapState, picks []torrent
 
 // handleDeletions returns the latest deletions, newest first.
 func (s *Service) handleDeletions(w http.ResponseWriter, r *http.Request) {
-	recent, err := s.store.RecentReaps(r.Context(), reapRecent)
+	recent, err := s.store.RecentReaps(r.Context(), r.URL.Query().Get("q"), reapRecent)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

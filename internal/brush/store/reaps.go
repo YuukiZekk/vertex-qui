@@ -66,11 +66,15 @@ func (s *Store) InsertReap(ctx context.Context, r Reap) (int64, error) {
 	return id, nil
 }
 
-// RecentReaps returns the newest deletions first.
-func (s *Store) RecentReaps(ctx context.Context, limit int) ([]Reap, error) {
+// RecentReaps returns the newest deletions first. A non-empty search keeps the
+// deletions whose name or info hash contains it, ignoring case.
+func (s *Store) RecentReaps(ctx context.Context, search string, limit int) ([]Reap, error) {
+	p := likePattern(search)
 	rows, err := s.db.QueryContext(ctx, `SELECT id, instance_id, info_hash, name, size_bytes, reason, first_at, age_seconds,
 			predicted, density, replacement, committed, need, floor_bytes, uploaded_first, ratio, files_kept
-		FROM brush_reaps WHERE executed = 1 ORDER BY first_at DESC, id DESC LIMIT ?`, limit)
+		FROM brush_reaps WHERE executed = 1
+			AND (CAST(? AS TEXT) = '' OR LOWER(name) LIKE ? ESCAPE '!' OR LOWER(info_hash) LIKE ? ESCAPE '!')
+		ORDER BY first_at DESC, id DESC LIMIT ?`, p, p, p, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list brush reaps: %w", err)
 	}

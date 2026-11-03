@@ -81,7 +81,7 @@ func TestAdmitMakesRoom(t *testing.T) {
 	require.Equal(t, 1, instanceID)
 	require.Equal(t, []fakeDeletion{{1, "idle", true}}, qb.deleted)
 	require.Empty(t, qb.reannounced, "no announce wait while a torrent races")
-	deletions, err := svc.store.RecentReaps(ctx, 10)
+	deletions, err := svc.store.RecentReaps(ctx, "", 10)
 	require.NoError(t, err)
 	require.Len(t, deletions, 1)
 	require.Equal(t, store.ReapMakeRoom, deletions[0].Reason)

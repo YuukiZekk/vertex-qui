@@ -2987,8 +2987,8 @@ class ApiClient {
     return this.request<BrushTestItem[]>(`/brush/feeds/${id}/test`, { method: "POST" })
   }
 
-  async getBrushEntries(): Promise<BrushEntry[]> {
-    return this.request<BrushEntry[]>("/brush/entries")
+  async getBrushEntries(search = ""): Promise<BrushEntry[]> {
+    return this.request<BrushEntry[]>(`/brush/entries${search ? `?q=${encodeURIComponent(search)}` : ""}`)
   }
 
   async getBrushGroups(): Promise<BrushGroup[]> {
@@ -3027,8 +3027,8 @@ class ApiClient {
     return this.request<BrushPerfDetail[]>(`/brush/performance/entries?by=${by}&id=${id}&from=${from}&to=${to}`)
   }
 
-  async getBrushDeletions(): Promise<BrushDeletion[]> {
-    return this.request<BrushDeletion[]>("/brush/deletions")
+  async getBrushDeletions(search = ""): Promise<BrushDeletion[]> {
+    return this.request<BrushDeletion[]>(`/brush/deletions${search ? `?q=${encodeURIComponent(search)}` : ""}`)
   }
 }
 

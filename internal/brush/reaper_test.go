@@ -170,7 +170,7 @@ func TestReapDeletesBelowTheFloor(t *testing.T) {
 	require.Empty(t, qb.reannounced, "an emergency does not wait for the announce")
 	require.Equal(t, []string{"dl"}, qb.paused, "the download is paused first")
 
-	deletions, err := svc.store.RecentReaps(ctx, 10)
+	deletions, err := svc.store.RecentReaps(ctx, "", 10)
 	require.NoError(t, err)
 	require.Len(t, deletions, 2)
 	byHash := map[string]store.Reap{}

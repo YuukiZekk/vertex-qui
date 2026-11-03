@@ -52,7 +52,7 @@ func racePoll(t *testing.T, qb *fakeQB, floors map[int]int64, capacity, siteLimi
 
 	var entries []store.Entry
 	require.Eventually(t, func() bool {
-		entries, err = svc.store.RecentEntries(ctx, 50)
+		entries, err = svc.store.RecentEntries(ctx, "", 50)
 		require.NoError(t, err)
 		for _, e := range entries {
 			if e.Status == store.StatusPending || e.Status == store.StatusAdding {

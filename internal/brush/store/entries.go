@@ -9,8 +9,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
+
+// likePattern turns a search term into a LIKE pattern, with '!' as the escape
+// character, that matches it anywhere, lower-cased and with LIKE's wildcards taken
+// literally. An empty term stays empty.
+func likePattern(search string) string {
+	search = strings.ToLower(strings.TrimSpace(search))
+	if search == "" {
+		return ""
+	}
+	return "%" + strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(search) + "%"
+}
 
 // Entry statuses. "adding" is held while the add request is in flight; the unique
 // index on (info_hash, instance_id) over adding/added stops a second feed that
@@ -152,12 +164,16 @@ func (s *Store) MarkInterruptedAdds(ctx context.Context) error {
 }
 
 // RecentEntries returns the newest decisions for the history view, skipping the
-// baseline rows a first poll writes.
-func (s *Store) RecentEntries(ctx context.Context, limit int) ([]Entry, error) {
+// baseline rows a first poll writes. A non-empty search keeps the entries whose
+// title, feed, info hash or reason contains it, ignoring case.
+func (s *Store) RecentEntries(ctx context.Context, search string, limit int) ([]Entry, error) {
+	p := likePattern(search)
 	rows, err := s.db.QueryContext(ctx, `SELECT e.id, e.feed_id, f.name, e.title, e.size_bytes, e.link, e.published_at,
 		e.first_seen_at, e.status, e.reason, e.info_hash, e.instance_id, e.decided_at, e.placement
 		FROM brush_entries e JOIN brush_feeds f ON f.id = e.feed_id
-		WHERE e.status <> ? ORDER BY e.id DESC LIMIT ?`, StatusBaseline, limit)
+		WHERE e.status <> ? AND (CAST(? AS TEXT) = '' OR LOWER(e.title) LIKE ? ESCAPE '!' OR LOWER(f.name) LIKE ? ESCAPE '!'
+			OR LOWER(e.info_hash) LIKE ? ESCAPE '!' OR LOWER(e.reason) LIKE ? ESCAPE '!')
+		ORDER BY e.id DESC LIMIT ?`, StatusBaseline, p, p, p, p, p, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list brush entries: %w", err)
 	}

@@ -17,12 +17,13 @@ function formatAge(seconds: number): string {
 }
 
 // BrushDeletionsLog lists the torrents brush deleted to make room, newest first,
-// in the brush log under qui's logs.
-export function BrushDeletionsLog() {
+// in the brush log under qui's logs, only those matching the search when there is one.
+export function BrushDeletionsLog({ search }: { search: string }) {
   const { t } = useTranslation("brush")
   const { data } = useQuery({
-    queryKey: ["brush", "deletions"],
-    queryFn: () => api.getBrushDeletions(),
+    queryKey: ["brush", "deletions", search],
+    queryFn: () => api.getBrushDeletions(search),
+    placeholderData: (previous) => previous,
     refetchInterval: 30000,
   })
   const { data: status } = useQuery({ queryKey: ["brush", "status"], queryFn: () => api.getBrushStatus() })
@@ -31,7 +32,7 @@ export function BrushDeletionsLog() {
   return (
     <>
       <p className="px-6 py-3 text-sm text-muted-foreground">{t("deletions.info")}</p>
-      {data?.length === 0 && <EmptyState>{t("deletions.empty")}</EmptyState>}
+      {data?.length === 0 && <EmptyState>{search ? t("log.noMatch") : t("deletions.empty")}</EmptyState>}
       {(data?.length ?? 0) > 0 && (
         <Table className={sectionTableClass}>
           <TableHeader>

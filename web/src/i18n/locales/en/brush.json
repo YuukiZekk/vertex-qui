@@ -236,7 +236,9 @@
   },
   "log": {
     "title": "Brush log",
-    "description": "What brush decided for each new torrent, and the torrents it deleted to make room."
+    "description": "What brush decided for each new torrent, and the torrents it deleted to make room.",
+    "searchPlaceholder": "Search name, feed, hash or reason",
+    "noMatch": "No matching records."
   },
   "instanceTab": {
     "tab": "Brush",

@@ -411,7 +411,7 @@ func (s *Service) handleTestFeed(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleEntries(w http.ResponseWriter, r *http.Request) {
-	entries, err := s.store.RecentEntries(r.Context(), historyLimit)
+	entries, err := s.store.RecentEntries(r.Context(), r.URL.Query().Get("q"), historyLimit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

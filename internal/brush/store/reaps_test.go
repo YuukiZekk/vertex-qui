@@ -35,7 +35,7 @@ func TestReapsRoundTrip(t *testing.T) {
 				VALUES (1, 'p', 'P', 0, 'need_space', ?, 0, 1, 0, 0, 0, 0, 0, 0, 0)`, at.Add(2*time.Minute).Unix())
 			require.NoError(t, err)
 
-			reaps, err := s.RecentReaps(ctx, 10)
+			reaps, err := s.RecentReaps(ctx, "", 10)
 			require.NoError(t, err)
 			require.Len(t, reaps, 2)
 			require.Equal(t, "b", reaps[0].InfoHash, "newest first")
@@ -50,8 +50,16 @@ func TestReapsRoundTrip(t *testing.T) {
 			require.InDelta(t, density, *a.Density, 1e-9)
 			require.InDelta(t, replacement, *a.Replacement, 1e-9)
 
+			found, err := s.RecentReaps(ctx, " a ", 10)
+			require.NoError(t, err)
+			require.Len(t, found, 1, "search ignores case and surrounding spaces")
+			require.Equal(t, "a", found[0].InfoHash)
+			found, err = s.RecentReaps(ctx, "%", 10)
+			require.NoError(t, err)
+			require.Empty(t, found, "a LIKE wildcard in the search is taken literally")
+
 			require.NoError(t, s.PruneReaps(ctx, at.Add(reapRetention+30*time.Second)))
-			reaps, err = s.RecentReaps(ctx, 10)
+			reaps, err = s.RecentReaps(ctx, "", 10)
 			require.NoError(t, err)
 			require.Len(t, reaps, 1, "only the older one is past retention")
 		})
