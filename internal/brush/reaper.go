@@ -183,12 +183,13 @@ func demand(feeds []store.Feed, arrivals []store.Arrival, configs map[int]store.
 			continue
 		}
 		var ids []int
-		for _, id := range f.InstanceIDs {
+		targets, all := f.Targets()
+		for _, id := range targets {
 			if _, ok := configs[id]; ok {
 				ids = append(ids, id)
 			}
 		}
-		if len(f.InstanceIDs) == 0 {
+		if all {
 			for id := range configs {
 				ids = append(ids, id)
 			}

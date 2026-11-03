@@ -5,7 +5,7 @@
 
 import { Button } from "@/components/ui/button"
 import { formatBytes } from "@/lib/utils"
-import type { BrushFlowInstance, BrushFlowPeer } from "@/types/brush"
+import type { BrushFlowCountry, BrushFlowInstance, BrushFlowPeer } from "@/types/brush"
 import { geoGraticule10, geoMercator, geoPath } from "d3-geo"
 import { Minus, Plus } from "lucide-react"
 import { useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react"
@@ -63,13 +63,14 @@ interface Line {
   title: string
 }
 
-// FlowMap draws each server at its region with glowing arcs to the countries its
-// peers are in now. A pulse runs along each arc the way the data goes: out to the
-// peer for uploads, in to the server for downloads. Thicker arcs move more.
+// FlowMap draws the flows flat, as pipes and pools like the globe: each arc is a
+// pipe as wide as what moves through it now, with a pulse running the way the data
+// goes, and each peer country is a pool sized and shaded by what it moved today.
 // colorOf gives each server its colour when arcs are coloured by server.
-export function FlowMap({ instances, peers, colorBy, colorOf }: {
+export function FlowMap({ instances, peers, today, colorBy, colorOf }: {
   instances: BrushFlowInstance[]
   peers: BrushFlowPeer[]
+  today: BrushFlowCountry[]
   colorBy: FlowColorBy
   colorOf: (id: number) => string
 }) {
@@ -86,7 +87,7 @@ export function FlowMap({ instances, peers, colorBy, colorOf }: {
   const svgRef = useRef<SVGSVGElement>(null)
 
   const { clusters, lines, dots } = useMemo(() => {
-    const model = buildFlows(instances, peers)
+    const model = buildFlows(instances, peers, today)
     const speed = (bytes: number) => `${formatBytes(bytes)}/s`
     const lines: Line[] = model.arcs.map((a) => {
       const from = projection(a.serverAt)!
@@ -109,12 +110,13 @@ export function FlowMap({ instances, peers, colorBy, colorOf }: {
       lines,
       dots: model.countries.map((c) => ({ ...c, at: projection(c.at)! })),
     }
-  }, [instances, peers, colorBy, colorOf, names])
+  }, [instances, peers, today, colorBy, colorOf, names])
 
   const maxSpeed = Math.max(1, ...lines.map((l) => l.speed))
-  const maxCountry = Math.max(1, ...dots.map((d) => d.speed))
-  // Close to linear, so an arc moving twice as much looks clearly thicker.
-  const width = (s: number) => 0.6 + 3.4 * Math.pow(s / maxSpeed, 0.75)
+  const maxTotal = Math.max(1, ...dots.map((d) => d.total))
+  // Close to linear, so a pipe moving twice as much looks clearly wider.
+  const width = (s: number) => 0.6 + 4.4 * Math.pow(s / maxSpeed, 0.7)
+  const pool = (d: (typeof dots)[number]) => heatShare(d.total, maxTotal)
   const labelled = new Set(dots.slice(0, LABELLED_COUNTRIES).map((d) => d.code))
   const clusterCodes = new Set(clusters.map((c) => c.code))
   const k = view.k
@@ -177,13 +179,15 @@ export function FlowMap({ instances, peers, colorBy, colorOf }: {
           .flow-ping { animation: flow-ping 2.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
           @keyframes flow-run { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
           @keyframes flow-ping { from { transform: scale(1); opacity: .7; } to { transform: scale(3.4); opacity: 0; } }
-          @media (prefers-reduced-motion: reduce) { .flow-pulse, .flow-ping { animation: none; } }
+          .flow-pool { animation: flow-pool 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+          @keyframes flow-pool { 50% { transform: scale(1.08); } }
+          @media (prefers-reduced-motion: reduce) { .flow-pulse, .flow-ping, .flow-pool { animation: none; } }
         `}</style>
         <g transform={`translate(${view.x},${view.y}) scale(${k})`}>
           <path d={gridPath} fill="none" stroke={GRID} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
           <path d={landPath} fill={LAND} />
-          {dots.map((d) => countryPaths.has(d.code) && d.speed > 0 && (
-            <path key={`shade:${d.code}`} d={countryPaths.get(d.code)} fill={heatColor(heatShare(d.speed, maxCountry), 0.6)} />
+          {dots.map((d) => countryPaths.has(d.code) && d.total > 0 && (
+            <path key={`shade:${d.code}`} d={countryPaths.get(d.code)} fill={heatColor(pool(d), 0.55)} />
           ))}
           <path d={borderPath} fill="none" stroke={BORDER} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
 
@@ -203,10 +207,14 @@ export function FlowMap({ instances, peers, colorBy, colorOf }: {
 
           {dots.map((d) => (
             <g key={d.code}>
-              <circle cx={d.at[0]} cy={d.at[1]} r={2.6 / k} fill="#e2e8f0" stroke={MAP_BG} strokeWidth={1 / k}>
-                <title>{t("flows.countryTitle", {
-                  country: countryName(names, d.code), count: d.connections,
-                  upload: `${formatBytes(d.upload)}/s`, download: `${formatBytes(d.download)}/s`,
+              {d.total > 0 && (
+                <circle cx={d.at[0]} cy={d.at[1]} r={(3 + 16 * pool(d)) / k} fill={heatColor(pool(d), 0.35)}
+                  stroke={heatColor(pool(d), 0.95)} strokeWidth={1.2 / k} className="flow-pool" />
+              )}
+              <circle cx={d.at[0]} cy={d.at[1]} r={2.4 / k} fill="#e2e8f0" stroke={MAP_BG} strokeWidth={1 / k}>
+                <title>{t("flows.countryToday", {
+                  country: countryName(names, d.code), uploaded: formatBytes(d.uploaded), downloaded: formatBytes(d.downloaded),
+                  count: d.connections, upload: `${formatBytes(d.upload)}/s`, download: `${formatBytes(d.download)}/s`,
                 })}</title>
               </circle>
               {dotLabel.has(d.code) && (
@@ -252,14 +260,14 @@ export function FlowMap({ instances, peers, colorBy, colorOf }: {
             {[0.08, 0.35, 1].map((share) => (
               <span key={share} className="w-4 rounded-full bg-slate-300" style={{ height: width(share * maxSpeed) }} />
             ))}
-            {t("flows.legendWidth", { speed: `${formatBytes(maxSpeed)}/s` })}
+            {t("flows.legendPipe", { speed: `${formatBytes(maxSpeed)}/s` })}
           </span>
         )}
-        {dots.length > 0 && (
+        {dots.some((d) => d.total > 0) && (
           <span className="flex items-center gap-1.5">
-            {t("flows.heatLow")}
+            {t("flows.legendPool")}
             <span className="h-1.5 w-16 rounded-full" style={{ background: heatGradient }} />
-            {t("flows.heatHigh")}
+            {t("flows.heatHigh", { total: formatBytes(maxTotal) })}
           </span>
         )}
       </div>

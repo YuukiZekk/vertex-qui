@@ -78,15 +78,15 @@ func (s *Service) admit(ctx context.Context, f store.Feed, entryID int64, tf sit
 		byID[inst.ID] = inst
 	}
 
-	ids := f.InstanceIDs
-	if len(ids) == 0 {
+	ids, all := f.Targets()
+	if all {
 		for id := range configs {
 			ids = append(ids, id)
 		}
 		sort.Ints(ids)
-		if len(ids) == 0 {
-			return 0, reasonNoFloor, ""
-		}
+	}
+	if len(ids) == 0 {
+		return 0, reasonNoFloor, ""
 	}
 
 	p := placement{Candidates: make([]candidate, 0, len(ids))}

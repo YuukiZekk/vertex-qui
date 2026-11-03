@@ -34,6 +34,12 @@ func (s *Service) Routes(r chi.Router) {
 	r.Put("/instances/{instanceID}/floor", s.handleFloor)
 	r.Put("/instances/{instanceID}/capacity", s.handleCapacity)
 	r.Put("/instances/{instanceID}/country", s.handleCountry)
+	r.Put("/instances/{instanceID}/groups", s.handleInstanceGroups)
+
+	r.Get("/groups", s.handleListGroups)
+	r.Post("/groups", s.handleSaveGroup)
+	r.Put("/groups/{id}", s.handleSaveGroup)
+	r.Delete("/groups/{id}", s.handleDeleteGroup)
 
 	r.Get("/sites", s.handleListSites)
 	r.Post("/sites", s.handleSaveSite)
@@ -71,8 +77,10 @@ type instanceStatus struct {
 	UploadCapacity int64 `json:"uploadCapacity"`
 	// CountryCode is where the instance runs, for its flag; empty when not set.
 	CountryCode string `json:"countryCode"`
-	UploadRate  *int64 `json:"uploadRate"`
-	Error       string `json:"error,omitempty"`
+	// GroupIDs are the groups the instance is in.
+	GroupIDs   []int64 `json:"groupIds"`
+	UploadRate *int64  `json:"uploadRate"`
+	Error      string  `json:"error,omitempty"`
 }
 
 type statusResponse struct {
@@ -99,6 +107,11 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	groups, err := s.store.InstanceGroups(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 
 	resp := statusResponse{Enabled: enabled, Instances: make([]instanceStatus, 0, len(instances))}
 	local := s.now().Local()
@@ -107,7 +120,10 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, inst := range instances {
-		st := instanceStatus{ID: inst.ID, Name: inst.Name, Active: inst.Active}
+		st := instanceStatus{ID: inst.ID, Name: inst.Name, Active: inst.Active, GroupIDs: groups[inst.ID]}
+		if st.GroupIDs == nil {
+			st.GroupIDs = []int64{}
+		}
 		if cfg, ok := configs[inst.ID]; ok {
 			st.FloorBytes = &cfg.FloorBytes
 			st.UploadCapacity = cfg.UploadCapacity
@@ -241,19 +257,20 @@ func (s *Service) handleDeleteSite(w http.ResponseWriter, r *http.Request) {
 var errSiteHasFeeds = errors.New("delete the site's feeds first")
 
 type feedBody struct {
-	SiteID           int64  `json:"siteId"`
-	Name             string `json:"name"`
-	URL              string `json:"url"`
-	IntervalSeconds  int    `json:"intervalSeconds"`
-	MinSizeBytes     int64  `json:"minSizeBytes"`
-	MaxSizeBytes     int64  `json:"maxSizeBytes"`
-	FreeOnly         bool   `json:"freeOnly"`
-	SkipHR           bool   `json:"skipHr"`
-	WindowSeconds    int    `json:"windowSeconds"`
-	AgeFromFirstSeen bool   `json:"ageFromFirstSeen"`
-	Category         string `json:"category"`
-	InstanceIDs      []int  `json:"instanceIds"`
-	Enabled          bool   `json:"enabled"`
+	SiteID           int64   `json:"siteId"`
+	Name             string  `json:"name"`
+	URL              string  `json:"url"`
+	IntervalSeconds  int     `json:"intervalSeconds"`
+	MinSizeBytes     int64   `json:"minSizeBytes"`
+	MaxSizeBytes     int64   `json:"maxSizeBytes"`
+	FreeOnly         bool    `json:"freeOnly"`
+	SkipHR           bool    `json:"skipHr"`
+	WindowSeconds    int     `json:"windowSeconds"`
+	AgeFromFirstSeen bool    `json:"ageFromFirstSeen"`
+	Category         string  `json:"category"`
+	InstanceIDs      []int   `json:"instanceIds"`
+	GroupIDs         []int64 `json:"groupIds"`
+	Enabled          bool    `json:"enabled"`
 }
 
 func (s *Service) handleListFeeds(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +294,7 @@ func (s *Service) handleSaveFeed(w http.ResponseWriter, r *http.Request) {
 		SiteID: body.SiteID, Name: strings.TrimSpace(body.Name), URL: strings.TrimSpace(body.URL),
 		IntervalSeconds: body.IntervalSeconds, MinSizeBytes: body.MinSizeBytes, MaxSizeBytes: body.MaxSizeBytes,
 		FreeOnly: body.FreeOnly, SkipHR: body.SkipHR, WindowSeconds: body.WindowSeconds, AgeFromFirstSeen: body.AgeFromFirstSeen, Category: strings.TrimSpace(body.Category),
-		InstanceIDs: normalizeIDs(body.InstanceIDs), Enabled: body.Enabled,
+		InstanceIDs: normalizeIDs(body.InstanceIDs), GroupIDs: normalizeIDs(body.GroupIDs), Enabled: body.Enabled,
 	}
 	create := chi.URLParam(r, "id") == ""
 	if msg := validateFeed(f, create); msg != "" {
@@ -294,7 +311,10 @@ func (s *Service) handleSaveFeed(w http.ResponseWriter, r *http.Request) {
 }
 
 // normalizeIDs sorts the ids and drops duplicates.
-func normalizeIDs(ids []int) []int {
+func normalizeIDs[T int | int64](ids []T) []T {
+	if ids == nil {
+		return []T{}
+	}
 	out := slices.Clone(ids)
 	slices.Sort(out)
 	return slices.Compact(out)
@@ -304,8 +324,10 @@ func validateFeed(f store.Feed, create bool) string {
 	switch {
 	case f.Name == "" || f.SiteID == 0:
 		return "name and siteId are required"
-	case len(f.InstanceIDs) == 0 || f.InstanceIDs[0] <= 0:
-		return "instanceIds must list at least one instance"
+	case len(f.InstanceIDs) == 0 && len(f.GroupIDs) == 0:
+		return "pick at least one instance or group"
+	case len(f.InstanceIDs) > 0 && f.InstanceIDs[0] <= 0, len(f.GroupIDs) > 0 && f.GroupIDs[0] <= 0:
+		return "instance and group ids must be positive"
 	case create && !isHTTPURL(f.URL), !create && f.URL != "" && !isHTTPURL(f.URL):
 		return "url must be an http(s) URL"
 	case f.IntervalSeconds < minInterval:
@@ -445,7 +467,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 func writeStoreError(w http.ResponseWriter, err error) {
-	if errors.Is(err, errSiteHasFeeds) {
+	if errors.Is(err, errSiteHasFeeds) || errors.Is(err, errGroupNameTaken) {
 		writeError(w, http.StatusConflict, err)
 		return
 	}

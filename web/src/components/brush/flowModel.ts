@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-import type { BrushFlowInstance, BrushFlowPeer } from "@/types/brush"
+import type { BrushFlowCountry, BrushFlowInstance, BrushFlowPeer } from "@/types/brush"
 import { countryPoints } from "./countryPoints"
 
 // Arcs past this many, the slowest ones, are left out so the map stays readable.
@@ -30,6 +30,7 @@ export interface FlowArc {
   speed: number
 }
 
+// A peer country: what moves now, and what it moved today, which fills its pool.
 export interface FlowCountry {
   code: string
   at: LonLat
@@ -37,12 +38,16 @@ export interface FlowCountry {
   download: number
   connections: number
   speed: number
+  uploaded: number
+  downloaded: number
+  total: number
 }
 
 // buildFlows groups the connections into one arc per server, peer country and
-// direction, fastest first, and sums each peer country. Peers in the server's own
-// country, and servers or peers with no known country, get no arc.
-export function buildFlows(instances: BrushFlowInstance[], peers: BrushFlowPeer[]) {
+// direction, fastest first, and sums each peer country now and today, over the
+// given servers. Peers in the server's own country, and servers or peers with no
+// known country, get no arc.
+export function buildFlows(instances: BrushFlowInstance[], peers: BrushFlowPeer[], today: BrushFlowCountry[]) {
   const clusters = new Map<string, FlowCluster>()
   for (const inst of instances) {
     const at = countryPoints[inst.country]
@@ -59,7 +64,7 @@ export function buildFlows(instances: BrushFlowInstance[], peers: BrushFlowPeer[
   for (const p of peers) {
     const peerAt = countryPoints[p.country]
     if (!peerAt) continue
-    const c = countries.get(p.country) ?? { code: p.country, at: peerAt, upload: 0, download: 0, connections: 0, speed: 0 }
+    const c = countries.get(p.country) ?? emptyCountry(p.country, peerAt)
     c.upload += p.uploadSpeed
     c.download += p.downloadSpeed
     c.speed += p.uploadSpeed + p.downloadSpeed
@@ -78,9 +83,24 @@ export function buildFlows(instances: BrushFlowInstance[], peers: BrushFlowPeer[
     }
   }
 
+  for (const d of today) {
+    const at = countryPoints[d.country]
+    if (!at || !byServer.has(d.instanceId)) continue
+    const c = countries.get(d.country) ?? emptyCountry(d.country, at)
+    c.uploaded += d.uploaded
+    c.downloaded += d.downloaded
+    c.total += d.uploaded + d.downloaded
+    countries.set(d.country, c)
+  }
+
   return {
     clusters: [...clusters.values()],
     arcs: [...arcs.values()].sort((a, b) => b.speed - a.speed).slice(0, MAX_ARCS),
-    countries: [...countries.values()].sort((a, b) => b.speed - a.speed),
+    // Busiest today first, then busiest now.
+    countries: [...countries.values()].sort((a, b) => b.total - a.total || b.speed - a.speed),
   }
+}
+
+function emptyCountry(code: string, at: LonLat): FlowCountry {
+  return { code, at, upload: 0, download: 0, connections: 0, speed: 0, uploaded: 0, downloaded: 0, total: 0 }
 }

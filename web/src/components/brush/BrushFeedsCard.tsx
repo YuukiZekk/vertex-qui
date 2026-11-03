@@ -18,6 +18,8 @@ import { FlaskConical, Pencil, Plus, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { GroupPicker } from "./BrushGroups"
+import { useBrushGroups } from "./useBrushGroups"
 import { EmptyState, Field, FormSection, SectionCard, StateBadge, ToggleRow } from "./section"
 import { SiteIcon } from "./SiteIcon"
 import { sectionHeaderRowClass, sectionTableClass } from "./sectionStyles"
@@ -37,9 +39,14 @@ export function BrushFeedsCard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["brush"] }),
     onError: (err: Error) => toast.error(t("feeds.deleteFailed"), { description: err.message }),
   })
-  const instanceNames = (ids: number[]) => ids.length === 0
+  const { data: groups } = useBrushGroups()
+  // A feed lists its groups first, then the instances picked one by one.
+  const targetNames = (feed: BrushFeed) => feed.instanceIds.length === 0 && feed.groupIds.length === 0
     ? t("feeds.allInstances")
-    : ids.map((id) => status?.instances.find((i) => i.id === id)?.name ?? `#${id}`).join(", ")
+    : [
+      ...feed.groupIds.map((id) => t("groups.label", { name: groups?.find((g) => g.id === id)?.name ?? `#${id}` })),
+      ...feed.instanceIds.map((id) => status?.instances.find((i) => i.id === id)?.name ?? `#${id}`),
+    ].join(", ")
   const siteOf = (feed: BrushFeed) => sites?.find((s) => s.id === feed.siteId)
 
   return (
@@ -88,7 +95,7 @@ export function BrushFeedsCard() {
                       </div>
                     ) : "-"}
                   </TableCell>
-                  <TableCell>{instanceNames(feed.instanceIds)}</TableCell>
+                  <TableCell>{targetNames(feed)}</TableCell>
                   <TableCell>{t("feeds.sizeRangeValue", { min: bytesToGB(feed.minSizeBytes), max: bytesToGB(feed.maxSizeBytes) })}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {[
@@ -153,9 +160,10 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
     siteId: feed ? String(feed.siteId) : sites?.[0] ? String(sites[0].id) : "",
     // A new feed, or one saved when it meant every instance, starts with every
     // instance that has a floor checked.
-    instanceIds: feed?.instanceIds.length
+    instanceIds: feed && (feed.instanceIds.length || feed.groupIds.length)
       ? feed.instanceIds
       : status?.instances.filter((i) => i.floorBytes !== null).map((i) => i.id) ?? [],
+    groupIds: feed?.groupIds ?? [],
     // NexusPHP sites generally allow one RSS request a minute.
     intervalSeconds: String(feed?.intervalSeconds ?? 60),
     minGB: feed ? bytesToGB(feed.minSizeBytes) : "5",
@@ -177,6 +185,7 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
         url: form.url,
         siteId: selectedSite.id,
         instanceIds: form.instanceIds,
+        groupIds: form.groupIds,
         intervalSeconds: Number(form.intervalSeconds),
         minSizeBytes: gbToBytes(form.minGB),
         maxSizeBytes: gbToBytes(form.maxGB),
@@ -240,6 +249,11 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
           </FormSection>
 
           <FormSection title={t("feeds.instances")}>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t("groups.title")}</p>
+              <GroupPicker value={form.groupIds} onChange={(ids) => set("groupIds", ids)} />
+              <p className="text-xs text-muted-foreground">{t("feeds.groupsHelp")}</p>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {status?.instances.map((i) => (
                 <label
@@ -314,7 +328,7 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
         </div>
         <DialogFooter className="flex-shrink-0 border-t pt-4">
           <Button variant="outline" onClick={onClose}>{t("actions.cancel")}</Button>
-          <Button disabled={save.isPending || form.instanceIds.length === 0 || !selectedSite} onClick={() => save.mutate()}>{t("actions.save")}</Button>
+          <Button disabled={save.isPending || (form.instanceIds.length === 0 && form.groupIds.length === 0) || !selectedSite} onClick={() => save.mutate()}>{t("actions.save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

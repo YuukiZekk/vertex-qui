@@ -56,13 +56,13 @@ func TestSampleFlows(t *testing.T) {
 	require.NoError(t, svc.store.SetCountry(ctx, 1, "nl"))
 	siteID, err := svc.store.CreateSite(ctx, store.Site{Name: "pt", BaseURL: "https://pt.example"})
 	require.NoError(t, err)
-	_, err = svc.store.CreateFeed(ctx, store.Feed{SiteID: siteID, Name: "a", URL: "https://pt.example/a",
-		IntervalSeconds: 60, WindowSeconds: 300, InstanceIDs: []int{1}, Enabled: true})
+	group, err := svc.store.CreateGroup(ctx, "de")
 	require.NoError(t, err)
+	require.NoError(t, svc.store.SetInstanceGroups(ctx, 1, []int64{group}))
 
 	svc.sampleFlows(ctx)
 	snap := svc.flow
-	require.Equal(t, []flowInstance{{ID: 1, Name: "vps-1", Country: "nl", Brush: true, UploadSpeed: 6 << 20, DownloadSpeed: 1 << 20, Connections: 1}}, snap.Instances)
+	require.Equal(t, []flowInstance{{ID: 1, Name: "vps-1", Country: "nl", Groups: []int64{group}, UploadSpeed: 6 << 20, DownloadSpeed: 1 << 20, Connections: 1}}, snap.Instances)
 	require.Len(t, snap.Peers, 1, "only connections moving data")
 	require.Equal(t, flowPeer{InstanceID: 1, Hash: "busy", Torrent: "Busy", SiteID: siteID, IP: "1.2.3.4", Port: 5000,
 		Country: "de", UploadSpeed: 4 << 20}, snap.Peers[0])
@@ -73,6 +73,8 @@ func TestSampleFlows(t *testing.T) {
 	peers["5.6.7.8:6000"] = qbt.TorrentPeer{IP: "5.6.7.8", CountryCode: "jp", Uploaded: 40}
 	now = now.Add(flowInterval)
 	svc.sampleFlows(ctx)
+	require.Equal(t, []flowCountry{{InstanceID: 1, Country: "de", Uploaded: 300, Downloaded: 7}}, svc.flow.Today,
+		"today counts what is not written yet")
 	// The next day's first read writes what the day before still had pending.
 	now = now.Add(24 * time.Hour)
 	svc.sampleFlows(ctx)

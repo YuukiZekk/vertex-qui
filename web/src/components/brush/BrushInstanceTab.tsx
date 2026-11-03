@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { GroupManager, GroupPicker } from "./BrushGroups"
 import { countryOptions } from "./countries"
 import { CountryFlag } from "./CountryFlag"
 import { bytesPerSecondToMbps, bytesToGB, gbToBytes, mbpsToBytesPerSecond } from "./units"
@@ -29,7 +30,7 @@ export function BrushInstanceTab({ instanceId }: { instanceId: number }) {
 
   return (
     <TabsContent value="brush" className="mt-6 flex min-h-0 flex-1 flex-col overflow-hidden">
-      {inst ? <BrushInstanceForm key={`${inst.floorBytes}-${inst.uploadCapacity}-${inst.countryCode}`} inst={inst} /> : (
+      {inst ? <BrushInstanceForm key={`${inst.floorBytes}-${inst.uploadCapacity}-${inst.countryCode}-${inst.groupIds.join(",")}`} inst={inst} /> : (
         <p className="py-8 text-center text-sm text-muted-foreground">{t("status.loading")}</p>
       )}
     </TabsContent>
@@ -40,6 +41,8 @@ function BrushInstanceForm({ inst }: { inst: BrushInstanceStatus }) {
   const { t, i18n } = useTranslation("brush")
   const queryClient = useQueryClient()
   const [country, setCountry] = useState(inst.countryCode)
+  const [groupIds, setGroupIds] = useState(inst.groupIds)
+  const [managing, setManaging] = useState(false)
   const [floorGB, setFloorGB] = useState(inst.floorBytes === null ? "" : bytesToGB(inst.floorBytes))
   const [capacityMbps, setCapacityMbps] = useState(inst.uploadCapacity ? bytesPerSecondToMbps(inst.uploadCapacity) : "")
   // The capacity is stored with the floor, so the floor is saved first.
@@ -48,6 +51,7 @@ function BrushInstanceForm({ inst }: { inst: BrushInstanceStatus }) {
       await api.setBrushFloor(inst.id, gbToBytes(floorGB))
       await api.setBrushCapacity(inst.id, mbpsToBytesPerSecond(capacityMbps || "0"))
       await api.setBrushCountry(inst.id, country)
+      await api.setBrushInstanceGroups(inst.id, groupIds)
     },
     onSuccess: () => {
       toast.success(t("instanceTab.saved"))
@@ -109,6 +113,19 @@ function BrushInstanceForm({ inst }: { inst: BrushInstanceStatus }) {
               <p className="text-xs text-muted-foreground">{t("instanceTab.countryHelp")}</p>
             </div>
           </div>
+        </section>
+        <section className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="text-base font-medium">{t("groups.title")}</h3>
+              <p className="text-sm text-muted-foreground">{t("groups.instanceHelp")}</p>
+            </div>
+            <Button type="button" variant="ghost" size="sm" className="shrink-0 text-xs" onClick={() => setManaging(!managing)}>
+              {managing ? t("groups.doneManaging") : t("groups.manage")}
+            </Button>
+          </div>
+          <GroupPicker value={groupIds} onChange={setGroupIds} />
+          {managing && <GroupManager />}
         </section>
         <section className="space-y-4">
           <div className="space-y-1">

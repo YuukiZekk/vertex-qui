@@ -10,6 +10,7 @@ import { countryName, downloadText, serverColor, uploadText, type FlowColorBy } 
 import { EmptyState, SectionCard } from "@/components/brush/section"
 import { sectionHeaderRowClass, sectionTableClass } from "@/components/brush/sectionStyles"
 import { SiteIcon } from "@/components/brush/SiteIcon"
+import { useBrushGroups } from "@/components/brush/useBrushGroups"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -85,7 +86,7 @@ function ServerGroup({ label, servers, hidden, onChange, colorOf, colorBy }: {
   const all = servers.map((s) => s.id)
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <label className="flex w-24 shrink-0 cursor-pointer items-center gap-2 text-sm font-medium">
+      <label className="flex w-32 shrink-0 cursor-pointer items-center gap-2 text-sm font-medium">
         <Checkbox
           checked={shown === servers.length ? true : shown === 0 ? false : "indeterminate"}
           onCheckedChange={(v) => onChange(all, v === true)}
@@ -108,6 +109,7 @@ export function Flows() {
   const { t, i18n } = useTranslation("brush")
   const { data } = useQuery({ queryKey: ["brush", "flows"], queryFn: () => api.getBrushFlows(), refetchInterval: POLL_MS })
   const { data: sites } = useQuery({ queryKey: ["brush", "sites"], queryFn: () => api.getBrushSites() })
+  const { data: groups } = useBrushGroups()
   const [hidden, setHidden] = useState(() => new Set(readStored<number[]>(HIDDEN_KEY, [])))
   const [colorBy, setColorBy] = useState<FlowColorBy>(() => readStored<FlowColorBy>(COLOR_KEY, "direction"))
   const [view, setView] = useState<FlowView>(() => readStored<FlowView>(VIEW_KEY, "globe"))
@@ -170,17 +172,21 @@ export function Flows() {
     session: sum.session + (session[i.id]?.up ?? 0) + (session[i.id]?.down ?? 0),
   }), { up: 0, down: 0, connections: 0, session: 0 })
 
+  // Today's totals of the servers shown, which fill the pools on the map.
+  const today = useMemo(() => {
+    const ids = new Set(instances.map((i) => i.id))
+    return (data?.today ?? []).filter((d) => ids.has(d.instanceId))
+  }, [data, instances])
   const countries = useMemo(() => {
-    const byCode = new Map<string, { code: string, upload: number, download: number, connections: number }>()
-    for (const p of peers) {
-      const row = byCode.get(p.country) ?? { code: p.country, upload: 0, download: 0, connections: 0 }
-      row.upload += p.uploadSpeed
-      row.download += p.downloadSpeed
-      row.connections++
-      byCode.set(p.country, row)
+    const byCode = new Map<string, { code: string, uploaded: number, downloaded: number }>()
+    for (const d of today) {
+      const row = byCode.get(d.country) ?? { code: d.country, uploaded: 0, downloaded: 0 }
+      row.uploaded += d.uploaded
+      row.downloaded += d.downloaded
+      byCode.set(d.country, row)
     }
-    return [...byCode.values()].sort((a, b) => (b.upload + b.download) - (a.upload + a.download)).slice(0, 10)
-  }, [peers])
+    return [...byCode.values()].sort((a, b) => (b.uploaded + b.downloaded) - (a.uploaded + a.downloaded)).slice(0, 10)
+  }, [today])
 
   const instanceOf = (id: number) => allInstances.find((i) => i.id === id)
   const siteOf = (p: BrushFlowPeer) => sites?.find((s) => s.id === p.siteId)
@@ -197,10 +203,13 @@ export function Flows() {
       {allInstances.length > 0 && (
         <Card className="gap-0 py-0">
           <CardContent className="space-y-3 p-4">
-            <ServerGroup label={t("flows.brushServers")} servers={allInstances.filter((i) => i.brush)}
+            {(groups ?? []).map((g) => (
+              <ServerGroup key={g.id} label={g.name} servers={allInstances.filter((i) => i.groups.includes(g.id))}
+                hidden={hidden} onChange={toggle} colorOf={colorOf} colorBy={colorBy} />
+            ))}
+            <ServerGroup label={groups?.length ? t("flows.ungrouped") : t("flows.allServers")} servers={allInstances.filter((i) => i.groups.length === 0)}
               hidden={hidden} onChange={toggle} colorOf={colorOf} colorBy={colorBy} />
-            <ServerGroup label={t("flows.seedServers")} servers={allInstances.filter((i) => !i.brush)}
-              hidden={hidden} onChange={toggle} colorOf={colorOf} colorBy={colorBy} />
+            {!groups?.length && <p className="text-xs text-muted-foreground">{t("flows.groupsHint")}</p>}
           </CardContent>
         </Card>
       )}
@@ -239,10 +248,10 @@ export function Flows() {
           <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
             <div className="min-w-0 p-4">
               {view === "globe" ? (
-                <FlowGlobe instances={instances} peers={peers} colorBy={colorBy} colorOf={colorOf}
-                  fallback={<FlowMap instances={instances} peers={peers} colorBy={colorBy} colorOf={colorOf} />} />
+                <FlowGlobe instances={instances} peers={peers} today={today} colorBy={colorBy} colorOf={colorOf}
+                  fallback={<FlowMap instances={instances} peers={peers} today={today} colorBy={colorBy} colorOf={colorOf} />} />
               ) : (
-                <FlowMap instances={instances} peers={peers} colorBy={colorBy} colorOf={colorOf} />
+                <FlowMap instances={instances} peers={peers} today={today} colorBy={colorBy} colorOf={colorOf} />
               )}
               {noCountry.length > 0 && (
                 <p className="mt-2 text-xs text-muted-foreground">{t("flows.noCountry", { names: noCountry.map((i) => i.name).join("、") })}</p>
@@ -256,8 +265,8 @@ export function Flows() {
                     <li key={c.code || "unknown"} className="flex items-center gap-2">
                       <CountryFlag code={c.code} iconBox />
                       <span className="min-w-0 flex-1 truncate">{c.code ? countryName(names, c.code) : t("flows.unknownCountry")}</span>
-                      <span className={cn("tabular-nums text-xs", uploadText)}>{speed(c.upload)}</span>
-                      <span className={cn("tabular-nums text-xs", downloadText)}>{speed(c.download)}</span>
+                      <span className={cn("tabular-nums text-xs", uploadText)}>{formatBytes(c.uploaded)}</span>
+                      <span className={cn("tabular-nums text-xs", downloadText)}>{formatBytes(c.downloaded)}</span>
                     </li>
                   ))}
                 </ul>

@@ -135,7 +135,7 @@ import type {
   WarningResponse,
   WebSeed
 } from "@/types"
-import type { BrushDeletion, BrushEntry, BrushFeed, BrushFeedInput, BrushPerfDetail, BrushPerformance, BrushSite, BrushSiteInput, BrushSiteTest, BrushStatus, BrushTestItem, BrushTransferToday, BrushFlows } from "@/types/brush"
+import type { BrushDeletion, BrushEntry, BrushFeed, BrushFeedInput, BrushPerfDetail, BrushPerformance, BrushSite, BrushSiteInput, BrushSiteTest, BrushStatus, BrushTestItem, BrushTransferToday, BrushFlows, BrushGroup } from "@/types/brush"
 import type {
   ArrInstance,
   ArrInstanceFormData,
@@ -2989,6 +2989,26 @@ class ApiClient {
 
   async getBrushEntries(): Promise<BrushEntry[]> {
     return this.request<BrushEntry[]>("/brush/entries")
+  }
+
+  async getBrushGroups(): Promise<BrushGroup[]> {
+    return this.request<BrushGroup[]>("/brush/groups")
+  }
+
+  async createBrushGroup(name: string): Promise<{ id: number }> {
+    return this.request<{ id: number }>("/brush/groups", { method: "POST", body: JSON.stringify({ name }) })
+  }
+
+  async renameBrushGroup(id: number, name: string): Promise<void> {
+    await this.request<{ id: number }>(`/brush/groups/${id}`, { method: "PUT", body: JSON.stringify({ name }) })
+  }
+
+  async deleteBrushGroup(id: number): Promise<void> {
+    return this.request<void>(`/brush/groups/${id}`, { method: "DELETE" })
+  }
+
+  async setBrushInstanceGroups(instanceId: number, groupIds: number[]): Promise<void> {
+    return this.request<void>(`/brush/instances/${instanceId}/groups`, { method: "PUT", body: JSON.stringify({ groupIds }) })
   }
 
   async getBrushFlows(): Promise<BrushFlows> {

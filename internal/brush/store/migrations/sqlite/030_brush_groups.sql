@@ -1,0 +1,5 @@
+CREATE TABLE brush_groups (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	created_at BIGINT NOT NULL
+)

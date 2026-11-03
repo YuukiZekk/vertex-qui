@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,7 +36,11 @@ type Feed struct {
 	// InstanceIDs are the instances placement may choose from, in ascending order.
 	// Empty means every instance with a floor, which only feeds saved before
 	// instances could be picked one by one still have.
-	InstanceIDs  []int  `json:"instanceIds"`
+	InstanceIDs []int `json:"instanceIds"`
+	// GroupIDs are groups whose instances placement may also choose from.
+	GroupIDs []int64 `json:"groupIds"`
+	// members are the instances of GroupIDs when the feed was read.
+	members      []int
 	Enabled      bool   `json:"enabled"`
 	ETag         string `json:"-"`
 	LastModified string `json:"-"`
@@ -45,7 +50,7 @@ type Feed struct {
 
 const feedColumns = `id, site_id, name, url_encrypted, interval_seconds, min_size_bytes, max_size_bytes,
 	free_only, skip_hr, window_seconds, instance_id, instance_ids, enabled, etag, last_modified, last_fetch_at, last_error,
-	age_from_first_seen, category`
+	age_from_first_seen, category, group_ids`
 
 // formatInstanceIDs stores a feed's instances as a comma-separated list.
 func formatInstanceIDs(ids []int) string {
@@ -87,11 +92,11 @@ func (s *Store) ListFeeds(ctx context.Context) ([]Feed, error) {
 	var feeds []Feed
 	for rows.Next() {
 		var f Feed
-		var sealed, instanceIDs string
+		var sealed, instanceIDs, groupIDs string
 		var freeOnly, skipHR, enabled, legacyInstance, ageFromFirstSeen int
 		if err := rows.Scan(&f.ID, &f.SiteID, &f.Name, &sealed, &f.IntervalSeconds, &f.MinSizeBytes, &f.MaxSizeBytes,
 			&freeOnly, &skipHR, &f.WindowSeconds, &legacyInstance, &instanceIDs, &enabled, &f.ETag, &f.LastModified,
-			&f.LastFetchAt, &f.LastError, &ageFromFirstSeen, &f.Category); err != nil {
+			&f.LastFetchAt, &f.LastError, &ageFromFirstSeen, &f.Category, &groupIDs); err != nil {
 			return nil, fmt.Errorf("scan brush feed: %w", err)
 		}
 		f.FreeOnly, f.SkipHR, f.Enabled = freeOnly == 1, skipHR == 1, enabled == 1
@@ -99,12 +104,39 @@ func (s *Store) ListFeeds(ctx context.Context) ([]Feed, error) {
 		if f.InstanceIDs, err = parseInstanceIDs(instanceIDs, legacyInstance); err != nil {
 			return nil, fmt.Errorf("brush feed %d: %w", f.ID, err)
 		}
+		if f.GroupIDs, err = parseGroupIDs(groupIDs); err != nil {
+			return nil, fmt.Errorf("brush feed %d: %w", f.ID, err)
+		}
 		if f.URL, err = s.open(sealed, aadFeedURL); err != nil {
 			return nil, fmt.Errorf("decrypt url of brush feed %d: %w", f.ID, err)
 		}
 		feeds = append(feeds, f)
 	}
-	return feeds, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	members, err := s.GroupMembers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range feeds {
+		for _, g := range feeds[i].GroupIDs {
+			feeds[i].members = append(feeds[i].members, members[g]...)
+		}
+	}
+	return feeds, nil
+}
+
+// Targets are the instances placement may choose from: the feed's own and those
+// of its groups, in ascending order. all is true only for a feed saved before
+// instances could be picked, which names neither, and may use every instance.
+func (f Feed) Targets() (ids []int, all bool) {
+	if len(f.InstanceIDs) == 0 && len(f.GroupIDs) == 0 {
+		return nil, true
+	}
+	ids = append(slices.Clone(f.InstanceIDs), f.members...)
+	slices.Sort(ids)
+	return slices.Compact(ids), false
 }
 
 func (s *Store) GetFeed(ctx context.Context, id int64) (Feed, error) {
@@ -127,10 +159,10 @@ func (s *Store) CreateFeed(ctx context.Context, f Feed) (int64, error) {
 	}
 	var id int64
 	err = s.db.QueryRowContext(ctx, `INSERT INTO brush_feeds (site_id, name, url_encrypted, interval_seconds, min_size_bytes,
-		max_size_bytes, free_only, skip_hr, window_seconds, instance_id, instance_ids, enabled, age_from_first_seen, category, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?) RETURNING id`,
+		max_size_bytes, free_only, skip_hr, window_seconds, instance_id, instance_ids, enabled, age_from_first_seen, category, group_ids, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		f.SiteID, f.Name, sealed, f.IntervalSeconds, f.MinSizeBytes, f.MaxSizeBytes, boolInt(f.FreeOnly), boolInt(f.SkipHR),
-		f.WindowSeconds, formatInstanceIDs(f.InstanceIDs), boolInt(f.Enabled), boolInt(f.AgeFromFirstSeen), f.Category, time.Now().Unix()).Scan(&id)
+		f.WindowSeconds, formatInstanceIDs(f.InstanceIDs), boolInt(f.Enabled), boolInt(f.AgeFromFirstSeen), f.Category, formatGroupIDs(f.GroupIDs), time.Now().Unix()).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("create brush feed: %w", err)
 	}
@@ -141,9 +173,10 @@ func (s *Store) CreateFeed(ctx context.Context, f Feed) (int64, error) {
 // so the API never sends it back to the browser.
 func (s *Store) UpdateFeed(ctx context.Context, f Feed) error {
 	set := `site_id = ?, name = ?, interval_seconds = ?, min_size_bytes = ?, max_size_bytes = ?, free_only = ?,
-		skip_hr = ?, window_seconds = ?, instance_id = 0, instance_ids = ?, enabled = ?, age_from_first_seen = ?, category = ?`
+		skip_hr = ?, window_seconds = ?, instance_id = 0, instance_ids = ?, enabled = ?, age_from_first_seen = ?, category = ?, group_ids = ?`
 	args := []any{f.SiteID, f.Name, f.IntervalSeconds, f.MinSizeBytes, f.MaxSizeBytes, boolInt(f.FreeOnly),
-		boolInt(f.SkipHR), f.WindowSeconds, formatInstanceIDs(f.InstanceIDs), boolInt(f.Enabled), boolInt(f.AgeFromFirstSeen), f.Category}
+		boolInt(f.SkipHR), f.WindowSeconds, formatInstanceIDs(f.InstanceIDs), boolInt(f.Enabled), boolInt(f.AgeFromFirstSeen), f.Category,
+		formatGroupIDs(f.GroupIDs)}
 	if f.URL != "" {
 		sealed, err := s.seal(f.URL, aadFeedURL)
 		if err != nil {

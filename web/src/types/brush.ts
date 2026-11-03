@@ -20,6 +20,15 @@ export interface BrushInstanceStatus {
   error?: string
   // Where the instance runs, as a lower-case ISO code for its flag; empty when not set.
   countryCode: string
+  // The groups the instance is in.
+  groupIds: number[]
+}
+
+// A named set of instances; an instance may be in any number of them.
+export interface BrushGroup {
+  id: number
+  name: string
+  instanceIds: number[]
 }
 
 export interface BrushStatus {
@@ -85,6 +94,8 @@ export interface BrushFeed {
   // Brush puts each torrent on the least busy of these. Empty, only on feeds saved
   // before instances could be picked one by one, means every instance with a floor.
   instanceIds: number[]
+  // Brush also places on the instances these groups have at the time.
+  groupIds: number[]
   enabled: boolean
   lastFetchAt: number
   lastError: string
@@ -260,8 +271,8 @@ export interface BrushFlowInstance {
   id: number
   name: string
   country: string
-  // True when an enabled feed may add torrents to it; the others only seed.
-  brush: boolean
+  // The groups the instance is in.
+  groups: number[]
   // The whole instance's speeds, in bytes per second.
   uploadSpeed: number
   downloadSpeed: number
@@ -273,4 +284,14 @@ export interface BrushFlows {
   sampledAt: number
   instances: BrushFlowInstance[]
   peers: BrushFlowPeer[]
+  // What each instance moved with each country's peers today, in bytes.
+  today: BrushFlowCountry[]
+}
+
+export interface BrushFlowCountry {
+  instanceId: number
+  // Lower-case ISO code, empty when qBittorrent named no country.
+  country: string
+  uploaded: number
+  downloaded: number
 }

@@ -51,9 +51,8 @@ type flowInstance struct {
 	ID      int    `json:"id"`
 	Name    string `json:"name"`
 	Country string `json:"country"`
-	// Brush is true when an enabled feed may add torrents to the instance; the
-	// others only seed.
-	Brush bool `json:"brush"`
+	// Groups are the groups the instance is in.
+	Groups []int64 `json:"groups"`
 	// UploadSpeed and DownloadSpeed are the whole instance's, not only the torrents
 	// whose peers were read.
 	UploadSpeed   int64 `json:"uploadSpeed"`
@@ -62,10 +61,20 @@ type flowInstance struct {
 	Connections int `json:"connections"`
 }
 
+// flowCountry is what one instance moved with one country's peers today, over
+// every site, including what is not written yet.
+type flowCountry struct {
+	InstanceID int    `json:"instanceId"`
+	Country    string `json:"country"`
+	Uploaded   int64  `json:"uploaded"`
+	Downloaded int64  `json:"downloaded"`
+}
+
 type flowSnapshot struct {
 	SampledAt int64          `json:"sampledAt"`
 	Instances []flowInstance `json:"instances"`
 	Peers     []flowPeer     `json:"peers"`
+	Today     []flowCountry  `json:"today"`
 }
 
 type peerKey struct {
@@ -190,24 +199,16 @@ func (s *Service) sampleFlows(ctx context.Context) {
 		s.log.Error().Err(err).Msg("read brush torrent sites for flows")
 		return
 	}
-	feeds, err := s.store.ListFeeds(ctx)
+	groups, err := s.store.InstanceGroups(ctx)
 	if err != nil {
-		s.log.Error().Err(err).Msg("read brush feeds for flows")
+		s.log.Error().Err(err).Msg("read brush instance groups for flows")
 		return
-	}
-	brushing := make(map[int]bool)
-	for _, f := range feeds {
-		if f.Enabled {
-			for _, id := range f.InstanceIDs {
-				brushing[id] = true
-			}
-		}
 	}
 	matcher := newSiteMatcher(sites)
 	m := s.flowMeter
 	m.day = now.Format(time.DateOnly)
 
-	snap := flowSnapshot{SampledAt: now.Unix(), Instances: []flowInstance{}, Peers: []flowPeer{}}
+	snap := flowSnapshot{SampledAt: now.Unix(), Instances: []flowInstance{}, Peers: []flowPeer{}, Today: []flowCountry{}}
 	for _, inst := range instances {
 		if !inst.Active {
 			continue
@@ -216,7 +217,10 @@ func (s *Service) sampleFlows(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		fi := flowInstance{ID: inst.ID, Name: inst.Name, Country: configs[inst.ID].CountryCode, Brush: brushing[inst.ID]}
+		fi := flowInstance{ID: inst.ID, Name: inst.Name, Country: configs[inst.ID].CountryCode, Groups: groups[inst.ID]}
+		if fi.Groups == nil {
+			fi.Groups = []int64{}
+		}
 		if tr, ok, err := s.qui.Transfer(ctx, inst.ID); err == nil && ok {
 			fi.UploadSpeed, fi.DownloadSpeed = tr.ULSpeed, tr.DLSpeed
 		}
@@ -245,10 +249,51 @@ func (s *Service) sampleFlows(ctx context.Context) {
 	})
 	snap.Peers = snap.Peers[:min(len(snap.Peers), flowPeersShown)]
 	slices.SortFunc(snap.Instances, func(a, b flowInstance) int { return cmp.Compare(a.ID, b.ID) })
+	snap.Today = s.todayByCountry(ctx, m)
 
 	s.flowMu.Lock()
 	s.flow = snap
 	s.flowMu.Unlock()
+}
+
+// todayByCountry adds up today's stored totals and what the meter has not written
+// yet, per instance and country, across sites.
+func (s *Service) todayByCountry(ctx context.Context, m *peerMeter) []flowCountry {
+	type key struct {
+		instance int
+		country  string
+	}
+	sums := make(map[key]*flowCountry)
+	add := func(t store.PeerTransfer) {
+		k := key{t.InstanceID, t.CountryCode}
+		c := sums[k]
+		if c == nil {
+			c = &flowCountry{InstanceID: t.InstanceID, Country: t.CountryCode}
+			sums[k] = c
+		}
+		c.Uploaded += t.Uploaded
+		c.Downloaded += t.Downloaded
+	}
+	stored, err := s.store.PeerTransfersSince(ctx, m.day)
+	if err != nil {
+		s.log.Error().Err(err).Msg("read today's brush peer totals")
+	}
+	for _, t := range stored {
+		if t.Day == m.day {
+			add(t)
+		}
+	}
+	for _, t := range m.pending {
+		add(*t)
+	}
+	out := make([]flowCountry, 0, len(sums))
+	for _, c := range sums {
+		out = append(out, *c)
+	}
+	slices.SortFunc(out, func(a, b flowCountry) int {
+		return cmp.Or(cmp.Compare(a.InstanceID, b.InstanceID), strings.Compare(a.Country, b.Country))
+	})
+	return out
 }
 
 // flushFlows writes the pending per-country totals at most once per flowFlushEvery,
@@ -275,7 +320,7 @@ func (s *Service) handleFlows(w http.ResponseWriter, _ *http.Request) {
 	snap := s.flow
 	s.flowMu.RUnlock()
 	if snap.Instances == nil {
-		snap.Instances, snap.Peers = []flowInstance{}, []flowPeer{}
+		snap.Instances, snap.Peers, snap.Today = []flowInstance{}, []flowPeer{}, []flowCountry{}
 	}
 	writeJSON(w, http.StatusOK, snap)
 }

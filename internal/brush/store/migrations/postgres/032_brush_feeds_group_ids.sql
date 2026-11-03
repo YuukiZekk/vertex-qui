@@ -1,0 +1,1 @@
+ALTER TABLE brush_feeds ADD COLUMN group_ids TEXT NOT NULL DEFAULT ''
