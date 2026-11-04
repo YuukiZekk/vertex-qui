@@ -372,6 +372,10 @@
     "confirmDelete": "确认删除",
     "saveFailed": "保存集群失败",
     "deleteFailed": "删除集群失败",
-    "label": "集群 {{name}}"
+    "label": "集群 {{name}}",
+    "readInterval": "读取间隔",
+    "readIntervalHelp": "读取间隔是刷流多久读一次这个集群里各台下载器的种子状态，qui 也随之和 qBittorrent 同步一次。刷流集群读得勤一些，判断更及时；种子很多的保种集群可以读得慢一些，省资源。一台实例在多个集群里时，按最短的间隔读取。",
+    "readDefault": "默认（10 秒）",
+    "readEvery": "每 {{seconds}} 秒"
   }
 }

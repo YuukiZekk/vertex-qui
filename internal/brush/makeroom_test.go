@@ -61,7 +61,7 @@ func TestAdmitMakesRoom(t *testing.T) {
 		require.NoError(t, svc.store.ResolvePrediction(ctx, id, now, gib, 1800, store.OutcomeResolved))
 	}
 	// idle has a full window of readings with no upload.
-	for at := now.Add(-model.RateWindow); !at.After(now); at = at.Add(sampleInterval) {
+	for at := now.Add(-model.RateWindow); !at.After(now); at = at.Add(defaultReadInterval) {
 		svc.values.observe(1, at, []qbt.Torrent{idle})
 	}
 

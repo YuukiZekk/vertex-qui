@@ -5,6 +5,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
@@ -66,8 +67,11 @@ export function GroupPicker({ value, onChange }: { value: number[], onChange: (i
   )
 }
 
+// The read intervals a group can pick, in seconds; 0 is the default.
+const READ_INTERVALS = [0, 3, 5, 10, 15, 20, 30]
+
 // GroupManager lists every group with how many instances it has, to rename or
-// delete it.
+// delete it or set how often brush reads its instances.
 export function GroupManager() {
   const { t } = useTranslation("brush")
   const queryClient = useQueryClient()
@@ -83,6 +87,11 @@ export function GroupManager() {
     },
     onError: (err: Error) => toast.error(t("groups.saveFailed"), { description: err.message }),
   })
+  const readInterval = useMutation({
+    mutationFn: ({ id, name, seconds }: { id: number, name: string, seconds: number }) => api.renameBrushGroup(id, name, seconds),
+    onSuccess: refresh,
+    onError: (err: Error) => toast.error(t("groups.saveFailed"), { description: err.message }),
+  })
   const remove = useMutation({
     mutationFn: (id: number) => api.deleteBrushGroup(id),
     onSuccess: () => {
@@ -94,40 +103,54 @@ export function GroupManager() {
   if (!groups?.length) return null
 
   return (
-    <ul className="divide-y rounded-lg border text-sm">
-      {groups.map((g) => (
-        <li key={g.id} className="flex items-center gap-2 px-3 py-2">
-          {editing?.id === g.id ? (
-            <>
-              <Input value={editing.name} onChange={(e) => setEditing({ id: g.id, name: e.target.value })} maxLength={40} className="h-7 flex-1 text-xs" autoFocus />
-              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={t("actions.save")}
-                disabled={!editing.name.trim() || rename.isPending} onClick={() => rename.mutate({ id: g.id, name: editing.name.trim() })}>
-                <Check className="h-3.5 w-3.5" />
-              </Button>
-              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={t("actions.cancel")} onClick={() => setEditing(null)}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </>
-          ) : (
-            <>
-              <span className="flex-1 truncate">{g.name}</span>
-              <span className="text-xs text-muted-foreground">{t("groups.members", { count: g.instanceIds.length })}</span>
-              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={t("actions.edit")} onClick={() => setEditing({ id: g.id, name: g.name })}>
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              {confirming === g.id ? (
-                <Button type="button" size="sm" variant="destructive" className="h-7 px-2 text-xs" disabled={remove.isPending} onClick={() => remove.mutate(g.id)}>
-                  {t("groups.confirmDelete")}
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">{t("groups.readIntervalHelp")}</p>
+      <ul className="divide-y rounded-lg border text-sm">
+        {groups.map((g) => (
+          <li key={g.id} className="flex items-center gap-2 px-3 py-2">
+            {editing?.id === g.id ? (
+              <>
+                <Input value={editing.name} onChange={(e) => setEditing({ id: g.id, name: e.target.value })} maxLength={40} className="h-7 flex-1 text-xs" autoFocus />
+                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={t("actions.save")}
+                  disabled={!editing.name.trim() || rename.isPending} onClick={() => rename.mutate({ id: g.id, name: editing.name.trim() })}>
+                  <Check className="h-3.5 w-3.5" />
                 </Button>
-              ) : (
-                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={t("actions.delete")} onClick={() => setConfirming(g.id)}>
-                  <Trash2 className="h-3.5 w-3.5" />
+                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={t("actions.cancel")} onClick={() => setEditing(null)}>
+                  <X className="h-3.5 w-3.5" />
                 </Button>
-              )}
-            </>
-          )}
-        </li>
-      ))}
-    </ul>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 truncate">{g.name}</span>
+                <span className="text-xs text-muted-foreground">{t("groups.members", { count: g.instanceIds.length })}</span>
+                <Select value={String(g.readIntervalSeconds)} disabled={readInterval.isPending}
+                  onValueChange={(v) => readInterval.mutate({ id: g.id, name: g.name, seconds: Number(v) })}>
+                  <SelectTrigger className="h-7 w-32 text-xs" aria-label={t("groups.readInterval")}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {READ_INTERVALS.map((s) => (
+                      <SelectItem key={s} value={String(s)}>
+                        {s === 0 ? t("groups.readDefault") : t("groups.readEvery", { seconds: s })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={t("actions.edit")} onClick={() => setEditing({ id: g.id, name: g.name })}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                {confirming === g.id ? (
+                  <Button type="button" size="sm" variant="destructive" className="h-7 px-2 text-xs" disabled={remove.isPending} onClick={() => remove.mutate(g.id)}>
+                    {t("groups.confirmDelete")}
+                  </Button>
+                ) : (
+                  <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={t("actions.delete")} onClick={() => setConfirming(g.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }

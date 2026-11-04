@@ -2999,8 +2999,9 @@ class ApiClient {
     return this.request<{ id: number }>("/brush/groups", { method: "POST", body: JSON.stringify({ name }) })
   }
 
-  async renameBrushGroup(id: number, name: string): Promise<void> {
-    await this.request<{ id: number }>(`/brush/groups/${id}`, { method: "PUT", body: JSON.stringify({ name }) })
+  // readIntervalSeconds 0 reads the group at the default interval; leaving it out keeps it.
+  async renameBrushGroup(id: number, name: string, readIntervalSeconds?: number): Promise<void> {
+    await this.request<{ id: number }>(`/brush/groups/${id}`, { method: "PUT", body: JSON.stringify({ name, readIntervalSeconds }) })
   }
 
   async deleteBrushGroup(id: number): Promise<void> {

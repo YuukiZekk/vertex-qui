@@ -47,6 +47,8 @@ type fakeQB struct {
 	disks       map[int]int64
 	resumed     []string
 	deleted     []fakeDeletion
+	// reads counts Torrents calls by instance.
+	reads map[int]int
 }
 
 type fakeDeletion struct {
@@ -67,6 +69,10 @@ func (f *fakeQB) Instances(context.Context) ([]quiadapter.Instance, error) {
 func (f *fakeQB) Torrents(_ context.Context, id int) ([]qbt.Torrent, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.reads == nil {
+		f.reads = map[int]int{}
+	}
+	f.reads[id]++
 	return slices.Clone(f.listed[id]), nil
 }
 

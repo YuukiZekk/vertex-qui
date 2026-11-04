@@ -17,13 +17,16 @@ import (
 type Group struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
+	// ReadIntervalSeconds is how often brush reads the group's instances; 0 keeps
+	// the default.
+	ReadIntervalSeconds int `json:"readIntervalSeconds"`
 	// InstanceIDs are the group's instances, in ascending order.
 	InstanceIDs []int `json:"instanceIds"`
 }
 
 // ListGroups returns every group with its instances, by name.
 func (s *Store) ListGroups(ctx context.Context) ([]Group, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, name FROM brush_groups ORDER BY name, id")
+	rows, err := s.db.QueryContext(ctx, "SELECT id, name, read_interval_seconds FROM brush_groups ORDER BY name, id")
 	if err != nil {
 		return nil, fmt.Errorf("list brush groups: %w", err)
 	}
@@ -31,7 +34,7 @@ func (s *Store) ListGroups(ctx context.Context) ([]Group, error) {
 	groups := []Group{}
 	for rows.Next() {
 		g := Group{InstanceIDs: []int{}}
-		if err := rows.Scan(&g.ID, &g.Name); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.ReadIntervalSeconds); err != nil {
 			return nil, fmt.Errorf("scan brush group: %w", err)
 		}
 		groups = append(groups, g)
@@ -82,6 +85,31 @@ func (s *Store) CreateGroup(ctx context.Context, name string) (int64, error) {
 
 func (s *Store) RenameGroup(ctx context.Context, id int64, name string) error {
 	return s.execOne(ctx, "rename brush group", "UPDATE brush_groups SET name = ? WHERE id = ?", name, id)
+}
+
+func (s *Store) SetGroupReadInterval(ctx context.Context, id int64, seconds int) error {
+	return s.execOne(ctx, "set brush group read interval", "UPDATE brush_groups SET read_interval_seconds = ? WHERE id = ?", seconds, id)
+}
+
+// ReadIntervals maps each instance in a group with its own read interval to the
+// shortest of those intervals, in seconds.
+func (s *Store) ReadIntervals(ctx context.Context) (map[int]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT m.instance_id, MIN(g.read_interval_seconds)
+		FROM brush_instance_groups m JOIN brush_groups g ON g.id = m.group_id
+		WHERE g.read_interval_seconds > 0 GROUP BY m.instance_id`)
+	if err != nil {
+		return nil, fmt.Errorf("list brush read intervals: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[int]int)
+	for rows.Next() {
+		var id, seconds int
+		if err := rows.Scan(&id, &seconds); err != nil {
+			return nil, fmt.Errorf("scan brush read interval: %w", err)
+		}
+		out[id] = seconds
+	}
+	return out, rows.Err()
 }
 
 // DeleteGroup removes a group, its memberships and every feed's reference to it.

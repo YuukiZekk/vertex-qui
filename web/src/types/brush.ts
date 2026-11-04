@@ -28,6 +28,8 @@ export interface BrushInstanceStatus {
 export interface BrushGroup {
   id: number
   name: string
+  // 0 reads the group's instances at the default interval.
+  readIntervalSeconds: number
   instanceIds: number[]
 }
 

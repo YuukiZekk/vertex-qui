@@ -59,6 +59,11 @@ type Service struct {
 	// uploading holds, per instance, the brush torrents already seen uploading, so
 	// their first upload is stored once. Only the sampler touches it.
 	uploading map[int]map[string]bool
+	// lastSweep, readEvery and lastRead pace the sampler's reads, per instance;
+	// only the sampler touches them.
+	lastSweep time.Time
+	readEvery map[int]time.Duration
+	lastRead  map[int]time.Time
 	// flowMeter is only touched by the flow goroutine.
 	flowMeter *peerMeter
 
@@ -89,6 +94,7 @@ func New(ctx context.Context, db dbinterface.Querier, cipher *models.CredentialC
 		alerts:    &alerter{sent: make(map[string]time.Time)},
 		sites:     newSiteMeter(),
 		uploading: make(map[int]map[string]bool),
+		lastRead:  make(map[int]time.Time),
 		flowMeter: newPeerMeter(),
 		baselined: make(map[int64]bool),
 		polling:   make(map[int64]bool),

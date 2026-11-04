@@ -12,8 +12,17 @@ import (
 )
 
 const (
-	// sampleInterval is how often the meter reads each instance's torrents from qui's cache.
-	sampleInterval = 10 * time.Second
+	// defaultReadInterval is how often the sampler reads an instance's torrents from
+	// qui's cache, unless a group the instance is in sets its own interval, from
+	// minReadSeconds to maxReadSeconds; the shortest of those wins. qui syncs an
+	// instance with qBittorrent when it is read, so a seeding group with thousands of
+	// torrents can be read less often and a brush group more. maxReadSeconds keeps
+	// two reads inside uploadWindow and snapshotFresh.
+	defaultReadInterval = 10 * time.Second
+	minReadSeconds      = 3
+	maxReadSeconds      = 30
+	// samplerBeat is how often the sampler looks for an instance due to be read.
+	samplerBeat = time.Second
 	// uploadWindow is how far back an instance's average upload reaches.
 	uploadWindow = time.Minute
 )
@@ -93,7 +102,7 @@ func (m *uploadMeter) rate(instanceID int, now time.Time) (int64, bool) {
 // runSampler has its own goroutine so a slow feed never delays a sample, and runs
 // samples one after another so they reach the meter in order.
 func (s *Service) runSampler(ctx context.Context) {
-	ticker := time.NewTicker(sampleInterval)
+	ticker := time.NewTicker(samplerBeat)
 	defer ticker.Stop()
 	for {
 		select {
@@ -105,21 +114,43 @@ func (s *Service) runSampler(ctx context.Context) {
 	}
 }
 
-// sample gives new instances their default floor, reads every instance brush has a
-// floor for to meter instances, torrents and sites, then stores and checks
-// predictions against what it read.
+// sample reads every instance brush has a floor for whose read interval has passed,
+// to meter instances, torrents and sites. Every defaultReadInterval it also gives
+// new instances their default floor, reloads the instances and their intervals, and
+// stores and checks predictions against what it read.
 func (s *Service) sample(ctx context.Context) {
-	s.ensureFloors(ctx, s.now())
-	configs, err := s.store.InstanceConfigs(ctx)
-	if err != nil {
-		s.log.Error().Err(err).Msg("read brush instances for sampling")
-		return
+	start := s.now()
+	sweep := start.Sub(s.lastSweep) >= defaultReadInterval
+	if sweep {
+		s.ensureFloors(ctx, start)
+		configs, err := s.store.InstanceConfigs(ctx)
+		if err != nil {
+			s.log.Error().Err(err).Msg("read brush instances for sampling")
+			return
+		}
+		intervals, err := s.store.ReadIntervals(ctx)
+		if err != nil {
+			s.log.Error().Err(err).Msg("read brush read intervals")
+			return
+		}
+		s.lastSweep = start
+		s.readEvery = make(map[int]time.Duration, len(configs))
+		for id := range configs {
+			s.readEvery[id] = defaultReadInterval
+			if seconds := intervals[id]; seconds > 0 {
+				s.readEvery[id] = time.Duration(seconds) * time.Second
+			}
+		}
+		s.refreshSites(ctx, start.Local())
+		s.flushSites(ctx, start.Local())
 	}
-	start := s.now().Local()
-	s.refreshSites(ctx, start)
-	s.flushSites(ctx, start)
-	day := start.Format(time.DateOnly)
-	for id := range configs {
+	day := start.Local().Format(time.DateOnly)
+	for id, every := range s.readEvery {
+		// Half a beat of slack, so a beat that fires a little early still reads.
+		if start.Sub(s.lastRead[id]) < every-samplerBeat/2 {
+			continue
+		}
+		s.lastRead[id] = start
 		torrents, err := s.qui.Torrents(ctx, id)
 		if err != nil {
 			continue
@@ -130,9 +161,11 @@ func (s *Service) sample(ctx context.Context) {
 		s.sites.observe(id, day, torrents)
 		s.markFirstUploads(ctx, id, now, torrents)
 	}
-	now := s.now()
-	s.resolvePredictions(ctx, now)
-	s.recordPredictions(ctx, now)
+	if sweep {
+		now := s.now()
+		s.resolvePredictions(ctx, now)
+		s.recordPredictions(ctx, now)
+	}
 }
 
 // firstUploadWindow bounds how long after its add a torrent's first upload is

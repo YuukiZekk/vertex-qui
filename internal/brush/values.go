@@ -96,9 +96,9 @@ func (v *valueTracker) observe(instanceID int, at time.Time, torrents []qbt.Torr
 func (tt *trackedTorrent) rate() (float64, bool) {
 	first, last := tt.points[0], tt.points[len(tt.points)-1]
 	span := last.at.Sub(first.at)
-	// One sample of slack: readings are sampleInterval apart, so the span is never
+	// One sample of slack: readings are defaultReadInterval apart, so the span is never
 	// exactly the window.
-	if span < model.RateWindow-sampleInterval/2 {
+	if span < model.RateWindow-defaultReadInterval/2 {
 		return 0, false
 	}
 	return float64(last.uploaded-first.uploaded) / span.Seconds(), true

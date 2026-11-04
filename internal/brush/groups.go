@@ -5,6 +5,7 @@ package brush
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -26,10 +27,12 @@ func (s *Service) handleListGroups(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, groups)
 }
 
-// handleSaveGroup creates or renames a group. Names are unique regardless of case.
+// handleSaveGroup creates or renames a group, and sets its read interval when the
+// body has one. Names are unique regardless of case.
 func (s *Service) handleSaveGroup(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name string `json:"name"`
+		Name                string `json:"name"`
+		ReadIntervalSeconds *int   `json:"readIntervalSeconds"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -37,6 +40,10 @@ func (s *Service) handleSaveGroup(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(body.Name)
 	if name == "" || len([]rune(name)) > maxGroupName {
 		writeError(w, http.StatusBadRequest, errors.New("name must be 1 to 40 characters"))
+		return
+	}
+	if v := body.ReadIntervalSeconds; v != nil && *v != 0 && (*v < minReadSeconds || *v > maxReadSeconds) {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("readIntervalSeconds must be 0 or %d to %d", minReadSeconds, maxReadSeconds))
 		return
 	}
 	groups, err := s.store.ListGroups(r.Context())
@@ -51,9 +58,18 @@ func (s *Service) handleSaveGroup(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if create {
-			return s.store.CreateGroup(r.Context(), name)
+			created, err := s.store.CreateGroup(r.Context(), name)
+			if err != nil {
+				return 0, err
+			}
+			id = created
+		} else if err := s.store.RenameGroup(r.Context(), id, name); err != nil {
+			return 0, err
 		}
-		return id, s.store.RenameGroup(r.Context(), id, name)
+		if body.ReadIntervalSeconds != nil {
+			return id, s.store.SetGroupReadInterval(r.Context(), id, *body.ReadIntervalSeconds)
+		}
+		return id, nil
 	})
 }
 

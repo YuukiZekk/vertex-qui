@@ -372,6 +372,10 @@
     "confirmDelete": "Delete",
     "saveFailed": "Could not save the group",
     "deleteFailed": "Could not delete the group",
-    "label": "group {{name}}"
+    "label": "group {{name}}",
+    "readInterval": "Read interval",
+    "readIntervalHelp": "How often brush reads the torrents of this group's instances, which also makes qui sync them with qBittorrent. Read brush groups often so decisions come sooner, and seeding groups with many torrents less often to save work. An instance in several groups is read at the shortest interval.",
+    "readDefault": "Default (10 s)",
+    "readEvery": "Every {{seconds}} s"
   }
 }

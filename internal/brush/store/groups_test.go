@@ -56,6 +56,16 @@ func TestGroups(t *testing.T) {
 			ids, _ = f.Targets()
 			require.Equal(t, []int{1, 2, 4}, ids)
 
+			// An instance reads at the shortest interval of its groups that set one.
+			require.NoError(t, s.SetGroupReadInterval(ctx, seed, 30))
+			intervals, err := s.ReadIntervals(ctx)
+			require.NoError(t, err)
+			require.Equal(t, map[int]int{1: 30, 3: 30}, intervals)
+			require.NoError(t, s.SetGroupReadInterval(ctx, de, 5))
+			intervals, err = s.ReadIntervals(ctx)
+			require.NoError(t, err)
+			require.Equal(t, map[int]int{1: 5, 2: 5, 3: 30, 4: 5}, intervals)
+
 			require.NoError(t, s.RenameGroup(ctx, seed, "Seed"))
 			require.NoError(t, s.DeleteGroup(ctx, de))
 			f, err = s.GetFeed(ctx, onlyGroup)

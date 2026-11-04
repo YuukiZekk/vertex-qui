@@ -133,3 +133,36 @@ func TestSiteTotals(t *testing.T) {
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/sites/"+strconv.FormatInt(zm, 10), nil))
 	require.Equal(t, http.StatusConflict, rec.Code, "a site with feeds stays")
 }
+
+// Each instance is read at the shortest interval of its groups, others at the
+// default, and a seeding group can be read less often.
+func TestSamplerReadsEachInstanceAtItsInterval(t *testing.T) {
+	ctx := t.Context()
+	db := testdb.NewMigratedSQLite(t, t.Name())
+	cipher, err := models.NewCredentialCipher(make([]byte, 32))
+	require.NoError(t, err)
+	qb := &fakeQB{listed: map[int][]qbt.Torrent{}}
+	svc, err := New(ctx, db, cipher, qb)
+	require.NoError(t, err)
+	for _, id := range []int{1, 2, 3} {
+		require.NoError(t, svc.store.SetFloor(ctx, id, 10*gib))
+	}
+	fast, err := svc.store.CreateGroup(ctx, "brush")
+	require.NoError(t, err)
+	slow, err := svc.store.CreateGroup(ctx, "seeding")
+	require.NoError(t, err)
+	require.NoError(t, svc.store.SetGroupReadInterval(ctx, fast, 5))
+	require.NoError(t, svc.store.SetGroupReadInterval(ctx, slow, 30))
+	require.NoError(t, svc.store.SetInstanceGroups(ctx, 1, []int64{fast, slow}))
+	require.NoError(t, svc.store.SetInstanceGroups(ctx, 2, []int64{slow}))
+
+	at := time.Date(2026, 11, 5, 12, 0, 0, 0, time.Local)
+	svc.now = func() time.Time { return at }
+	for range 60 {
+		svc.sample(ctx)
+		at = at.Add(samplerBeat)
+	}
+	qb.mu.Lock()
+	defer qb.mu.Unlock()
+	require.Equal(t, map[int]int{1: 12, 2: 2, 3: 6}, qb.reads, "5 s in both groups, 30 s seeding, 10 s by default, over a minute")
+}

@@ -30,10 +30,10 @@ func TestValueTrackerPredictsFromAFullWindow(t *testing.T) {
 
 	var at time.Time
 	for i := 0; at.Before(start.Add(model.RateWindow)); i++ {
-		at = start.Add(time.Duration(i) * sampleInterval)
+		at = start.Add(time.Duration(i) * defaultReadInterval)
 		// 10 MiB/s steady.
 		v.observe(1, at, []qbt.Torrent{brushTorrent("a", int64(at.Sub(start).Seconds())*(10<<20), added), other})
-		if at.Before(start.Add(model.RateWindow - sampleInterval)) {
+		if at.Before(start.Add(model.RateWindow - defaultReadInterval)) {
 			vals := v.values(at)
 			require.Len(t, vals, 1, "only brush's torrents")
 			require.Nil(t, vals[0].Predicted, "not a full window yet at %s", at.Sub(start))
@@ -79,17 +79,17 @@ func TestPredictionsAreRecordedAndResolved(t *testing.T) {
 	}
 
 	at := start
-	for ; !at.After(start.Add(model.RateWindow)); at = at.Add(sampleInterval) {
+	for ; !at.After(start.Add(model.RateWindow)); at = at.Add(defaultReadInterval) {
 		read(at, true, brushTorrent("a", uploaded(at), added), brushTorrent("b", uploaded(at), added))
 	}
-	made := at.Add(-sampleInterval)
+	made := at.Add(-defaultReadInterval)
 	acc, err := svc.store.PredictionAccuracy(ctx, start)
 	require.NoError(t, err)
 	require.Zero(t, acc.Count, "nothing is due yet")
 
 	// b disappears, and instance 2 is no longer read.
 	end := made.Add(model.Horizon)
-	for ; !at.After(end); at = at.Add(sampleInterval) {
+	for ; !at.After(end); at = at.Add(defaultReadInterval) {
 		read(at, false, brushTorrent("a", uploaded(at), added))
 	}
 	var pending int
@@ -109,7 +109,7 @@ func TestPredictionsAreRecordedAndResolved(t *testing.T) {
 	require.Equal(t, model.Predict(model.Input{Age: made.Sub(added), Rate: 10 << 20}).Bytes, recent[0].Predicted)
 	require.GreaterOrEqual(t, recent[0].ActualSeconds, int64(model.Horizon/time.Second))
 
-	for ; !at.After(end.Add(lostAfter + sampleInterval)); at = at.Add(sampleInterval) {
+	for ; !at.After(end.Add(lostAfter + defaultReadInterval)); at = at.Add(defaultReadInterval) {
 		read(at, false)
 	}
 	var outcome string
