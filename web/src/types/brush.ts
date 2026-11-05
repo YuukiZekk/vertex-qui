@@ -299,3 +299,15 @@ export interface BrushFlowCountry {
   uploaded: number
   downloaded: number
 }
+
+export type BrushSiteTransferRange = "today" | "yesterday" | "week"
+
+// What every site moved over a range of local days on the server, most uploaded first.
+export interface BrushSiteTransfer {
+  // The days summed, both included, as YYYY-MM-DD.
+  first: string
+  last: string
+  // How long the range has run so far, for average speeds.
+  seconds: number
+  sites: Array<{ siteId: number, name: string, uploaded: number, downloaded: number }>
+}

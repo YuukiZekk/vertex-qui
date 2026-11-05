@@ -45,6 +45,7 @@ func (s *Service) Routes(r chi.Router) {
 	r.Post("/sites", s.handleSaveSite)
 	r.Put("/sites/{id}", s.handleSaveSite)
 	r.Delete("/sites/{id}", s.handleDeleteSite)
+	r.Get("/sites/transfer", s.handleSiteTransfer)
 	r.Post("/sites/{id}/test", s.handleTestSite)
 
 	r.Get("/feeds", s.handleListFeeds)

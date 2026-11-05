@@ -255,7 +255,25 @@
   },
   "performance": {
     "title": "Performance",
-    "description": "How fast brush gets torrents in: from the site's publish to the downloader's confirmation, and how soon they upload.",
+    "description": "Each site's upload and download, and how fast brush gets torrents in.",
+    "traffic": {
+      "title": "Site traffic",
+      "range": {
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "week": "Last 7 days"
+      },
+      "site": "Site",
+      "uploaded": "Uploaded",
+      "downloaded": "Downloaded",
+      "averageUpload": "Average upload",
+      "ratio": "Up / down",
+      "footnote": "Every torrent on the instances with a safety floor, by site: brush torrents by their feed, others by tracker. Days follow the server time zone; the last 7 days include today. Written once a minute."
+    },
+    "grab": {
+      "title": "Grab speed",
+      "description": "From the site's publish to the downloader's confirmation, and how soon torrents upload."
+    },
     "info": "Discovery = site publish → brush first sees it in the RSS, set mostly by the poll interval; processing = first sight → qBittorrent confirms the add, including the free check, the torrent download and the add. Entry is both. Bars are each period's entry P95, amber past {{slow}} s, faded with fewer than 3 torrents. It reports facts only; placement and deletion do not use it.",
     "bySite": "By site",
     "byInstance": "By VPS",

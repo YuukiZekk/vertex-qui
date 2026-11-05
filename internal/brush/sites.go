@@ -145,3 +145,75 @@ func (s *Service) handleTestSite(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, result)
 }
+
+type siteTransferView struct {
+	SiteID     int64  `json:"siteId"`
+	Name       string `json:"name"`
+	Uploaded   int64  `json:"uploaded"`
+	Downloaded int64  `json:"downloaded"`
+}
+
+type siteTransferResponse struct {
+	// First and Last are the local days summed, both included.
+	First string `json:"first"`
+	Last  string `json:"last"`
+	// Seconds is how long the range has run so far, for average speeds.
+	Seconds int64              `json:"seconds"`
+	Sites   []siteTransferView `json:"sites"`
+}
+
+// siteTransferRange turns a range name into the local days it sums and how many
+// seconds of them have passed: today, yesterday, or the last 7 days with today.
+func siteTransferRange(name string, now time.Time) (first, last string, seconds int64, ok bool) {
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	sinceMidnight := int64(now.Sub(midnight) / time.Second)
+	switch name {
+	case "", "today":
+		day := midnight.Format(time.DateOnly)
+		return day, day, sinceMidnight, true
+	case "yesterday":
+		start := midnight.AddDate(0, 0, -1)
+		day := start.Format(time.DateOnly)
+		return day, day, int64(midnight.Sub(start) / time.Second), true
+	case "week":
+		start := midnight.AddDate(0, 0, -6)
+		return start.Format(time.DateOnly), midnight.Format(time.DateOnly), int64(now.Sub(start) / time.Second), true
+	}
+	return "", "", 0, false
+}
+
+// handleSiteTransfer returns what every site uploaded and downloaded over a range
+// of local days, most uploaded first.
+func (s *Service) handleSiteTransfer(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	first, last, seconds, ok := siteTransferRange(r.URL.Query().Get("range"), s.now().Local())
+	if !ok {
+		writeError(w, http.StatusBadRequest, errors.New("range must be today, yesterday or week"))
+		return
+	}
+	sites, err := s.store.ListSites(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	totals, err := s.store.SiteTransfersBetween(ctx, first, last)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	resp := siteTransferResponse{First: first, Last: last, Seconds: seconds, Sites: make([]siteTransferView, 0, len(sites))}
+	for _, st := range sites {
+		t := totals[st.ID]
+		resp.Sites = append(resp.Sites, siteTransferView{SiteID: st.ID, Name: st.Name, Uploaded: t.Uploaded, Downloaded: t.Downloaded})
+	}
+	slices.SortStableFunc(resp.Sites, func(a, b siteTransferView) int {
+		switch {
+		case a.Uploaded > b.Uploaded:
+			return -1
+		case a.Uploaded < b.Uploaded:
+			return 1
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	writeJSON(w, http.StatusOK, resp)
+}

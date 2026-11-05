@@ -108,3 +108,23 @@ func (s *Store) FeedCounts(ctx context.Context) (map[int64]int, error) {
 	}
 	return out, rows.Err()
 }
+
+// SiteTransfersBetween returns every site's totals summed over the days from
+// first to last, both included, as DateOnly strings.
+func (s *Store) SiteTransfersBetween(ctx context.Context, first, last string) (map[int64]SiteTransfer, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT site_id, CAST(SUM(uploaded) AS BIGINT), CAST(SUM(downloaded) AS BIGINT) FROM brush_site_daily
+		WHERE day >= ? AND day <= ? GROUP BY site_id`, first, last)
+	if err != nil {
+		return nil, fmt.Errorf("sum brush site transfers: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[int64]SiteTransfer)
+	for rows.Next() {
+		var t SiteTransfer
+		if err := rows.Scan(&t.SiteID, &t.Uploaded, &t.Downloaded); err != nil {
+			return nil, fmt.Errorf("scan brush site transfer sum: %w", err)
+		}
+		out[t.SiteID] = t
+	}
+	return out, rows.Err()
+}

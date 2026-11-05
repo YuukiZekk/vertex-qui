@@ -106,7 +106,7 @@ export function FlowMap({ instances, peers, today, colorBy, colorOf }: {
       }
     })
     return {
-      clusters: model.clusters.map((c) => ({ ...c, at: projection(c.at)! })),
+      clusters: model.clusters.map((c) => ({ ...c, at: projection(c.at)!, spots: c.spots.map((at) => projection(at)!) })),
       lines,
       dots: model.countries.map((c) => ({ ...c, at: projection(c.at)! })),
     }
@@ -234,15 +234,24 @@ export function FlowMap({ instances, peers, today, colorBy, colorOf }: {
           ))}
 
           {clusters.map((c) => {
-            const color = colorBy === "server" && c.servers.length === 1 ? colorOf(c.servers[0].id) : "#ffffff"
+            // Each server is its own dot, in its own colour when coloured by server.
+            const r = (c.servers.length > 1 ? 3.5 : 4.5) / k
             return (
               <g key={c.code}>
-                <circle cx={c.at[0]} cy={c.at[1]} r={4.5 / k} fill={color} className="flow-ping" />
-                <circle cx={c.at[0]} cy={c.at[1]} r={4.5 / k} fill={color} stroke={MAP_BG} strokeWidth={1.5 / k}>
-                  <title>{c.servers.map((s) => t("flows.serverTitle", {
-                    name: s.name, upload: `${formatBytes(s.uploadSpeed)}/s`, download: `${formatBytes(s.downloadSpeed)}/s`,
-                  })).join("\n")}</title>
-                </circle>
+                {c.servers.map((s, i) => {
+                  const color = colorBy === "server" ? colorOf(s.id) : "#ffffff"
+                  const [x, y] = c.spots[i]
+                  return (
+                    <g key={s.id}>
+                      <circle cx={x} cy={y} r={r} fill={color} className="flow-ping" />
+                      <circle cx={x} cy={y} r={r} fill={color} stroke={MAP_BG} strokeWidth={1.5 / k}>
+                        <title>{t("flows.serverTitle", {
+                          name: s.name, upload: `${formatBytes(s.uploadSpeed)}/s`, download: `${formatBytes(s.downloadSpeed)}/s`,
+                        })}</title>
+                      </circle>
+                    </g>
+                  )
+                })}
                 <text x={clusterLabel.get(c.code)!.x} y={clusterLabel.get(c.code)!.y} textAnchor={clusterLabel.get(c.code)!.anchor}
                   fontSize={12 / k} fontWeight={600} fill="#f1f5f9" stroke={MAP_BG} strokeWidth={3 / k} paintOrder="stroke" pointerEvents="none">
                   {clusterText(c)}

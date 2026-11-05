@@ -17,6 +17,7 @@ import { type Drill, PerformanceDrill } from "./PerformanceDrill"
 import { EmptyState, SectionCard, StateBadge } from "./section"
 import { readOpen, writeOpen } from "./sectionStyles"
 import { SiteIcon } from "./SiteIcon"
+import { SiteTraffic } from "./SiteTraffic"
 
 const BY_KEY = "brush.performance.by"
 const HOURS_KEY = "brush.performance.hours"
@@ -99,10 +100,17 @@ export function BrushPerformanceCard() {
       title={t("performance.title")}
       description={t("performance.description")}
       info={t("performance.info", { slow: data?.slowSeconds ?? 20 })}
-      actions={controls}
       open={open}
       onOpenChange={(next) => { setOpen(next); writeOpen("brush.performance.open", next) }}
     >
+      <SiteTraffic sites={sites} />
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-6 py-4">
+        <div>
+          <h3 className="text-sm font-medium">{t("performance.grab.title")}</h3>
+          <p className="text-xs text-muted-foreground">{t("performance.grab.description")}</p>
+        </div>
+        {controls}
+      </div>
       {o && (
         <div className="grid grid-cols-2 gap-px border-b bg-border md:grid-cols-4">
           <Stat label={t("performance.entryP95")} value={formatSeconds(o.entryP95)} />

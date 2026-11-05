@@ -11,11 +11,28 @@ export const MAX_ARCS = 40
 
 export type LonLat = [number, number]
 
-// A cluster is the servers of one country, drawn at one point with one label.
+// Servers that share a country sit this many degrees from its point, around it.
+const SPREAD_DEGREES = 1.4
+
+// A cluster is the servers of one country, labelled once at its point. Each server
+// has its own spot, the point itself for a lone server and around it for several,
+// so their arcs and colours do not lie on top of each other.
 export interface FlowCluster {
   code: string
   at: LonLat
   servers: BrushFlowInstance[]
+  spots: LonLat[]
+}
+
+// spreadAround places n spots evenly on a small circle around a point, the first
+// one above it; one spot is the point itself.
+export function spreadAround(at: LonLat, n: number): LonLat[] {
+  if (n <= 1) return [at]
+  const stretch = 1 / Math.max(0.2, Math.cos((at[1] * Math.PI) / 180))
+  return Array.from({ length: n }, (_, i) => {
+    const angle = (2 * Math.PI * i) / n - Math.PI / 2
+    return [at[0] + SPREAD_DEGREES * stretch * Math.cos(angle), at[1] - SPREAD_DEGREES * Math.sin(angle)] as LonLat
+  })
 }
 
 export interface FlowArc {
@@ -52,9 +69,15 @@ export function buildFlows(instances: BrushFlowInstance[], peers: BrushFlowPeer[
   for (const inst of instances) {
     const at = countryPoints[inst.country]
     if (!at) continue
-    const c = clusters.get(inst.country) ?? { code: inst.country, at, servers: [] }
+    const c = clusters.get(inst.country) ?? { code: inst.country, at, servers: [], spots: [] }
     c.servers.push(inst)
     clusters.set(inst.country, c)
+  }
+
+  const spotOf = new Map<number, LonLat>()
+  for (const c of clusters.values()) {
+    c.spots = spreadAround(c.at, c.servers.length)
+    c.servers.forEach((inst, i) => spotOf.set(inst.id, c.spots[i]))
   }
 
   const order = new Map(instances.map((inst, i) => [inst.id, i]))
@@ -72,7 +95,7 @@ export function buildFlows(instances: BrushFlowInstance[], peers: BrushFlowPeer[
     countries.set(p.country, c)
 
     const server = byServer.get(p.instanceId)
-    const serverAt = server && countryPoints[server.country]
+    const serverAt = server && spotOf.get(server.id)
     if (!server || !serverAt || server.country === p.country) continue
     for (const [direction, speed] of [["up", p.uploadSpeed], ["down", p.downloadSpeed]] as const) {
       if (speed <= 0) continue

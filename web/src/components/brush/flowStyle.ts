@@ -12,8 +12,10 @@ export const DOWNLOAD_COLOR = "#fbbf24"
 export const uploadText = "text-cyan-600 dark:text-cyan-400"
 export const downloadText = "text-amber-600 dark:text-amber-400"
 
-// Coloured by server, each server keeps its hue for as long as the list keeps its order.
-const SERVER_COLORS = ["#22d3ee", "#f472b6", "#a3e635", "#fbbf24", "#a78bfa", "#fb923c", "#34d399", "#60a5fa", "#f87171", "#e879f9"]
+// Coloured by server, each server keeps its hue for as long as the list keeps its
+// order. The hues leave out the upload cyan and download amber, so the two ways of
+// colouring never look alike.
+const SERVER_COLORS = ["#f472b6", "#a3e635", "#a78bfa", "#fb923c", "#60a5fa", "#f87171", "#34d399", "#e879f9", "#94a3b8"]
 
 export function serverColor(index: number) {
   return SERVER_COLORS[index % SERVER_COLORS.length]

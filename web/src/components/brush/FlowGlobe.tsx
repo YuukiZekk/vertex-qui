@@ -257,29 +257,29 @@ export function FlowGlobe({ instances, peers, today, colorBy, colorOf, fallback 
       return [
         { ...base, colors: [withAlpha(color, 0.12), withAlpha(color, 0.35)], stroke: width, dashLength: 1, dashGap: 0, initialGap: 0, dashTime: 0 },
         {
-          ...base, colors: [withAlpha(color, 0.6), "#ffffff"], stroke: width * 0.9 + 0.1,
+          // Coloured by server, the particles keep the server's hue to the end.
+          ...base, colors: [withAlpha(color, 0.6), colorBy === "server" ? color : "#ffffff"], stroke: width * 0.9 + 0.1,
           dashLength: 0.012 + 0.01 * share, dashGap: 0.11 - 0.07 * share, initialGap: Math.random(), dashTime: 4200 - 2400 * share,
         },
       ]
     })
 
-    const serverColor = (servers: BrushFlowInstance[]) => colorBy === "server" && servers.length === 1 ? colorOf(servers[0].id) : "#ffffff"
+    // Each server is its own dot, in its own colour when coloured by server.
+    const serverColor = (s: BrushFlowInstance) => colorBy === "server" ? colorOf(s.id) : "#ffffff"
     const pools = model.countries.filter((c) => c.total > 0)
-    const points = [
-      ...model.clusters.map((c) => ({
-        lat: c.at[1], lng: c.at[0], color: serverColor(c.servers), radius: 0.42, altitude: 0.006,
-        label: c.servers.map((s) => escapeHTML(t("flows.serverTitle", { name: s.name, upload: speed(s.uploadSpeed), download: speed(s.downloadSpeed) }))).join("<br>"),
-      })),
-    ]
+    const points = model.clusters.flatMap((c) => c.servers.map((s, i) => ({
+      lat: c.spots[i][1], lng: c.spots[i][0], color: serverColor(s), radius: c.servers.length > 1 ? 0.32 : 0.42, altitude: 0.006,
+      label: escapeHTML(t("flows.serverTitle", { name: s.name, upload: speed(s.uploadSpeed), download: speed(s.downloadSpeed) })),
+    })))
     const rings: GlobeRing[] = [
       ...pools.map((c) => {
         const share = heatShare(c.total, maxTotal)
         return { lat: c.at[1], lng: c.at[0], tint: (alpha: number) => heatColor(share, alpha * 0.7), maxRadius: 1 + 3 * share, speed: 0.7, period: 3000 }
       }),
-      ...model.clusters.map((c) => {
-        const color = serverColor(c.servers)
-        return { lat: c.at[1], lng: c.at[0], tint: (alpha: number) => withAlpha(color, alpha), maxRadius: 3, speed: 1.6, period: 1600 }
-      }),
+      ...model.clusters.flatMap((c) => c.servers.map((s, i) => {
+        const color = serverColor(s)
+        return { lat: c.spots[i][1], lng: c.spots[i][0], tint: (alpha: number) => withAlpha(color, alpha), maxRadius: c.servers.length > 1 ? 2 : 3, speed: 1.6, period: 1600 }
+      })),
     ]
 
     const clusterLabel = (servers: BrushFlowInstance[], code: string) => servers.length > 1
