@@ -542,7 +542,6 @@
       "dryRun": "Execució de prova",
       "removed": "Suprimit",
       "executed": "Executat",
-      "copyHash": "Copia el hash",
       "original": "Original: {{domain}}",
       "programLabel": "Programa: {{name}}",
       "ruleLabel": "Regla: {{name}}",
@@ -653,6 +652,7 @@
         "delete": "Elimina"
       },
       "enableDeleteRule": "Activa la regla d'eliminació",
+      "enableTagRule": "Activa la regla d'etiquetes",
       "enableCategoryRule": "Activa la regla de categoria → {{category}}",
       "enableRuleImmediately": "Si ho confirmes, aquesta regla s'activarà immediatament.",
       "noTorrentsMatch": "Ara mateix no hi ha cap torrent que coincideixi amb \"{{name}}\".",
@@ -700,12 +700,29 @@
         "exportedTorrents": "S'han exportat {{count}} torrents a CSV",
         "exportFailed": "No s'ha pogut exportar la previsualització",
         "deletedActivityEntries": "S'han eliminat {{count}} entrades d'activitat",
-        "deleteActivityFailed": "No s'ha pogut eliminar l'activitat",
-        "hashCopied": "S'ha copiat el hash"
+        "deleteActivityFailed": "No s'ha pogut eliminar l'activitat"
       },
       "exported": "Exportat",
       "tagActions_one": "{{count}} acció d'etiqueta",
       "tagActions_other": "{{count}} accions d'etiqueta"
+    },
+    "runWorkflowNow": {
+      "action": "Executa ara",
+      "title": "Vols executar \"{{name}}\" ara?",
+      "description": "qui executa el workflow desat una vegada ara i aplica les seves accions als torrents que coincideixen. També s'executa quan el workflow està desactivat.",
+      "dryRunDescription": "Aquest workflow està configurat com a execució de prova, així que qui només registra què faria. Cap torrent canvia.",
+      "actions": "Accions",
+      "cancel": "Cancel·la",
+      "confirm": "Executa ara",
+      "toast": {
+        "running": "S'està executant \"{{name}}\"…",
+        "completed": "S'ha completat l'execució de \"{{name}}\"",
+        "noChanges": "S'ha completat l'execució de \"{{name}}\". Cap torrent necessitava canvis.",
+        "completedWithErrors": "S'ha completat l'execució de \"{{name}}\" amb errors. Consulta el registre d'activitat.",
+        "dryRunCompleted": "S'ha completat l'execució de prova de \"{{name}}\"",
+        "inProgress": "Hi ha una execució en curs. Torna-ho a provar d'aquí a un moment.",
+        "failed": "No s'ha pogut executar el workflow"
+      }
     },
     "workflowDialog": {
       "editWorkflow": "Edita el workflow",
@@ -804,6 +821,7 @@
         "title": "Acció",
         "addAction": "Afegeix una acció",
         "selectAction": "Selecciona una acció...",
+        "runOrderHelp": "Les accions s'executen en l'ordre que es mostra. Cada acció veu el torrent tal com era quan va començar l'execució, de manera que un programa extern que s'executa després d'un moviment encara rep el camí de desada antic.",
         "speedLimits": "Límits de velocitat",
         "shareLimits": "Límits de compartició",
         "pause": "Atura",
@@ -856,6 +874,7 @@
         "strategyReplace": "Substitueix-les al client",
         "replaceDescription": "El mode de substitució força un restabliment complet d'aquestes etiquetes a tot el client abans d'aplicar aquesta regla.",
         "managedDescription": "El mode gestionat manté les etiquetes al dia amb actualitzacions diferencials; la sincronització completa afegeix les etiquetes als torrents coincidents i les treu dels que no ho són.",
+        "includeAffectedCrossSeeds": "Inclou-hi els cross-seed afectats",
         "useTrackerName": "Fes servir el nom del tracker com a etiqueta",
         "useDisplayName": "Fes servir el nom a mostrar",
         "aboutDisplayNames": "Sobre els noms a mostrar",
@@ -898,7 +917,10 @@
         "placeholder": "p. ex., /data/torrents",
         "skipIfCrossSeedsDontMatch": "Omet-ho si els cross-seed no compleixen les condicions de la regla",
         "aboutSkipping": "Sobre l'omissió del trasllat quan hi ha cross-seed",
-        "skipDescription": "Omet el trasllat si hi ha qualsevol altre torrent del mateix grup de cross-seed que no compleixi les condicions de la regla. Si no, es mouran tots els cross-seed, encara que no coincideixin amb les condicions de la regla."
+        "skipDescription": "Omet el trasllat si hi ha qualsevol altre torrent del mateix grup de cross-seed que no compleixi les condicions de la regla. Si no, es mouran tots els cross-seed, encara que no coincideixin amb les condicions de la regla.",
+        "errors": {
+          "mustBeAbsolute": "Ha de ser un camí absolut, per exemple /data/archive o D:\\Archive."
+        }
       },
       "templateHelp": {
         "absolutePath": "Ha de ser un camí absolut. Els valors van dins del camí, per exemple",
@@ -1003,11 +1025,13 @@
       "preview": {
         "confirmDeleteRule": "Confirma la regla d'eliminació",
         "previewDeleteRule": "Previsualitza la regla d'eliminació",
+        "confirmTagChange": "Confirma els canvis d'etiquetes",
         "confirmCategoryChange": "Confirma el canvi de categoria → {{category}}",
         "deleteEnabledSummary": "Aquesta regla afectarà {{count}} torrent que hi coincideix ara mateix.",
         "deleteEnabledSummary_other": "Aquesta regla afectarà {{count}} torrents que hi coincideixen ara mateix.",
         "deleteDisabledSummary": "{{count}} torrent coincidiria amb aquesta regla si s'activés.",
         "deleteDisabledSummary_other": "{{count}} torrents coincidirien amb aquesta regla si s'activés.",
+        "tagPrefix": "Aquesta regla actualitzarà les etiquetes de",
         "categoryPrefix": "Aquesta regla mourà",
         "torrents": "{{count}} torrent",
         "torrents_other": "{{count}} torrents",
@@ -1164,8 +1188,6 @@
       "tryDifferentSearch": "Prova un altre terme de cerca o neteja el filtre.",
       "eventsWillAppear": "Els esdeveniments apareixeran aquí quan es detectin torrents encallats.",
       "enableMonitoring": "Activa la vigilància per començar a fer el seguiment dels torrents encallats.",
-      "hashCopied": "S'ha copiat el hash",
-      "copyHash": "Copia el hash",
       "outcomes": {
         "succeeded": "Correcte",
         "failed": "Fallit",
@@ -1296,8 +1318,6 @@
       "ratio": "Ràtio",
       "added": "Afegit",
       "original": "Original: {{domain}}",
-      "hashCopied": "S'ha copiat el hash",
-      "copyHash": "Copia el hash",
       "loading": "S'està carregant...",
       "notAvailable": "Els detalls de l'execució no estan disponibles (només hi són a la memòria).",
       "failedToLoad": "No s'han pogut carregar els detalls de l'execució.",
@@ -1335,8 +1355,8 @@
       "description": "Explora els directoris de baixada i identifica els fitxers orfes per netejar-los.",
       "noLocalAccess": "Sense accés local",
       "noLocalAccessTooltip": "qui i qBittorrent s'han d'executar a la mateixa màquina. Activa «Accés al sistema de fitxers local» a la configuració de la instància per fer servir l'exploració d'orfes.",
-      "remoteLimits": "La supressió i la neteja automàtica encara no funcionen en instàncies remotes.",
-      "remoteNoIdentity": "A més, qui no pot saber quan dos camins són el mateix fitxer, de manera que un fitxer accessible per un segon camí, per exemple amb un muntatge bind, pot aparèixer a la llista encara que un torrent l'utilitzi.",
+      "remoteLimits": "La supressió i la neteja automàtica en una instància remota necessiten la identitat dels fitxers, que qui només pot llegir si el servidor li permet executar GNU find i stat.",
+      "remoteNoIdentity": "Aquesta instància remota no li permet executar-los, de manera que qui no pot saber quan dos camins són el mateix fitxer, i un fitxer accessible per un segon camí, per exemple amb un muntatge bind, pot aparèixer a la llista encara que un torrent l'utilitzi. Les exploracions d'aquí es poden previsualitzar i exportar, però no suprimir.",
       "on": "Activada",
       "off": "Desactivada",
       "summaryGrace": "Marge {{grace}} min",
@@ -1346,7 +1366,7 @@
       "cancel": "Cancel·la",
       "autoCleanupEnabled": "Neteja automàtica activada (≤{{max}} fitxers)",
       "autoCleanupDisabled": "Neteja automàtica desactivada",
-      "autoCleanupRemote": "Sense neteja automàtica en instàncies remotes",
+      "autoCleanupRemote": "Sense neteja automàtica en aquesta instància remota",
       "scanNow": "Explora ara",
       "configure": "Configura",
       "totalSize": "Mida total: {{size}}",
@@ -1358,7 +1378,6 @@
       "deletedStats": "{{deleted}} eliminats · {{size}}",
       "partialFailure": "Error parcial: comprova les exploracions recents",
       "partialFailureExpand": "Error parcial: desplega'l per veure'n els detalls",
-      "copiedToClipboard": "S'ha copiat al porta-retalls",
       "noScansYet": "Encara no s'ha fet cap exploració. Fes clic a «Explora ara» per trobar els orfes.",
       "statusClean": "Net",
       "statusPartial": "Exploració parcial",
@@ -1389,7 +1408,9 @@
       "deletedFiles_other": "{{count}} fitxers",
       "deletedDirs_one": "{{count}} directori",
       "deletedDirs_other": "{{count}} directoris",
-      "deletedSeparator": ", "
+      "deletedSeparator": ", ",
+      "errorMessage": "Missatge d'error",
+      "scanPaths": "Camins d'exploració"
     },
     "orphanScanPreview": {
       "title": "Previsualització d'orfes",
@@ -1422,7 +1443,7 @@
       "itemsCount_one": "{{count}} element · {{size}}",
       "itemsCount_other": "{{count}} elements · {{size}}",
       "deleteItems": "Elimina",
-      "remoteDeleteUnavailable": "Aquesta exploració s'ha fet en una instància remota, on la supressió encara no és compatible. Exporta la llista per suprimir tu mateix els fitxers al servidor.",
+      "remoteDeleteUnavailable": "Aquesta exploració no pot suprimir, perquè la instància remota no informa de la identitat dels fitxers o l'exploració no l'ha pogut llegir per a tots els fitxers. Exporta la llista per suprimir tu mateix els fitxers al servidor.",
       "directory": "Directori",
       "noItems": "No hi ha res per mostrar."
     },
@@ -1770,11 +1791,9 @@
       "lastBackup": "Última còpia de seguretat",
       "loading": "S'està carregant...",
       "progress": "{{current}} de {{total}} torrents ({{percentage}} %)",
-      "status": "Estat: {{status}}",
       "noBackupsYet": "Encara no hi ha cap còpia de seguretat",
       "nextScheduledBackup": "Propera còpia de seguretat programada",
       "loadingSchedule": "S'està carregant la programació...",
-      "instance": "Instància",
       "automaticBackupsOff": "Les còpies de seguretat automàtiques estan desactivades per a aquesta instància.",
       "enableCadenceToSchedule": "Activa com a mínim una cadència automàtica per programar còpies de seguretat.",
       "currentlyRunning": "Ara mateix s'està fent una còpia de seguretat.",
@@ -1798,6 +1817,7 @@
       "schedule": {
         "title": "Cadències automàtiques",
         "description": "Les execucions per hora, diàries, setmanals i mensuals comencen quan ha acabat la còpia de seguretat anterior i ha passat el seu interval. Deixa-les totes desactivades si només vols fer còpies manualment.",
+        "keep": "Conserva",
         "hourly": "Cada hora",
         "hourlyDescription": "Quantes instantànies horàries s'han de conservar abans de descartar les més antigues.",
         "hourlyTooltip": "S'executa aproximadament un cop per hora quan les còpies de seguretat estan activades i ha passat com a mínim una hora des de l'última execució.",
@@ -1816,8 +1836,7 @@
         "saveChanges": "Desa els canvis",
         "saveAll": "Desa els canvis a totes les instàncies",
         "requiresCadence": "Selecciona com a mínim una cadència (horària, diària, setmanal o mensual) abans de desar.",
-        "waitForCapabilities": "Espera que acabin les comprovacions de capacitats de les instàncies abans de desar-ho a totes.",
-        "changesApplyImmediately": "Els canvis s'apliquen a les còpies de seguretat futures tan bon punt els deses."
+        "waitForCapabilities": "Espera que acabin les comprovacions de capacitats de les instàncies abans de desar-ho a totes."
       }
     },
     "restore": {

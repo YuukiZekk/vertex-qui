@@ -16,8 +16,8 @@ qui integrates with autobrr through webhook endpoints. When autobrr announces a 
 3. qui checks your qBittorrent instances without downloading a torrent file
 4. qui responds with:
    - `200 OK`: a matching torrent is complete and ready to cross-seed
-   - `202 Accepted`: a matching torrent exists but is not complete yet. Retry later.
-   - `404 Not Found`: no matching torrent exists
+   - `202 Accepted`: a matching torrent exists, but it is not complete yet, or qBittorrent is moving or checking it. Retry later.
+   - `404 Not Found`: no matching torrent exists. If `crossSeedRecoverErroredTorrents` is off (the default), a matching torrent in an error state or a missing-files state also counts as no match.
 5. On `200 OK`, autobrr sends the torrent file and original announcement name to `/api/cross-seed/apply`
 6. qui reads the actual size from the torrent file and repeats the match against the current local torrents
 
@@ -189,7 +189,7 @@ When qui adds a torrent, it can set `skip_checking=true`. This option skips only
 
 Title, season, episode, and split release-group fallbacks still require an explicit full piece check. qui keeps these torrents paused, starts the check, and resumes them only at 100%.
 
-Soft differences, such as codec, source, HDR, edition, or one-sided checksum data, keep the normal fast path after all file and layout checks.
+Soft differences, such as codec, source, HDR, or edition, keep the normal fast path after all file and layout checks.
 
 On the normal fast path, qui applies the [Max auto-start download](./rules.md#max-auto-start-download) rule.
 

@@ -33,6 +33,7 @@ import (
 	"github.com/autobrr/qui/internal/services/arr"
 	"github.com/autobrr/qui/internal/services/automations"
 	"github.com/autobrr/qui/internal/services/crossseed"
+	"github.com/autobrr/qui/internal/services/crossseedroute"
 	"github.com/autobrr/qui/internal/services/dirscan"
 	"github.com/autobrr/qui/internal/services/discscan"
 	"github.com/autobrr/qui/internal/services/externalprograms"
@@ -41,6 +42,7 @@ import (
 	"github.com/autobrr/qui/internal/services/license"
 	"github.com/autobrr/qui/internal/services/notifications"
 	"github.com/autobrr/qui/internal/services/orphanscan"
+	"github.com/autobrr/qui/internal/services/peerclienticons"
 	"github.com/autobrr/qui/internal/services/reannounce"
 	"github.com/autobrr/qui/internal/services/trackericons"
 	"github.com/autobrr/qui/internal/sshpool"
@@ -74,6 +76,7 @@ type Server struct {
 	restarter                        *update.Restarter
 	selfUpdater                      *update.Updater
 	trackerIconService               *trackericons.Service
+	peerClientIconService            *peerclienticons.Service
 	backupService                    *backups.Service
 	streamManager                    *sse.StreamManager
 	filesManager                     *filesmanager.Service
@@ -93,6 +96,7 @@ type Server struct {
 	notificationService              *notifications.Service
 	instanceCrossSeedCompletionStore *models.InstanceCrossSeedCompletionStore
 	seasonPackRunStore               *models.SeasonPackRunStore
+	crossSeedRoutes                  *crossseedroute.Service
 	orphanScanStore                  *models.OrphanScanStore
 	orphanScanService                *orphanscan.Service
 	discScanStore                    *models.DiscScanStore
@@ -129,6 +133,7 @@ type Dependencies struct {
 	Restarter                        *update.Restarter
 	SelfUpdater                      *update.Updater
 	TrackerIconService               *trackericons.Service
+	PeerClientIconService            *peerclienticons.Service
 	BackupService                    *backups.Service
 	FilesManager                     *filesmanager.Service
 	CrossSeedService                 *crossseed.Service
@@ -147,6 +152,7 @@ type Dependencies struct {
 	NotificationService              *notifications.Service
 	InstanceCrossSeedCompletionStore *models.InstanceCrossSeedCompletionStore
 	SeasonPackRunStore               *models.SeasonPackRunStore
+	CrossSeedRoutes                  *crossseedroute.Service
 	OrphanScanStore                  *models.OrphanScanStore
 	OrphanScanService                *orphanscan.Service
 	DiscScanStore                    *models.DiscScanStore
@@ -206,6 +212,7 @@ func NewServer(deps *Dependencies) *Server {
 		restarter:                        deps.Restarter,
 		selfUpdater:                      deps.SelfUpdater,
 		trackerIconService:               deps.TrackerIconService,
+		peerClientIconService:            deps.PeerClientIconService,
 		backupService:                    deps.BackupService,
 		streamManager:                    streamManager,
 		filesManager:                     deps.FilesManager,
@@ -226,6 +233,7 @@ func NewServer(deps *Dependencies) *Server {
 		notificationService:              deps.NotificationService,
 		instanceCrossSeedCompletionStore: deps.InstanceCrossSeedCompletionStore,
 		seasonPackRunStore:               deps.SeasonPackRunStore,
+		crossSeedRoutes:                  deps.CrossSeedRoutes,
 		orphanScanStore:                  deps.OrphanScanStore,
 		orphanScanService:                deps.OrphanScanService,
 		discScanStore:                    deps.DiscScanStore,
@@ -376,7 +384,9 @@ func (s *Server) Handler() (*chi.Mux, error) {
 		return nil, err
 	}
 	instancesHandler := handlers.NewInstancesHandler(s.instanceStore, s.instanceReannounce, s.reannounceCache, s.clientPool, s.syncManager, s.reannounceService, sshpool.NewDialer(s.instanceStore), s.sshPool)
-	torrentsHandler := handlers.NewTorrentsHandler(s.syncManager, s.jackettService, s.instanceStore)
+	instancesHandler.SetOrphanScan(s.orphanScanService)
+	instancesHandler.SetCrossSeedRoutes(s.crossSeedRoutes)
+	torrentsHandler := handlers.NewTorrentsHandler(s.syncManager, s.jackettService, s.instanceStore, s.crossSeedService)
 	preferencesHandler := handlers.NewPreferencesHandler(s.syncManager)
 	clientAPIKeysHandler := handlers.NewClientAPIKeysHandler(s.clientAPIKeyStore, s.instanceStore, s.config.Config.BaseURL)
 	externalProgramsHandler := handlers.NewExternalProgramsHandler(s.externalProgramStore, s.externalProgramService, s.clientPool, s.automationStore)
@@ -387,6 +397,7 @@ func (s *Server) Handler() (*chi.Mux, error) {
 	qbittorrentInfoHandler := handlers.NewQBittorrentInfoHandler(s.clientPool)
 	backupsHandler := handlers.NewBackupsHandler(s.backupService)
 	trackerIconHandler := handlers.NewTrackerIconHandler(s.trackerIconService)
+	peerClientIconHandler := handlers.NewPeerClientIconHandler(s.peerClientIconService)
 	proxyHandler := proxy.NewHandler(s.clientPool, s.clientAPIKeyStore, s.instanceStore, s.syncManager, s.reannounceCache, s.reannounceService, s.config.Config.BaseURL)
 	licenseHandler := handlers.NewLicenseHandler(s.licenseService)
 	themesHandler := handlers.NewThemesHandler(s.config, s.licenseService, s.themeSettingsStore, func(ctx context.Context) bool {
@@ -398,6 +409,8 @@ func (s *Server) Handler() (*chi.Mux, error) {
 		s.instanceCrossSeedCompletionStore,
 		s.instanceStore,
 		s.seasonPackRunStore,
+		s.crossSeedRoutes,
+		s.syncManager,
 	)
 	automationsHandler := handlers.NewAutomationHandler(s.automationStore, s.automationActivityStore, s.instanceStore, s.externalProgramStore, s.automationService)
 	orphanScanHandler := handlers.NewOrphanScanHandler(s.orphanScanStore, s.instanceStore, s.orphanScanService)
@@ -484,6 +497,8 @@ func (s *Server) Handler() (*chi.Mux, error) {
 			r.Use(authMiddleware)
 
 			r.Get("/tracker-icons", trackerIconHandler.GetTrackerIcons)
+			r.Get("/peer-client-icons/{name}", peerClientIconHandler.GetPeerClientIcon)
+			r.Post("/stream/subscriptions", s.streamManager.ChangeSubscriptions)
 
 			if s.brushRoutes != nil {
 				r.Route("/brush", s.brushRoutes)
@@ -617,6 +632,7 @@ func (s *Server) Handler() (*chi.Mux, error) {
 						r.Post("/", torrentsHandler.AddTorrent)
 						r.Post("/check-duplicates", torrentsHandler.CheckDuplicates)
 						r.Post("/bulk-action", torrentsHandler.BulkAction)
+						r.Post("/delete-cross-seeds", torrentsHandler.GetDeleteCrossSeeds)
 						r.Post("/add-peers", torrentsHandler.AddPeers)
 						r.Post("/ban-peers", torrentsHandler.BanPeers)
 						r.Post("/field", torrentsHandler.GetTorrentField)
@@ -691,6 +707,7 @@ func (s *Server) Handler() (*chi.Mux, error) {
 						r.Route("/{ruleID}", func(r chi.Router) {
 							r.Put("/", automationsHandler.Update)
 							r.Delete("/", automationsHandler.Delete)
+							r.Post("/apply", automationsHandler.ApplyRuleNow)
 						})
 					})
 

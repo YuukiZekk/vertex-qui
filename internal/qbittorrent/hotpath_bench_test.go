@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"testing"
+	"time"
 
 	qbt "github.com/autobrr/go-qbittorrent"
 	"github.com/rs/zerolog"
@@ -103,6 +104,19 @@ func benchTorrents(count int) []qbt.Torrent {
 	return torrents
 }
 
+// benchTrackerHealth builds the snapshot that a refresh stores for these
+// torrents, so the state sort reads real verdicts.
+func benchTrackerHealth(torrents []qbt.Torrent) *TrackerHealthSnapshot {
+	now := time.Now()
+	byHash := make(map[string]TrackerHealth)
+	for i := range torrents {
+		if health := trackerHealthOf(&torrents[i], now); health != "" {
+			byHash[torrents[i].Hash] = health
+		}
+	}
+	return NewTrackerHealthSnapshot(byHash)
+}
+
 func benchSilence(b *testing.B) {
 	b.Helper()
 	old := zerolog.GlobalLevel()
@@ -171,7 +185,7 @@ func BenchmarkHotCounts(b *testing.B) {
 	torrents := benchTorrents(benchSize)
 
 	for b.Loop() {
-		_, _, _ = sm.calculateCountsFromTorrentsWithTrackers(b.Context(), nil, torrents, nil, nil, false, false)
+		_ = sm.calculateCountsFromTorrentsWithTrackers(b.Context(), nil, torrents, nil, false, false)
 	}
 }
 
@@ -200,7 +214,7 @@ func BenchmarkHotCountsWithTrackers(b *testing.B) {
 	client := &Client{instanceID: 1, trackerExclusions: make(map[string]map[string]struct{})}
 
 	for b.Loop() {
-		_, _, _ = sm.calculateCountsFromTorrentsWithTrackers(b.Context(), client, torrents, nil, nil, false, false)
+		_ = sm.calculateCountsFromTorrentsWithTrackers(b.Context(), client, torrents, nil, false, false)
 	}
 }
 
@@ -224,7 +238,7 @@ func BenchmarkHotResponseEncode(b *testing.B) {
 	benchSilence(b)
 	sm := &SyncManager{}
 	torrents := benchTorrents(benchSize)
-	counts, _, _ := sm.calculateCountsFromTorrentsWithTrackers(b.Context(), nil, torrents, nil, nil, false, false)
+	counts := sm.calculateCountsFromTorrentsWithTrackers(b.Context(), nil, torrents, nil, false, false)
 
 	page := torrents[:300]
 	views := make([]TorrentView, len(page))
@@ -255,6 +269,7 @@ func BenchmarkHotSort(b *testing.B) {
 	benchSilence(b)
 	sm := &SyncManager{}
 	src := benchTorrents(benchSize)
+	health := benchTrackerHealth(src)
 	work := make([]qbt.Torrent, len(src))
 
 	for _, tc := range []struct {
@@ -262,7 +277,7 @@ func BenchmarkHotSort(b *testing.B) {
 		run  func(t []qbt.Torrent)
 	}{
 		{"name", func(t []qbt.Torrent) { sm.sortTorrents(t, "name", false, false, nil) }},
-		{"state", func(t []qbt.Torrent) { sm.sortTorrents(t, "state", false, true, nil) }},
+		{"state", func(t []qbt.Torrent) { sm.sortTorrents(t, "state", false, true, health) }},
 		{"tracker", func(t []qbt.Torrent) { sm.sortTorrents(t, "tracker", false, false, nil) }},
 		{"added_on", func(t []qbt.Torrent) { sm.sortTorrents(t, "added_on", false, false, nil) }},
 		{"eta", func(t []qbt.Torrent) { sm.sortTorrents(t, "eta", false, false, nil) }},
@@ -296,7 +311,10 @@ func benchCrossInstanceViews(count int) []CrossInstanceTorrentView {
 
 func BenchmarkHotSortCrossInstance(b *testing.B) {
 	benchSilence(b)
-	sm := &SyncManager{}
+	// benchTorrents is deterministic, so this snapshot holds the hashes of the
+	// views. Each instance gets all of them, and a lookup finds its own rows.
+	health := benchTrackerHealth(benchTorrents(benchSize))
+	sm := &SyncManager{trackerHealthCache: map[int]*TrackerHealthSnapshot{0: health, 1: health, 2: health}}
 	src := benchCrossInstanceViews(benchSize)
 	work := make([]CrossInstanceTorrentView, len(src))
 
@@ -306,7 +324,7 @@ func BenchmarkHotSortCrossInstance(b *testing.B) {
 				b.StopTimer()
 				copy(work, src)
 				b.StartTimer()
-				sm.sortCrossInstanceTorrents(work, sortKey, false, false)
+				sm.sortCrossInstanceTorrents(work, sortKey, false)
 			}
 		})
 	}

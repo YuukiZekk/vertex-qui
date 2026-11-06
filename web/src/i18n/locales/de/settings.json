@@ -16,6 +16,11 @@
     "security": "Sicherheit",
     "logs": "Protokolle"
   },
+  "nav": {
+    "general": "Allgemein",
+    "connections": "Verbindungen",
+    "access": "Zugriff"
+  },
   "language": {
     "cardTitle": "Sprache",
     "cardDescription": "Wähle deine bevorzugte Anzeigesprache"
@@ -97,7 +102,6 @@
       "proxyUrl": "Proxy-URL",
       "showProxyUrl": "Proxy-URL anzeigen",
       "hideProxyUrl": "Proxy-URL ausblenden",
-      "copyProxyUrl": "Proxy-URL kopieren",
       "done": "Fertig"
     },
     "deleteDialog": {
@@ -113,9 +117,7 @@
       "deleted": "Client-API-Key erfolgreich gelöscht",
       "deleteFailed": "Client-API-Key konnte nicht gelöscht werden: {{error}}",
       "clientNameRequired": "Client-Name ist erforderlich",
-      "selectInstance": "Bitte wähle eine qBittorrent-Instanz aus",
-      "proxyCopied": "Proxy-URL in die Zwischenablage kopiert",
-      "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen"
+      "selectInstance": "Bitte wähle eine qBittorrent-Instanz aus"
     }
   },
   "apiKeys": {
@@ -141,7 +143,8 @@
     "newKey": {
       "label": "Dein neuer API-Key",
       "warning": "Speichere diesen Key jetzt. Du kannst ihn später nicht erneut einsehen.",
-      "done": "Fertig"
+      "done": "Fertig",
+      "apiKey": "API-Key"
     },
     "deleteDialog": {
       "title": "API-Key löschen?",
@@ -153,9 +156,7 @@
       "created": "API-Key erfolgreich erstellt",
       "createFailed": "API-Key konnte nicht erstellt werden",
       "deleted": "API-Key erfolgreich gelöscht",
-      "deleteFailed": "API-Key konnte nicht gelöscht werden",
-      "copied": "API-Key in die Zwischenablage kopiert",
-      "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen"
+      "deleteFailed": "API-Key konnte nicht gelöscht werden"
     }
   },
   "externalPrograms": {
@@ -448,7 +449,9 @@
         "activeTitle": "Premium-Zugang aktiv",
         "activeDescription": "Du hast Zugriff auf alle aktuellen und zukünftigen Premium-Designs",
         "activationRequiredTitle": "Lizenzaktivierung erforderlich",
-        "activationRequiredDescription": "Deine Lizenz muss auf diesem Gerät aktiviert werden"
+        "activationRequiredDescription": "Deine Lizenz muss auf diesem Gerät aktiviert werden",
+        "offlineTitle": "Lizenzdienst nicht erreichbar",
+        "offlineDescription": "qui konnte den Lizenzdienst 7 Tage lang nicht erreichen, daher sind die Premium-Designs gesperrt. qui prüft beim Start und einmal am Tag. Die Designs werden wieder freigeschaltet, sobald der Dienst antwortet. Du musst die Lizenz nicht neu aktivieren."
       },
       "portalHelp": {
         "prefix": "Kaufe über DodoPayments und gib hier deinen Lizenzschlüssel ein. Falls du den Schlüssel verlierst, kannst du ihn wiederherstellen über das",
@@ -470,7 +473,12 @@
       },
       "details": {
         "productAdded": "{{productName}} • Hinzugefügt {{date}}",
-        "productStatusAndAdded": "{{productName}} • Status: {{status}} • Hinzugefügt {{date}}"
+        "productStatusAndAdded": "{{productName}} • Status: {{status}} • Hinzugefügt {{date}}",
+        "statusLabels": {
+          "invalid": "Ungültig",
+          "offline": "Offline",
+          "unknown": "Unbekannt"
+        }
       },
       "invalid": {
         "dodo": "Diese Lizenz ist auf diesem Gerät nicht aktiv. Klicke auf „Reaktivieren“, um sie hier zu nutzen. Falls du das Aktivierungslimit erreichst, gehe zu <portal>licenses.getqui.com</portal>, registriere dich oder melde dich mit der E-Mail-Adresse an, mit der du die Lizenz gekauft hast, und deaktiviere unter Machine Instances ein Gerät, das du nicht mehr nutzt."
@@ -1095,11 +1103,6 @@
       "bind": "Bind-Adresse",
       "configDir": "Konfigurationsverzeichnis",
       "dataDir": "Datenverzeichnis"
-    },
-    "copyTitle": "{{label}} kopieren",
-    "toasts": {
-      "copied": "{{label}} in die Zwischenablage kopiert",
-      "copyFailed": "{{label}} konnte nicht kopiert werden"
     }
   }
 }

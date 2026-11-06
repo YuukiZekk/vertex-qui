@@ -176,6 +176,47 @@ func TestVolatileFieldsDoNotTriggerResend(t *testing.T) {
 	require.Equal(t, []string{"a"}, changedHashes(sent), "a real change (speed) must re-send the row")
 }
 
+// A one-row view (the details row) resends its row when a counter that the
+// General tab shows changes. The main list keeps the volatile-field rule.
+func TestOneRowViewResendsLiveCounters(t *testing.T) {
+	counters := map[string]func(*qbt.Torrent){
+		"TimeActive":       func(tr *qbt.Torrent) { tr.TimeActive++ },
+		"SeedingTime":      func(tr *qbt.Torrent) { tr.SeedingTime++ },
+		"NumSeeds":         func(tr *qbt.Torrent) { tr.NumSeeds++ },
+		"NumLeechs":        func(tr *qbt.Torrent) { tr.NumLeechs++ },
+		"NumComplete":      func(tr *qbt.Torrent) { tr.NumComplete++ },
+		"NumIncomplete":    func(tr *qbt.Torrent) { tr.NumIncomplete++ },
+		"ConnectionsCount": func(tr *qbt.Torrent) { tr.ConnectionsCount++ },
+		"PiecesHave":       func(tr *qbt.Torrent) { tr.PiecesHave++ },
+	}
+	for name, tick := range counters {
+		for _, tc := range []struct {
+			view   string
+			limit  int
+			resend bool
+		}{
+			{view: "details row", limit: 1, resend: true},
+			{view: "main list", limit: 300, resend: false},
+		} {
+			t.Run(name+"/"+tc.view, func(t *testing.T) {
+				g := &subscriptionGroup{}
+				opts := StreamOptions{InstanceID: 1, Limit: tc.limit}
+				base := qbt.Torrent{Hash: "a", Name: "A"}
+				g.buildUpdatePayload(opts, singleResp(qbittorrent.TorrentView{Torrent: &base}), &StreamMeta{})
+
+				ticked := base
+				tick(&ticked)
+				payload := g.buildUpdatePayload(opts, singleResp(qbittorrent.TorrentView{Torrent: &ticked}), &StreamMeta{})
+				if tc.resend {
+					require.Equal(t, []string{"a"}, changedHashes(payload))
+				} else {
+					require.Empty(t, changedHashes(payload))
+				}
+			})
+		}
+	}
+}
+
 func TestBuildUpdatePayloadCrossInstance(t *testing.T) {
 	g := &subscriptionGroup{}
 	opts := StreamOptions{InstanceIDs: []int{1, 2}}
@@ -338,4 +379,20 @@ func TestComputeRowDeltaFlagsNewAndChangedRows(t *testing.T) {
 	mutated := []qbittorrent.TorrentView{tv("a", "A"), tv("b", "B-new")}
 	_, changedIdx3, _ := computeRowDelta(mutated, singleRowKey, singleRowFingerprint, fp)
 	require.Equal(t, []int{1}, changedIdx3)
+}
+
+func TestServerStatePayloadRebuildsWhenSubcategoryModeChanges(t *testing.T) {
+	g := &subscriptionGroup{}
+	opts := StreamOptions{InstanceID: 1}
+	seed := singleResp(tv("a", "A"))
+	seed.ServerState = &qbt.ServerState{DlInfoSpeed: 1}
+	g.buildUpdatePayload(opts, seed, &StreamMeta{})
+
+	same := g.buildServerStatePayload(&qbt.ServerState{DlInfoSpeed: 2}, nil, 0, &StreamMeta{})
+	require.NotNil(t, same)
+	require.Equal(t, int64(2), same.Data.ServerState.DlInfoSpeed)
+	require.Equal(t, int64(2), g.baselineSnapshot.ServerState.DlInfoSpeed, "a joiner must get the new server state")
+	require.Equal(t, same.Delta.BaseVersion.Minor+1, same.Version.Minor)
+
+	require.Nil(t, g.buildServerStatePayload(&qbt.ServerState{DlInfoSpeed: 3, UseSubcategories: true}, nil, 0, &StreamMeta{}))
 }

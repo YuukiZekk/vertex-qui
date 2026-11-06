@@ -505,7 +505,6 @@
       "dryRun": "Dry run",
       "removed": "Rimosso",
       "executed": "Eseguito",
-      "copyHash": "Copia hash",
       "original": "Originale: {{domain}}",
       "programLabel": "Programma: {{name}}",
       "ruleLabel": "Regola: {{name}}",
@@ -617,6 +616,7 @@
         "cancel": "Annulla",
         "delete": "Elimina"
       },
+      "enableTagRule": "Abilita regola dei tag",
       "enableDeleteRule": "Abilita regola di eliminazione",
       "enableCategoryRule": "Abilita regola di categoria → {{category}}",
       "enableRuleImmediately": "La conferma abiliterà subito questa regola.",
@@ -665,10 +665,27 @@
         "exportedTorrents": "{{count}} torrent esportati in CSV",
         "exportFailed": "Esportazione dell'anteprima non riuscita",
         "deletedActivityEntries": "{{count}} voci di attività eliminate",
-        "deleteActivityFailed": "Eliminazione dell'attività non riuscita",
-        "hashCopied": "Hash copiato"
+        "deleteActivityFailed": "Eliminazione dell'attività non riuscita"
       },
       "exported": "Esportato"
+    },
+    "runWorkflowNow": {
+      "action": "Esegui ora",
+      "title": "Eseguire \"{{name}}\" ora?",
+      "description": "qui esegue ora una volta il workflow salvato e applica le sue azioni ai torrent corrispondenti. Viene eseguito anche quando il workflow è disattivato.",
+      "dryRunDescription": "Questo workflow è impostato come simulazione, quindi qui registra solo cosa farebbe. Nessun torrent cambia.",
+      "actions": "Azioni",
+      "cancel": "Annulla",
+      "confirm": "Esegui ora",
+      "toast": {
+        "running": "Esecuzione di \"{{name}}\"…",
+        "completed": "Esecuzione completata per \"{{name}}\"",
+        "noChanges": "Esecuzione completata per \"{{name}}\". Nessun torrent richiedeva modifiche.",
+        "completedWithErrors": "Esecuzione completata per \"{{name}}\" con errori. Consulta il registro attività.",
+        "dryRunCompleted": "Simulazione completata per \"{{name}}\"",
+        "inProgress": "È in corso un'altra esecuzione. Riprova tra un momento.",
+        "failed": "Impossibile eseguire il workflow"
+      }
     },
     "workflowPreview": {
       "loadingPreview": "Caricamento dell'anteprima. Potrebbe richiedere del tempo...",
@@ -714,8 +731,8 @@
       "description": "Scansiona le cartelle di download e identifica i file orfani da rimuovere.",
       "noLocalAccess": "Nessun accesso locale",
       "noLocalAccessTooltip": "qui e qBittorrent devono essere eseguiti sulla stessa macchina. Abilita \"Accesso al filesystem locale\" nelle impostazioni dell'istanza per usare la scansione orfani.",
-      "remoteLimits": "L'eliminazione e la pulizia automatica non sono ancora disponibili sulle istanze remote.",
-      "remoteNoIdentity": "Inoltre qui non riconosce quando due percorsi sono lo stesso file, quindi un file raggiungibile da un secondo percorso, ad esempio tramite un bind mount, può comparire nell'elenco anche se un torrent lo usa.",
+      "remoteLimits": "L'eliminazione e la pulizia automatica su un'istanza remota richiedono l'identità dei file, che qui può leggere solo se il server gli consente di eseguire GNU find e stat.",
+      "remoteNoIdentity": "Questa istanza remota non lo consente, quindi qui non riconosce quando due percorsi sono lo stesso file e un file raggiungibile da un secondo percorso, ad esempio tramite un bind mount, può comparire nell'elenco anche se un torrent lo usa. Le scansioni qui si possono visualizzare ed esportare, ma non eliminare.",
       "on": "On",
       "off": "Off",
       "summaryGrace": "Tolleranza {{grace}}min",
@@ -727,7 +744,7 @@
       "cancel": "Annulla",
       "autoCleanupEnabled": "Pulizia automatica abilitata (≤{{max}} file)",
       "autoCleanupDisabled": "Pulizia automatica disabilitata",
-      "autoCleanupRemote": "Nessuna pulizia automatica sulle istanze remote",
+      "autoCleanupRemote": "Nessuna pulizia automatica su questa istanza remota",
       "pathsIgnored_one": " · {{count}} percorso ignorato",
       "pathsIgnored_other": " · {{count}} percorsi ignorati",
       "scanNow": "Scansiona ora",
@@ -748,7 +765,6 @@
       "deletedSeparator": ", ",
       "partialFailure": "Errore parziale - controlla le scansioni recenti",
       "partialFailureExpand": "Errore parziale - espandi per i dettagli",
-      "copiedToClipboard": "Copiato negli appunti",
       "noScansYet": "Nessuna scansione eseguita. Fai clic su \"Scansiona ora\" per trovare gli orfani.",
       "statusClean": "Pulito",
       "statusPartial": "Scansione parziale",
@@ -768,7 +784,9 @@
         "scanStartFailed": "Avvio della scansione non riuscito",
         "scanCanceled": "Scansione annullata",
         "cancelFailed": "Annullamento non riuscito"
-      }
+      },
+      "errorMessage": "Messaggio di errore",
+      "scanPaths": "Percorsi di scansione"
     },
     "orphanScanPreview": {
       "title": "Anteprima orfani",
@@ -788,7 +806,7 @@
       "exportCSV": "Esporta CSV",
       "close": "Chiudi",
       "deleteItems": "Elimina",
-      "remoteDeleteUnavailable": "Questa scansione è stata eseguita su un'istanza remota, dove l'eliminazione non è ancora supportata. Esporta l'elenco per rimuovere tu stesso i file sul server.",
+      "remoteDeleteUnavailable": "Questa scansione non può eliminare, perché l'istanza remota non fornisce l'identità dei file o la scansione non è riuscita a leggerla per ogni file. Esporta l'elenco per rimuovere tu stesso i file sul server.",
       "toast": {
         "deletionStarted": "Eliminazione avviata",
         "deletionDescription": "I file orfani e le cartelle abbandonate sono in fase di rimozione",
@@ -917,8 +935,6 @@
       "ratio": "Rapporto",
       "added": "Aggiunto",
       "original": "Originale: {{domain}}",
-      "hashCopied": "Hash copiato",
-      "copyHash": "Copia hash",
       "loading": "Caricamento...",
       "notAvailable": "Dettagli dell'esecuzione non disponibili (solo in memoria).",
       "failedToLoad": "Impossibile caricare i dettagli dell'esecuzione.",
@@ -982,8 +998,6 @@
       "tryDifferentSearch": "Prova un altro termine di ricerca o svuota il filtro.",
       "eventsWillAppear": "Gli eventi appariranno qui quando vengono rilevati torrent in stallo.",
       "enableMonitoring": "Abilita il monitoraggio per iniziare a tracciare i torrent in stallo.",
-      "hashCopied": "Hash copiato",
-      "copyHash": "Copia hash",
       "outcomes": {
         "succeeded": "Completato",
         "failed": "Fallito",
@@ -1152,6 +1166,7 @@
         "title": "Azione",
         "addAction": "Aggiungi un'azione",
         "selectAction": "Seleziona un'azione...",
+        "runOrderHelp": "Le azioni vengono eseguite nell'ordine mostrato. Ogni azione vede il torrent com'era all'inizio dell'esecuzione, quindi un programma esterno eseguito dopo uno spostamento riceve ancora il vecchio percorso di salvataggio.",
         "speedLimits": "Limiti di velocità",
         "shareLimits": "Limiti di condivisione",
         "pause": "Metti in pausa",
@@ -1204,6 +1219,7 @@
         "strategyReplace": "Sostituisci nel client",
         "replaceDescription": "La modalità Sostituisci forza una reimpostazione completa di questi tag in tutto il client prima di applicare questa regola.",
         "managedDescription": "La modalità Gestita mantiene i tag accurati con aggiornamenti basati sulle differenze; la Sincronizzazione completa aggiunge i tag alle corrispondenze e li rimuove dalle non corrispondenze.",
+        "includeAffectedCrossSeeds": "Includi i cross-seed interessati",
         "useTrackerName": "Usa il nome del tracker come tag",
         "useDisplayName": "Usa il nome visualizzato",
         "aboutDisplayNames": "Informazioni sui nomi visualizzati",
@@ -1246,7 +1262,10 @@
         "placeholder": "es., /data/torrents",
         "skipIfCrossSeedsDontMatch": "Ignora se i cross-seed non corrispondono alle condizioni della regola",
         "aboutSkipping": "Informazioni sull'ignorare lo spostamento se esistono cross-seed",
-        "skipDescription": "Ignora lo spostamento se ci sono altri torrent nello stesso gruppo di cross-seed che non corrispondono alle condizioni della regola. Altrimenti, tutti i cross-seed verranno spostati, anche se non corrispondono alle condizioni della regola."
+        "skipDescription": "Ignora lo spostamento se ci sono altri torrent nello stesso gruppo di cross-seed che non corrispondono alle condizioni della regola. Altrimenti, tutti i cross-seed verranno spostati, anche se non corrispondono alle condizioni della regola.",
+        "errors": {
+          "mustBeAbsolute": "Deve essere un percorso assoluto, ad esempio /data/archive o D:\\Archive."
+        }
       },
       "templateHelp": {
         "absolutePath": "Deve essere un percorso assoluto. I valori vanno al suo interno, ad esempio",
@@ -1345,11 +1364,13 @@
       "preview": {
         "confirmDeleteRule": "Conferma regola di eliminazione",
         "previewDeleteRule": "Anteprima regola di eliminazione",
+        "confirmTagChange": "Conferma modifiche ai tag",
         "confirmCategoryChange": "Conferma cambio di categoria → {{category}}",
         "deleteEnabledSummary": "Questa regola interesserà {{count}} torrent che corrisponde attualmente.",
         "deleteEnabledSummary_other": "Questa regola interesserà {{count}} torrent che corrispondono attualmente.",
         "deleteDisabledSummary": "{{count}} torrent corrisponderebbe a questa regola se abilitata.",
         "deleteDisabledSummary_other": "{{count}} torrent corrisponderebbero a questa regola se abilitata.",
+        "tagPrefix": "Questa regola aggiornerà i tag di",
         "categoryPrefix": "Questa regola sposterà",
         "torrents": "{{count}} torrent",
         "torrents_other": "{{count}} torrent",
@@ -1763,11 +1784,9 @@
       "lastBackup": "Ultimo backup",
       "loading": "Caricamento...",
       "progress": "{{current}} di {{total}} torrent ({{percentage}}%)",
-      "status": "Stato: {{status}}",
       "noBackupsYet": "Nessun backup",
       "nextScheduledBackup": "Prossimo backup pianificato",
       "loadingSchedule": "Caricamento della pianificazione...",
-      "instance": "Istanza",
       "automaticBackupsOff": "I backup automatici sono disattivati per questa istanza.",
       "enableCadenceToSchedule": "Abilita almeno una cadenza automatica per pianificare i backup.",
       "currentlyRunning": "Il backup è attualmente in esecuzione.",
@@ -1791,6 +1810,7 @@
       "schedule": {
         "title": "Cadenze automatiche",
         "description": "Le esecuzioni orarie, giornaliere, settimanali e mensili iniziano dopo che il backup precedente è terminato e il loro intervallo è trascorso. Lasciale tutte disattivate se attivi i backup solo manualmente.",
+        "keep": "Mantieni",
         "hourly": "Ogni ora",
         "hourlyDescription": "Quanti snapshot orari conservare prima che i più vecchi vengano eliminati.",
         "hourlyTooltip": "Viene eseguito circa una volta all'ora quando i backup sono abilitati ed è trascorsa almeno un'ora dall'ultima esecuzione.",
@@ -1809,8 +1829,7 @@
         "saveChanges": "Salva modifiche",
         "saveAll": "Salva le modifiche su tutte le istanze",
         "requiresCadence": "Seleziona almeno una cadenza (oraria, giornaliera, settimanale o mensile) prima di salvare.",
-        "waitForCapabilities": "Attendi il completamento dei controlli delle capacità dell'istanza prima di salvare su tutte le istanze.",
-        "changesApplyImmediately": "Le modifiche si applicano ai backup futuri non appena salvi."
+        "waitForCapabilities": "Attendi il completamento dei controlli delle capacità dell'istanza prima di salvare su tutte le istanze."
       }
     },
     "restore": {

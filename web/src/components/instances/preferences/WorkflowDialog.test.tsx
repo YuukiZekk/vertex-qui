@@ -4,8 +4,9 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import type { Automation, FilesystemCapabilities } from "@/types"
 
 const mocks = vi.hoisted(() => {
@@ -82,7 +83,9 @@ describe("WorkflowDialog category validation", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <WorkflowDialog open onOpenChange={() => {}} instanceId={1} rule={rule} />
+        <TooltipProvider>
+          <WorkflowDialog open onOpenChange={() => {}} instanceId={1} rule={rule} />
+        </TooltipProvider>
       </QueryClientProvider>
     )
 
@@ -132,7 +135,9 @@ describe("WorkflowDialog include hardlinks", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <WorkflowDialog open onOpenChange={() => {}} instanceId={1} rule={deleteRule} />
+        <TooltipProvider>
+          <WorkflowDialog open onOpenChange={() => {}} instanceId={1} rule={deleteRule} />
+        </TooltipProvider>
       </QueryClientProvider>
     )
 
@@ -154,7 +159,9 @@ describe("WorkflowDialog tracker pattern", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <WorkflowDialog open onOpenChange={() => {}} instanceId={1} rule={{ ...rule, trackerPattern }} />
+        <TooltipProvider>
+          <WorkflowDialog open onOpenChange={() => {}} instanceId={1} rule={{ ...rule, trackerPattern }} />
+        </TooltipProvider>
       </QueryClientProvider>
     )
 
@@ -172,6 +179,142 @@ describe("WorkflowDialog tracker pattern", () => {
     const payload = mocks.save.mock.calls[0][2]
     expect(payload.trackerPattern).toBe(trackerPattern)
     expect(payload).not.toHaveProperty("trackerDomains")
+    client.clear()
+  })
+})
+
+function renderDialog(dialogRule: Automation) {
+  // Radix scrolls focused select options; jsdom has no layout.
+  Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: vi.fn() })
+  mocks.instancesQuery.data = []
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <TooltipProvider>
+        <WorkflowDialog open onOpenChange={() => {}} instanceId={1} rule={dialogRule} />
+      </TooltipProvider>
+    </QueryClientProvider>
+  )
+  return client
+}
+
+async function optionLabels(trigger: HTMLElement) {
+  fireEvent.keyDown(trigger, { key: "ArrowDown" })
+  await screen.findAllByRole("option")
+  return screen.getAllByRole("option").map(option => option.textContent)
+}
+
+// Labels in actionRunOrder, without delete.
+const combinableLabels = ["speedLimits", "shareLimits", "pause", "resume", "recheck", "reannounce", "autoManagement", "tag", "category", "move", "externalProgram", "exportToInstance"]
+  .map(action => key(`actions.${action}`))
+
+describe("WorkflowDialog action order", () => {
+  it("renders the action sections in run order", () => {
+    const client = renderDialog({
+      ...rule,
+      conditions: {
+        schemaVersion: "1",
+        speedLimits: { enabled: true, uploadKiB: 100 },
+        shareLimits: { enabled: true, ratioLimit: 2 },
+        pause: { enabled: true },
+        resume: { enabled: true },
+        recheck: { enabled: true },
+        reannounce: { enabled: true },
+        autoManagement: { enabled: true },
+        tags: [{ enabled: true, tags: ["ordered"], mode: "add" }],
+        category: { enabled: true, category: "sorted" },
+        move: { enabled: true, path: "/moved" },
+        externalProgram: { enabled: true, programId: 1 },
+        exportToInstance: { enabled: true, targetInstanceId: 2, savePath: "" },
+      },
+    })
+
+    const headings = ["actions.speedLimits", "actions.shareLimits", "actions.pause", "actions.resume", "actions.recheck", "actions.reannounce", "actions.autoManagement", "tag.title", "actions.category", "actions.move", "actions.externalProgram", "export.title"]
+      .map(suffix => screen.getByText(key(suffix)))
+    const inDomOrder = [...headings].sort((a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)
+    expect(inDomOrder.map(heading => heading.textContent)).toEqual(headings.map(heading => heading.textContent))
+    client.clear()
+  })
+
+  it("lists actions in run order when a rule has none, with delete last", async () => {
+    const client = renderDialog({ ...rule, conditions: { schemaVersion: "1" } })
+
+    expect(await optionLabels(screen.getByText(key("actions.selectAction")))).toEqual([...combinableLabels, key("actions.deleteStandalone")])
+    client.clear()
+  })
+
+  it("offers the remaining actions in run order", async () => {
+    const client = renderDialog(rule)
+
+    expect(await optionLabels(screen.getByText(key("actions.addAction")))).toEqual(combinableLabels.filter(label => label !== key("actions.pause")))
+    client.clear()
+  })
+
+  it("explains the run order on the Actions label", () => {
+    // The tooltip opens on tap only where "ontouchstart" exists; jsdom has no touch support.
+    const touchWindow = window as Window & { ontouchstart?: unknown }
+    touchWindow.ontouchstart = null
+    const client = renderDialog(rule)
+    try {
+      const trigger = within(screen.getByText(key("actions.title"))).getByRole("button", { name: "fieldHelp.trigger" })
+      fireEvent.pointerDown(trigger, { pointerType: "touch" })
+      fireEvent.pointerUp(trigger, { pointerType: "touch" })
+      fireEvent.click(trigger)
+
+      expect(screen.getAllByText(key("actions.runOrderHelp")).length).toBeGreaterThan(0)
+    } finally {
+      delete touchWindow.ontouchstart
+      client.clear()
+    }
+  })
+})
+
+describe("WorkflowDialog move path on a disabled rule", () => {
+  const renderRule = (path: string) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const moveRule: Automation = { ...rule, enabled: false, conditions: { schemaVersion: "1", move: { enabled: true, path } } }
+    render(
+      <QueryClientProvider client={client}>
+        <TooltipProvider>
+          <WorkflowDialog open onOpenChange={() => {}} instanceId={1} rule={moveRule} />
+        </TooltipProvider>
+      </QueryClientProvider>
+    )
+    return client
+  }
+
+  it("saves a rule saved before the check existed, since the server skips disabled rules", async () => {
+    mocks.save.mockResolvedValue({})
+    const client = renderRule("data/archive")
+
+    fireEvent.click(screen.getByRole("button", { name: key("save") }))
+
+    await waitFor(() => expect(mocks.save).toHaveBeenCalled())
+    client.clear()
+  })
+
+  it("shows the dialog's own move path error when a dry run is blocked", () => {
+    const client = renderRule("data/archive")
+    expect(screen.queryByText(key("move.errors.mustBeAbsolute"))).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: key("runDryRunNow") }))
+
+    expect(mocks.dryRun).not.toHaveBeenCalled()
+    expect(screen.getByText(key("move.errors.mustBeAbsolute"))).not.toBeNull()
+    // The error explains the dry run; saving the disabled rule stays allowed.
+    expect(screen.getByRole("button", { name: key("save") }).hasAttribute("disabled")).toBe(false)
+    client.clear()
+  })
+
+  it("shows the server's move path error when a dry run is rejected", async () => {
+    const message = "Move path must be absolute, for example /data/archive or D:\\Archive. For a sample torrent it renders \"sample/x\""
+    mocks.dryRun.mockRejectedValueOnce(new Error(message))
+    const client = renderRule("{{ .Category }}/x")
+
+    fireEvent.click(screen.getByRole("button", { name: key("runDryRunNow") }))
+
+    expect(await screen.findByText(message)).not.toBeNull()
+    expect(mocks.error).not.toHaveBeenCalled()
     client.clear()
   })
 })

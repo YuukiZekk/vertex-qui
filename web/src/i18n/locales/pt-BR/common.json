@@ -46,7 +46,7 @@
     "tasksForInstance": "Tarefas para a instância",
     "settingsForInstance": "Configurações para a instância",
     "clearSearch": "Limpar busca",
-    "searchTorrents": "Buscar torrents... ({{shortcutKey}})",
+    "searchTorrents": "Buscar torrents...",
     "globPattern": "Padrão Glob...",
     "smartSearchTitle": "Recursos de Busca Inteligente:",
     "smartSearchGlob": "Padrões Glob:",
@@ -57,6 +57,7 @@
     "smartSearchFields": "Busca no nome, categoria e tags",
     "smartSearchEnter": "Pressione Enter para busca instantânea",
     "smartSearchAuto": "Busca automaticamente após pausa de 500ms",
+    "smartSearchShortcut": "Pressione {{shortcutKey}} para ir à busca",
     "torrentCreationTasksTitle": "Tarefas de Criação de Torrent",
     "updateAvailable": "Atualização Disponível",
     "updateVersion": "Versão {{version}}",
@@ -100,17 +101,19 @@
     "cancel": "Cancelar",
     "close": "Fechar",
     "create": "Criar",
-    "copyPath": "Copiar caminho",
     "scrollToTop": "Rolar para o topo",
     "search": "Buscar",
-    "select": "Selecionar"
+    "select": "Selecionar",
+    "copyValue": "Copiar {{label}}"
   },
   "placeholders": {
     "search": "Buscar...",
     "selectItems": "Selecionar itens..."
   },
   "feedback": {
-    "noResultsFound": "Nenhum resultado encontrado."
+    "noResultsFound": "Nenhum resultado encontrado.",
+    "copied": "{{label}} copiado para a área de transferência",
+    "copyFailed": "Falha ao copiar para a área de transferência"
   },
   "errors": {
     "unknown": "Erro desconhecido",
@@ -244,5 +247,8 @@
     "yearly": "{{price}} / ano",
     "monthly": "{{price}} / mês",
     "notLicense": "Os temas premium são uma compra única à parte."
+  },
+  "labels": {
+    "path": "Caminho"
   }
 }

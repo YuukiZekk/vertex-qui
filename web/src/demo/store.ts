@@ -293,7 +293,9 @@ function generateTorrent(rng: () => number, now: number, index: number): Torrent
   const active = state === "downloading" || (state === "uploading" && rng() < 0.08)
   const dlspeed = state === "downloading" ? Math.round((0.3 + rng() * 6) * MIB) : 0
   const upspeed = active && state === "uploading" ? Math.round((50 + rng() * 4000) * KIB) : 0
-  const health = rng() < 0.012 ? "unregistered" : rng() < 0.004 ? "tracker_down" : undefined
+  // The second roll splits between down and error, so the draws from rng() stay the same.
+  const healthRoll = rng() < 0.012 ? -1 : rng()
+  const health = healthRoll < 0 ? "unregistered" : healthRoll < 0.004 ? "tracker_down" : healthRoll < 0.008 ? "tracker_error" : undefined
   const savePath = `/data/torrents/${category.split("/")[0]}`
   return {
     added_on: added,
@@ -558,7 +560,18 @@ export const CAPABILITIES: InstanceCapabilities = {
   webAPIVersion: "2.11.4",
 }
 
-const PEER_CLIENTS = ["qBittorrent 5.1.2", "qBittorrent 5.0.4", "Transmission 4.0.6", "Deluge 2.1.1", "rTorrent 0.9.8", "libtorrent 2.0.11"] as const
+// [client, peer_id_client] as qBittorrent reports them, so the demo shows each peer client rule.
+const PEER_CLIENTS = [
+  ["qBittorrent/5.1.2", "-qB5120-"], ["qBittorrent/5.1.2", "-qB5120-"], ["qBittorrent/5.0.4", "-qB5040-"], ["qBittorrent/4.6.7", "-qB4670-"],
+  ["Transmission 4.0.6", "-TR4060-"], ["Transmission 3.00", "-TR3000-"],
+  ["Deluge/2.1.1 libtorrent/2.0.10", "-DE211s-"],
+  ["libTorrent 0.16.27", "-lt101B-"], ["libTorrent 0.13.8", "-lt0D80-"], ["rTorrent 0.13.8", "-lt0D80-"],
+  ["libtorrent/2.0.11", "-LT20B0-"], ["porla/0.52.0 libtorrent/2.1.2.0", "-PO0k00-"],
+  ["µTorrent 3.5.5", "-UT355W-"], ["BitComet 2.10", "-BC0210-"], ["Tixati 3.29", "TIX0329-"],
+  ["BiglyBT 3.6.0.0", "-BI3600-"], ["PicoTorrent/3.0.0", "-PI3000-"], ["LibreTorrent 3.4", "-Lr3400-"],
+  ["KTorrent 24.08.0", "-KT5400-"], ["WebTorrent/2.5.1", "-WW0251-"], ["aria2/1.37.0", "A2-1-37-"],
+  ["Flud 1.10", "-FL1100-"], ["", "-qB5120-"],
+] as const
 const COUNTRIES = [["DE", "Germany"], ["NL", "Netherlands"], ["US", "United States"], ["FR", "France"], ["SE", "Sweden"], ["CA", "Canada"], ["GB", "United Kingdom"], ["FI", "Finland"]] as const
 
 function buildDetails(t: Torrent, now: number): TorrentDetails {
@@ -592,7 +605,7 @@ function buildDetails(t: Torrent, now: number): TorrentDetails {
   }
 
   const domain = trackerDomain(t)
-  const trackerStatus = t.tracker_health === "unregistered" ? 4 : t.tracker_health === "tracker_down" ? 4 : 2
+  const trackerStatus = t.tracker_health === "unregistered" ? 4 : t.tracker_health === "tracker_down" ? 4 : t.tracker_health === "tracker_error" ? 5 : 2
   const trackers: TorrentTracker[] = [
     { url: "** [DHT] **", status: t.private ? 0 : 2, num_peers: 0, num_seeds: 0, num_leeches: 0, num_downloaded: 0, msg: t.private ? "This torrent is private" : "" },
     { url: "** [PeX] **", status: t.private ? 0 : 2, num_peers: 0, num_seeds: 0, num_leeches: 0, num_downloaded: 0, msg: t.private ? "This torrent is private" : "" },
@@ -604,7 +617,7 @@ function buildDetails(t: Torrent, now: number): TorrentDetails {
       num_seeds: t.num_complete,
       num_leeches: t.num_incomplete,
       num_downloaded: Math.floor(rng() * 5000),
-      msg: t.tracker_health === "unregistered" ? "Unregistered torrent" : t.tracker_health === "tracker_down" ? `Connection to ${domain} timed out` : "",
+      msg: t.tracker_health === "unregistered" ? "Unregistered torrent" : t.tracker_health === "tracker_down" ? `Connection to ${domain} timed out` : t.tracker_health === "tracker_error" ? "Internal tracker error" : "",
     },
   ]
 
@@ -615,9 +628,9 @@ function buildDetails(t: Torrent, now: number): TorrentDetails {
     const ip = `${10 + Math.floor(rng() * 200)}.${Math.floor(rng() * 255)}.${Math.floor(rng() * 255)}.${1 + Math.floor(rng() * 254)}`
     const port = 6881 + Math.floor(rng() * 50000)
     const seed = i < t.num_seeds
+    const [client, peer_id_client] = pick(rng, PEER_CLIENTS)
     const peer = {
-      key: `${ip}:${port}`, ip, port,
-      client: pick(rng, PEER_CLIENTS),
+      key: `${ip}:${port}`, ip, port, client, peer_id_client,
       connection: rng() < 0.7 ? "uTP" : "BT",
       flags: seed ? "D" : "U",
       flags_desc: seed ? "D = interested (local) and unchoked (peer)" : "U = interested (peer) and unchoked (local)",

@@ -505,7 +505,6 @@
       "dryRun": "Simulação (Dry run)",
       "removed": "Removido",
       "executed": "Executado",
-      "copyHash": "Copiar hash",
       "original": "Original: {{domain}}",
       "programLabel": "Programa: {{name}}",
       "ruleLabel": "Regra: {{name}}",
@@ -617,6 +616,7 @@
         "cancel": "Cancelar",
         "delete": "Excluir"
       },
+      "enableTagRule": "Ativar Regra de Tags",
       "enableDeleteRule": "Ativar Regra de Exclusão",
       "enableCategoryRule": "Ativar Mudança de Categoria → {{category}}",
       "enableRuleImmediately": "Isto ativará a regra imediatamente.",
@@ -665,10 +665,27 @@
         "exportedTorrents": "Exportados {{count}} para CSV",
         "exportFailed": "Falha no exporte",
         "deletedActivityEntries": "Apagadas {{count}} entradas",
-        "deleteActivityFailed": "Falha ao excluir histórico",
-        "hashCopied": "Hash copiado"
+        "deleteActivityFailed": "Falha ao excluir histórico"
       },
       "exported": "Exportado"
+    },
+    "runWorkflowNow": {
+      "action": "Executar agora",
+      "title": "Executar \"{{name}}\" agora?",
+      "description": "O qui executa o workflow salvo uma vez agora e aplica as ações dele aos torrents correspondentes. Ele também é executado quando o workflow está desativado.",
+      "dryRunDescription": "Este workflow está configurado como simulação, então o qui só registra o que faria. Nenhum torrent é alterado.",
+      "actions": "Ações",
+      "cancel": "Cancelar",
+      "confirm": "Executar agora",
+      "toast": {
+        "running": "Executando \"{{name}}\"…",
+        "completed": "Execução concluída para \"{{name}}\"",
+        "noChanges": "Execução concluída para \"{{name}}\". Nenhum torrent precisava de alteração.",
+        "completedWithErrors": "Execução concluída para \"{{name}}\" com erros. Veja o registro de atividades.",
+        "dryRunCompleted": "Simulação concluída para \"{{name}}\"",
+        "inProgress": "Há uma execução em andamento. Tente novamente em instantes.",
+        "failed": "Falha ao executar o workflow"
+      }
     },
     "workflowPreview": {
       "loadingPreview": "Carregando estimativas...",
@@ -714,8 +731,8 @@
       "description": "Analise seus diretórios e ache arquivos não associados a torrents para limpar o disco.",
       "noLocalAccess": "Acesso Local Ausente",
       "noLocalAccessTooltip": "Você precisa ativar o 'Acesso ao Sistema de Arquivos Local' na configuração da instância.",
-      "remoteLimits": "A exclusão e a auto-limpeza ainda não funcionam em instâncias remotas.",
-      "remoteNoIdentity": "O qui também não consegue saber quando dois caminhos são o mesmo arquivo, então um arquivo acessível por um segundo caminho, como um bind mount, pode aparecer na lista mesmo que um torrent o utilize.",
+      "remoteLimits": "A exclusão e a auto-limpeza em uma instância remota precisam da identidade dos arquivos, que o qui só consegue ler quando o servidor permite executar GNU find e stat.",
+      "remoteNoIdentity": "Esta instância remota não permite isso, então o qui não consegue saber quando dois caminhos são o mesmo arquivo, e um arquivo acessível por um segundo caminho, como um bind mount, pode aparecer na lista mesmo que um torrent o utilize. As varreduras aqui podem ser visualizadas e exportadas, mas não excluídas.",
       "on": "Ligado",
       "off": "Desligado",
       "summaryGrace": "Tolerância {{grace}}m",
@@ -727,7 +744,7 @@
       "cancel": "Cancelar",
       "autoCleanupEnabled": "Auto-limpeza ATIVA (≤{{max}} arquivos)",
       "autoCleanupDisabled": "Auto-limpeza INATIVA",
-      "autoCleanupRemote": "Sem auto-limpeza em instâncias remotas",
+      "autoCleanupRemote": "Sem auto-limpeza nesta instância remota",
       "pathsIgnored_one": " · {{count}} caminho ignorado",
       "pathsIgnored_other": " · {{count}} caminhos ignorados",
       "scanNow": "Escanear Agora",
@@ -748,7 +765,6 @@
       "deletedSeparator": ", ",
       "partialFailure": "Falha parcial - verifique as atividades",
       "partialFailureExpand": "Falha parcial - veja detalhes",
-      "copiedToClipboard": "Copiado para área de transferência",
       "noScansYet": "Nenhum escaneamento realizado ainda. Clique em \"Escanear Agora\" para encontrar órfãos.",
       "statusClean": "Limpo",
       "statusPartial": "Verificação parcial",
@@ -768,7 +784,9 @@
         "scanStartFailed": "Falha ao iniciar",
         "scanCanceled": "Escaneamento cancelado",
         "cancelFailed": "Falha ao cancelar"
-      }
+      },
+      "errorMessage": "Mensagem de erro",
+      "scanPaths": "Caminhos de verificação"
     },
     "orphanScanPreview": {
       "title": "Pré-Visualizar Órfãos",
@@ -788,7 +806,7 @@
       "exportCSV": "Exportar CSV",
       "close": "Fechar",
       "deleteItems": "Excluir",
-      "remoteDeleteUnavailable": "Esta varredura foi feita em uma instância remota, onde a exclusão ainda não é suportada. Exporte a lista para remover você mesmo os arquivos no servidor.",
+      "remoteDeleteUnavailable": "Esta varredura não pode excluir, porque a instância remota não informa a identidade dos arquivos ou a varredura não conseguiu lê-la para todos os arquivos. Exporte a lista para remover você mesmo os arquivos no servidor.",
       "statusLabels": {
         "pending": "Pendente",
         "deleted": "Excluído",
@@ -917,8 +935,6 @@
       "ratio": "Proporção",
       "added": "Adicionado",
       "original": "Original: {{domain}}",
-      "hashCopied": "Hash copiado",
-      "copyHash": "Copiar hash",
       "loading": "Carregando...",
       "notAvailable": "Detalhes indisponíveis (apenas mantido em memória).",
       "failedToLoad": "Falha ao carregar detalhes.",
@@ -984,8 +1000,6 @@
       "tryDifferentSearch": "Altere sua busca.",
       "eventsWillAppear": "Eventos de reanúncio aparecerão aqui.",
       "enableMonitoring": "Ligue para acompanhar o histórico.",
-      "hashCopied": "Copiado",
-      "copyHash": "Copiar hash",
       "form": {
         "instanceMissing": "Instância não encontrada",
         "settingsSaved": "Configurações atualizadas.",
@@ -1152,6 +1166,7 @@
         "title": "Ações (O que a regra fará?)",
         "addAction": "Criar ação",
         "selectAction": "Qual ação...",
+        "runOrderHelp": "As ações são executadas na ordem mostrada. Cada ação vê o torrent como ele estava quando a execução começou, então um programa externo executado após uma movimentação ainda recebe o caminho de salvamento antigo.",
         "speedLimits": "Limites de Velocidade",
         "shareLimits": "Limites de Ratio / Compartilhamento",
         "pause": "Pausar o torrent",
@@ -1204,6 +1219,7 @@
         "strategyReplace": "Substituir no cliente",
         "replaceDescription": "O modo Substituir força uma redefinição completa dessas tags em todo o cliente antes de aplicar esta regra.",
         "managedDescription": "Diferencial. Só adicionará se o torrent não possuir a Tag.",
+        "includeAffectedCrossSeeds": "Incluir os cross-seeds afetados",
         "useTrackerName": "Sincronizar a tag para o nome do tracker",
         "useDisplayName": "Usar 'Display Name'",
         "aboutDisplayNames": "Sobre Nomes",
@@ -1246,7 +1262,10 @@
         "placeholder": "/caminho/final/movimentado",
         "skipIfCrossSeedsDontMatch": "Abortar a mudança caso haja cross-seeds que não condizem com a regra",
         "aboutSkipping": "Sobre pular cross-seeds",
-        "skipDescription": "Cancela a mudança se houver outros torrents no mesmo grupo de cross-seed que não atendam às condições da regra. Caso contrário, todos os cross-seeds serão movidos, mesmo os não correspondidos."
+        "skipDescription": "Cancela a mudança se houver outros torrents no mesmo grupo de cross-seed que não atendam às condições da regra. Caso contrário, todos os cross-seeds serão movidos, mesmo os não correspondidos.",
+        "errors": {
+          "mustBeAbsolute": "Precisa ser um caminho absoluto, por exemplo /data/archive ou D:\\Archive."
+        }
       },
       "templateHelp": {
         "absolutePath": "Deve ser um caminho absoluto. Os valores vão dentro dele, por exemplo",
@@ -1345,11 +1364,13 @@
       "preview": {
         "confirmDeleteRule": "Confirmar Exclusão de Torrent",
         "previewDeleteRule": "Visualizar Exclusão de Torrent",
+        "confirmTagChange": "Confirmar Mudanças de Tags",
         "confirmCategoryChange": "Confirmar Mudança para {{category}}",
         "deleteEnabledSummary": "No ar: Afetará {{count}} arquivo.",
         "deleteEnabledSummary_other": "No ar: Afetará {{count}} arquivos.",
         "deleteDisabledSummary": "Se ligado agora: {{count}} torrent seria impactado.",
         "deleteDisabledSummary_other": "Se ligado agora: {{count}} torrents seriam impactados.",
+        "tagPrefix": "A regra atualizará as tags de",
         "categoryPrefix": "A regra realocará",
         "torrents": "{{count}} torrent",
         "torrents_other": "{{count}} torrents",
@@ -1770,11 +1791,9 @@
       "lastBackup": "Último backup",
       "loading": "Carregando...",
       "progress": "{{current}} de {{total}} torrents ({{percentage}}%)",
-      "status": "Status: {{status}}",
       "noBackupsYet": "Nenhum backup ainda",
       "nextScheduledBackup": "Próximo backup agendado",
       "loadingSchedule": "Carregando agendamento...",
-      "instance": "Instância",
       "automaticBackupsOff": "Backups automáticos estão desligados para esta instância.",
       "enableCadenceToSchedule": "Ative pelo menos um agendamento automático para programar backups.",
       "currentlyRunning": "O backup está em execução.",
@@ -1798,6 +1817,7 @@
       "schedule": {
         "title": "Agendamento automático",
         "description": "As execuções por hora, diárias, semanais e mensais começam após a conclusão do backup anterior.",
+        "keep": "Manter",
         "hourly": "Por hora",
         "hourlyDescription": "Quantos snapshots por hora manter antes de podar os mais antigos.",
         "hourlyTooltip": "Executa aproximadamente uma vez por hora quando backups estão ativados e pelo menos uma hora se passou desde a última execução.",
@@ -1816,8 +1836,7 @@
         "saveChanges": "Salvar alterações",
         "saveAll": "Salvar alterações em todas as instâncias",
         "requiresCadence": "Selecione pelo menos um agendamento (por hora, diário, semanal ou mensal) antes de salvar.",
-        "waitForCapabilities": "Aguarde a conclusão das verificações de capacidade da instância antes de salvar em todas as instâncias.",
-        "changesApplyImmediately": "As alterações são aplicadas a backups futuros assim que você salva."
+        "waitForCapabilities": "Aguarde a conclusão das verificações de capacidade da instância antes de salvar em todas as instâncias."
       }
     },
     "restore": {

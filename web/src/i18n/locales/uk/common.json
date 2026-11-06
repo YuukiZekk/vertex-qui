@@ -46,7 +46,7 @@
     "tasksForInstance": "Завдання екземпляра",
     "settingsForInstance": "Налаштування екземпляра",
     "clearSearch": "Очистити пошук",
-    "searchTorrents": "Пошук торентів... ({{shortcutKey}})",
+    "searchTorrents": "Пошук торентів...",
     "globPattern": "Glob шаблон...",
     "smartSearchTitle": "Можливості розумного пошуку:",
     "smartSearchGlob": "Glob шаблони:",
@@ -57,6 +57,7 @@
     "smartSearchFields": "Пошук за назвою, категорією та тегами",
     "smartSearchEnter": "Натисніть Enter для миттєвого пошуку",
     "smartSearchAuto": "Автопошук після паузи 500 мс",
+    "smartSearchShortcut": "Натисніть {{shortcutKey}}, щоб перейти до пошуку",
     "torrentCreationTasksTitle": "Завдання створення торента",
     "updateAvailable": "Доступне оновлення",
     "updateVersion": "Версія {{version}}",
@@ -100,17 +101,19 @@
     "cancel": "Скасувати",
     "close": "Закрити",
     "create": "Створити",
-    "copyPath": "Копіювати шлях",
     "scrollToTop": "Прокрутити вгору",
     "search": "Пошук",
-    "select": "Вибрати"
+    "select": "Вибрати",
+    "copyValue": "Копіювати {{label}}"
   },
   "placeholders": {
     "search": "Пошук...",
     "selectItems": "Вибрати елементи..."
   },
   "feedback": {
-    "noResultsFound": "Результатів не знайдено."
+    "noResultsFound": "Результатів не знайдено.",
+    "copied": "{{label}} скопійовано в буфер обміну",
+    "copyFailed": "Не вдалося скопіювати в буфер обміну"
   },
   "errors": {
     "unknown": "Невідома помилка",
@@ -258,5 +261,8 @@
     "yearly": "{{price}} / рік",
     "monthly": "{{price}} / місяць",
     "notLicense": "Преміум-теми є окремою одноразовою покупкою."
+  },
+  "labels": {
+    "path": "Шлях"
   }
 }

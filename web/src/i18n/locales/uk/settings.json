@@ -16,6 +16,11 @@
     "security": "Безпека",
     "logs": "Журнали"
   },
+  "nav": {
+    "general": "Загальні",
+    "connections": "Підключення",
+    "access": "Доступ"
+  },
   "language": {
     "cardTitle": "Мова",
     "cardDescription": "Виберіть потрібну мову відображення"
@@ -97,7 +102,6 @@
       "proxyUrl": "Проксі URL",
       "showProxyUrl": "Показати проксі URL",
       "hideProxyUrl": "Приховати проксі URL",
-      "copyProxyUrl": "Копіювати проксі URL",
       "done": "Готово"
     },
     "deleteDialog": {
@@ -113,9 +117,7 @@
       "deleted": "Ключ клієнта API успішно видалено",
       "deleteFailed": "Не вдалося видалити клієнтський ключ API: {{error}}",
       "clientNameRequired": "Потрібне ім'я клієнта",
-      "selectInstance": "Виберіть екземпляр qBittorrent",
-      "proxyCopied": "Проксі URL скопійовано в буфер обміну",
-      "copyFailed": "Не вдалося скопіювати в буфер обміну"
+      "selectInstance": "Виберіть екземпляр qBittorrent"
     }
   },
   "apiKeys": {
@@ -141,7 +143,8 @@
     "newKey": {
       "label": "Ваш новий ключ API",
       "warning": "Збережіть цей ключ зараз. Ви більше не зможете його побачити.",
-      "done": "Готово"
+      "done": "Готово",
+      "apiKey": "Ключ API"
     },
     "deleteDialog": {
       "title": "Видалити ключ API?",
@@ -153,9 +156,7 @@
       "created": "Ключ API створено успішно",
       "createFailed": "Не вдалося створити ключ API",
       "deleted": "Ключ API успішно видалено",
-      "deleteFailed": "Не вдалося видалити ключ API",
-      "copied": "Ключ API скопійовано в буфер обміну",
-      "copyFailed": "Не вдалося скопіювати в буфер обміну"
+      "deleteFailed": "Не вдалося видалити ключ API"
     }
   },
   "externalPrograms": {
@@ -452,7 +453,9 @@
         "activeTitle": "Преміум доступ активний",
         "activeDescription": "Ви маєте доступ до всіх поточних і майбутніх преміум-тем",
         "activationRequiredTitle": "Потрібна активація ліцензії",
-        "activationRequiredDescription": "Ваша ліцензія має бути активована на цій машині"
+        "activationRequiredDescription": "Ваша ліцензія має бути активована на цій машині",
+        "offlineTitle": "Служба ліцензій недоступна",
+        "offlineDescription": "qui не міг зв'язатися зі службою ліцензій 7 днів, тому преміум-теми заблоковано. qui перевіряє під час запуску та раз на день. Теми розблокуються, щойно служба відповість. Повторно активувати ліцензію не потрібно."
       },
       "portalHelp": {
         "prefix": "Купуйте на DodoPayments, потім введіть свій ліцензійний ключ тут. Якщо ви загубите ключ, відновіть його за допомогою",
@@ -474,7 +477,12 @@
       },
       "details": {
         "productAdded": "{{productName}} • Додано {{date}}",
-        "productStatusAndAdded": "{{productName}} • Статус: {{status}} • Додано {{date}}"
+        "productStatusAndAdded": "{{productName}} • Статус: {{status}} • Додано {{date}}",
+        "statusLabels": {
+          "invalid": "Недійсна",
+          "offline": "Не в мережі",
+          "unknown": "Невідомий"
+        }
       },
       "invalid": {
         "dodo": "Ця ліцензія не активна на цій машині. Натисніть «Повторно активувати», щоб використовувати її тут. Якщо ви досягли ліміту активацій, перейдіть на <portal>licenses.getqui.com</portal>, зареєструйтеся або увійдіть з електронною поштою, яку ви використали для купівлі ліцензії, і деактивуйте в Machine Instances машину, якою більше не користуєтеся."
@@ -1101,11 +1109,6 @@
       "bind": "Адреса прив'язки",
       "configDir": "Каталог конфігурацій",
       "dataDir": "Каталог даних"
-    },
-    "copyTitle": "Копіювати {{label}}",
-    "toasts": {
-      "copied": "{{label}} скопійовано в буфер обміну",
-      "copyFailed": "Не вдалося скопіювати {{label}}"
     }
   }
 }

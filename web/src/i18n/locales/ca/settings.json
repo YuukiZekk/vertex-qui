@@ -16,6 +16,11 @@
     "security": "Seguretat",
     "logs": "Registres"
   },
+  "nav": {
+    "general": "General",
+    "connections": "Connexions",
+    "access": "Accés"
+  },
   "language": {
     "cardTitle": "Idioma",
     "cardDescription": "Tria l'idioma en què vols que es mostri tot"
@@ -97,7 +102,6 @@
       "proxyUrl": "URL del proxy",
       "showProxyUrl": "Mostra l'URL del proxy",
       "hideProxyUrl": "Amaga l'URL del proxy",
-      "copyProxyUrl": "Copia l'URL del proxy",
       "done": "Fet"
     },
     "deleteDialog": {
@@ -113,9 +117,7 @@
       "deleted": "S'ha eliminat la clau API de client correctament",
       "deleteFailed": "No s'ha pogut eliminar la clau API de client: {{error}}",
       "clientNameRequired": "El nom del client és obligatori",
-      "selectInstance": "Selecciona una instància de qBittorrent",
-      "proxyCopied": "S'ha copiat l'URL del proxy al porta-retalls",
-      "copyFailed": "No s'ha pogut copiar al porta-retalls"
+      "selectInstance": "Selecciona una instància de qBittorrent"
     }
   },
   "apiKeys": {
@@ -141,7 +143,8 @@
     "newKey": {
       "label": "La teva clau API nova",
       "warning": "Desa aquesta clau ara. No la podràs tornar a veure.",
-      "done": "Fet"
+      "done": "Fet",
+      "apiKey": "Clau API"
     },
     "deleteDialog": {
       "title": "Vols eliminar la clau API?",
@@ -153,9 +156,7 @@
       "created": "S'ha creat la clau API correctament",
       "createFailed": "No s'ha pogut crear la clau API",
       "deleted": "S'ha eliminat la clau API correctament",
-      "deleteFailed": "No s'ha pogut eliminar la clau API",
-      "copied": "S'ha copiat la clau API al porta-retalls",
-      "copyFailed": "No s'ha pogut copiar al porta-retalls"
+      "deleteFailed": "No s'ha pogut eliminar la clau API"
     }
   },
   "externalPrograms": {
@@ -448,7 +449,9 @@
         "activeTitle": "Accés premium actiu",
         "activeDescription": "Tens accés a tots els temes premium actuals i futurs",
         "activationRequiredTitle": "Cal activar la llicència",
-        "activationRequiredDescription": "La teva llicència s'ha d'activar en aquesta màquina"
+        "activationRequiredDescription": "La teva llicència s'ha d'activar en aquesta màquina",
+        "offlineTitle": "Servei de llicències inaccessible",
+        "offlineDescription": "qui no ha pogut connectar amb el servei de llicències durant 7 dies, per això els temes premium estan bloquejats. qui ho comprova en iniciar-se i un cop al dia. Els temes es desbloquegen quan el servei respon. No cal que tornis a activar la llicència."
       },
       "portalHelp": {
         "prefix": "Compra-ho a DodoPayments i després introdueix aquí la teva clau de llicència. Si perds la clau, recupera-la mitjançant el",
@@ -470,7 +473,12 @@
       },
       "details": {
         "productAdded": "{{productName}} • Afegida el {{date}}",
-        "productStatusAndAdded": "{{productName}} • Estat: {{status}} • Afegida el {{date}}"
+        "productStatusAndAdded": "{{productName}} • Estat: {{status}} • Afegida el {{date}}",
+        "statusLabels": {
+          "invalid": "No vàlida",
+          "offline": "Fora de línia",
+          "unknown": "Desconegut"
+        }
       },
       "invalid": {
         "dodo": "Aquesta llicència no està activa en aquesta màquina. Fes clic a Reactiva la llicència per fer-la servir aquí. Si has arribat al límit d'activacions, ves a <portal>licenses.getqui.com</portal>, registra't o inicia la sessió amb el correu que vas fer servir per comprar la llicència i desactiva una màquina que ja no facis servir a Machine Instances."
@@ -1095,11 +1103,6 @@
       "bind": "Adreça d'escolta",
       "configDir": "Directori de configuració",
       "dataDir": "Directori de dades"
-    },
-    "copyTitle": "Copia {{label}}",
-    "toasts": {
-      "copied": "S'ha copiat {{label}} al porta-retalls",
-      "copyFailed": "No s'ha pogut copiar {{label}}"
     }
   }
 }

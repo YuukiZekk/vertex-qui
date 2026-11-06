@@ -241,6 +241,7 @@ func TestSeasonPackApply_Returns500ForFailedApplyResponse(t *testing.T) {
 	svc.SetBackendPool(fsops.NewPool(instanceStore, local.NewBackend()))
 	setServiceField(t, svc, "instanceStore", instanceStore)
 	setServiceField(t, svc, "syncManager", syncManager)
+	setServiceField(t, svc, "adder", crossseed.NewAdder(syncManager, nil, nil, nil, nil))
 	setServiceField(t, svc, "releaseCache", crossseed.NewReleaseCache())
 	setServiceField(t, svc, "automationSettingsLoader", func(context.Context) (*models.CrossSeedAutomationSettings, error) {
 		return &models.CrossSeedAutomationSettings{
@@ -323,4 +324,8 @@ func TestManualMatchApplyFailsWhenSettingsReadFails(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, resp.Code)
 	require.Contains(t, resp.Body.String(), "Failed to load cross-seed settings")
 	require.Zero(t, syncManager.addCalls)
+}
+
+func (*seasonPackHandlerSyncManager) GetDirectoryContentCtx(context.Context, int, string, qbt.DirectoryContentMode, bool) (any, error) {
+	return nil, nil
 }

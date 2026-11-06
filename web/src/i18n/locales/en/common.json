@@ -46,7 +46,7 @@
     "tasksForInstance": "Tasks for instance",
     "settingsForInstance": "Settings for instance",
     "clearSearch": "Clear search",
-    "searchTorrents": "Search torrents... ({{shortcutKey}})",
+    "searchTorrents": "Search torrents...",
     "globPattern": "Glob pattern...",
     "smartSearchTitle": "Smart Search Features:",
     "smartSearchGlob": "Glob patterns:",
@@ -57,6 +57,7 @@
     "smartSearchFields": "Searches name, category, and tags",
     "smartSearchEnter": "Press Enter for instant search",
     "smartSearchAuto": "Auto-searches after 500ms pause",
+    "smartSearchShortcut": "Press {{shortcutKey}} to focus search",
     "torrentCreationTasksTitle": "Torrent Creation Tasks",
     "updateAvailable": "Update Available",
     "updateVersion": "Version {{version}}",
@@ -100,17 +101,19 @@
     "cancel": "Cancel",
     "close": "Close",
     "create": "Create",
-    "copyPath": "Copy path",
     "scrollToTop": "Scroll to top",
     "search": "Search",
-    "select": "Select"
+    "select": "Select",
+    "copyValue": "Copy {{label}}"
   },
   "placeholders": {
     "search": "Search...",
     "selectItems": "Select items..."
   },
   "feedback": {
-    "noResultsFound": "No results found."
+    "noResultsFound": "No results found.",
+    "copied": "{{label}} copied to clipboard",
+    "copyFailed": "Failed to copy to clipboard"
   },
   "errors": {
     "unknown": "Unknown error",
@@ -244,5 +247,8 @@
     "yearly": "{{price}} / year",
     "monthly": "{{price}} / month",
     "notLicense": "Premium themes are a separate one-time purchase."
+  },
+  "labels": {
+    "path": "Path"
   }
 }

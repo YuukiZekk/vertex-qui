@@ -23,6 +23,7 @@ import (
 	"github.com/autobrr/qui/internal/models"
 	"github.com/autobrr/qui/internal/services/crossseed"
 	"github.com/autobrr/qui/internal/services/crossseed/gazellemusic"
+	"github.com/autobrr/qui/internal/services/crossseedroute"
 	"github.com/autobrr/qui/internal/services/jackett"
 )
 
@@ -32,6 +33,8 @@ type CrossSeedHandler struct {
 	completionStore    *models.InstanceCrossSeedCompletionStore
 	instanceStore      *models.InstanceStore
 	seasonPackRunStore *models.SeasonPackRunStore
+	routes             *crossseedroute.Service
+	torrents           crossseedroute.TorrentReader
 	gazelleBaseURL     string // tests point the Gazelle key check at a stub tracker
 }
 
@@ -507,12 +510,16 @@ func NewCrossSeedHandler(
 	completionStore *models.InstanceCrossSeedCompletionStore,
 	instanceStore *models.InstanceStore,
 	seasonPackRunStore *models.SeasonPackRunStore,
+	routes *crossseedroute.Service,
+	torrents crossseedroute.TorrentReader,
 ) *CrossSeedHandler {
 	return &CrossSeedHandler{
 		service:            service,
 		completionStore:    completionStore,
 		instanceStore:      instanceStore,
 		seasonPackRunStore: seasonPackRunStore,
+		routes:             routes,
+		torrents:           torrents,
 	}
 }
 
@@ -529,7 +536,6 @@ func (h *CrossSeedHandler) Routes(r chi.Router, authMiddleware func(http.Handler
 
 		r.With(authMiddleware).Route("/torrents", func(r chi.Router) {
 			r.Get("/{instanceID}/{hash}/analyze", h.AnalyzeTorrentForSearch)
-			r.Get("/{instanceID}/{hash}/async-status", h.GetAsyncFilteringStatus)
 			r.Get("/{instanceID}/{hash}/local-matches", h.GetLocalMatches)
 			r.Post("/{instanceID}/{hash}/search", h.SearchTorrentMatches)
 			r.Post("/{instanceID}/{hash}/apply", h.ApplyTorrentSearchResults)
@@ -563,6 +569,13 @@ func (h *CrossSeedHandler) Routes(r chi.Router, authMiddleware func(http.Handler
 		r.With(authMiddleware).Route("/completion", func(r chi.Router) {
 			r.Get("/{instanceID}", h.GetInstanceCompletionSettings)
 			r.Put("/{instanceID}", h.UpdateInstanceCompletionSettings)
+		})
+		r.With(authMiddleware).Route("/routes", func(r chi.Router) {
+			r.Get("/", h.ListCrossSeedRoutes)
+			r.Get("/{instanceID}", h.GetCrossSeedRoute)
+			r.Put("/{instanceID}", h.SaveCrossSeedRoute)
+			r.Delete("/{instanceID}", h.ClearCrossSeedRoute)
+			r.Post("/{instanceID}/test", h.TestCrossSeedRoute)
 		})
 		r.Route("/season-pack", func(r chi.Router) {
 			r.With(apiKeyQueryMiddleware, authMiddleware).Post("/check", h.SeasonPackCheck)
@@ -632,47 +645,13 @@ func (h *CrossSeedHandler) AnalyzeTorrentForSearch(w http.ResponseWriter, r *htt
 	RespondJSON(w, http.StatusOK, torrentInfo)
 }
 
-// GetAsyncFilteringStatus godoc
-// @Summary Get async filtering status for a torrent
-// @Description Returns the current status of async indexer filtering for a torrent, including whether content filtering has completed
-// @Tags cross-seed
-// @Produce json
-// @Param instanceID path int true "Instance ID"
-// @Param hash path string true "Torrent hash"
-// @Success 200 {object} crossseed.AsyncIndexerFilteringState
-// @Failure 400 {object} httphelpers.ErrorResponse
-// @Failure 500 {object} httphelpers.ErrorResponse
-// @Security ApiKeyAuth
-// @Router /api/cross-seed/torrents/{instanceID}/{hash}/async-status [get]
-func (h *CrossSeedHandler) GetAsyncFilteringStatus(w http.ResponseWriter, r *http.Request) {
-	instanceID, hash, ok := parseTorrentParams(w, r)
-	if !ok {
-		return
-	}
-
-	filteringState, err := h.service.GetAsyncFilteringStatus(r.Context(), instanceID, hash)
-	if err != nil {
-		status := mapCrossSeedErrorStatus(err)
-		log.Error().
-			Err(err).
-			Int("instanceID", instanceID).
-			Str("hash", hash).
-			Msg("Failed to get async filtering status")
-		RespondError(w, status, err.Error())
-		return
-	}
-
-	RespondJSON(w, http.StatusOK, filteringState)
-}
-
 // GetLocalMatches godoc
 // @Summary Find existing torrents that match the source torrent across all instances
-// @Description Returns torrents from all instances that match the source torrent using proper release metadata parsing (rls library), not fuzzy string matching.
+// @Description Returns the cross-seeds of the source torrent on every active instance, from the batch matcher. Fails when a file list or a link check cannot be read.
 // @Tags cross-seed
 // @Produce json
 // @Param instanceID path int true "Source instance ID"
 // @Param hash path string true "Source torrent hash"
-// @Param strict query bool false "When true, fail if file overlap checks cannot complete (use for delete dialogs)"
 // @Success 200 {object} crossseed.LocalMatchesResponse
 // @Failure 400 {object} httphelpers.ErrorResponse
 // @Failure 500 {object} httphelpers.ErrorResponse
@@ -684,11 +663,7 @@ func (h *CrossSeedHandler) GetLocalMatches(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// strict=true for delete dialogs: fail if overlap checks can't complete
-	// ParseBool accepts true/TRUE/1/t etc., defaults to false when absent/invalid
-	strict, _ := strconv.ParseBool(r.URL.Query().Get("strict")) //nolint:errcheck // intentional: default to false
-
-	response, err := h.service.FindLocalMatches(r.Context(), instanceID, hash, strict)
+	response, err := h.service.FindCrossSeeds(r.Context(), instanceID, hash)
 	if err != nil {
 		status := mapCrossSeedErrorStatus(err)
 		log.Error().
@@ -892,6 +867,7 @@ func mapCrossSeedErrorStatus(err error) int {
 	case errors.Is(err, crossseed.ErrInvalidRequest),
 		errors.Is(err, crossseed.ErrTorrentNotFound),
 		errors.Is(err, crossseed.ErrTorrentNotComplete),
+		errors.Is(err, crossseed.ErrSourceNotSettled),
 		errors.Is(err, crossseed.ErrNoIndexersConfigured):
 		return http.StatusBadRequest
 	default:
@@ -1833,7 +1809,7 @@ func (h *CrossSeedHandler) ListSeasonPackRuns(w http.ResponseWriter, r *http.Req
 
 	limit := 20
 	if v := r.URL.Query().Get("limit"); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 && parsed <= 200 {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 && parsed <= 400 {
 			limit = parsed
 		}
 	}

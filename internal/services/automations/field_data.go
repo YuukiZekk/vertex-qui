@@ -22,7 +22,8 @@ type RuleNeeds struct {
 	SeasonPackAnyInstance bool
 	FreeSpace             bool
 	TrackerNames          bool
-	TrackerEntries        bool // the per-torrent tracker list
+	TrackerURLs           bool // the URL of each tracker, from MainData
+	TrackerEntries        bool // the per-torrent tracker list with status and message
 }
 
 // fieldData is the prepared data one condition field reads. A field without a
@@ -77,8 +78,8 @@ var conditionFieldData = map[ConditionField]fieldData{
 	FieldExistsOnOtherInstance:  {need: func(n *RuleNeeds) { n.CrossMatch.OtherExists = true }, known: otherInstanceCrossSeedKnown},
 	FieldSeedingOnOtherInstance: {need: func(n *RuleNeeds) { n.CrossMatch.OtherSeeding = true }, known: otherInstanceCrossSeedKnown},
 	FieldFreeSpace:              {need: func(n *RuleNeeds) { n.FreeSpace = true }},
-	FieldTracker:                {need: func(n *RuleNeeds) { n.TrackerNames, n.TrackerEntries = true, true }},
-	FieldTrackers:               {need: func(n *RuleNeeds) { n.TrackerNames, n.TrackerEntries = true, true }},
+	FieldTracker:                {need: func(n *RuleNeeds) { n.TrackerNames, n.TrackerURLs = true, true }},
+	FieldTrackers:               {need: func(n *RuleNeeds) { n.TrackerNames, n.TrackerURLs = true, true }},
 	FieldTrackerStatus:          {need: func(n *RuleNeeds) { n.TrackerEntries = true }},
 	FieldTrackerMessage:         {need: func(n *RuleNeeds) { n.TrackerEntries = true }},
 }
@@ -162,6 +163,9 @@ func NeedsFor(rules []*models.Automation) RuleNeeds {
 			if actionsGroupCrossSeeds(ac) {
 				needs.CrossMatch.SameContent = true
 			}
+			if deleteKeepsFilesForOtherInstances(ac.Delete) {
+				needs.CrossMatch.OtherShared = true
+			}
 		}
 	}
 	return needs
@@ -169,8 +173,9 @@ func NeedsFor(rules []*models.Automation) RuleNeeds {
 
 // actionsGroupCrossSeeds reports whether an enabled action reads the cross-seed
 // groups: a delete that keeps, expands to, or counts once the torrents that share
-// files, any move (it takes the torrents that share files along), and a category
-// change that blocks on or includes cross-seeds.
+// files, any move (it takes the torrents that share files along), a category
+// change that blocks on or includes cross-seeds, and a tag action that includes
+// cross-seeds.
 func actionsGroupCrossSeeds(ac *models.ActionConditions) bool {
 	if del := ac.Delete; del != nil && del.Enabled {
 		switch del.Mode {
@@ -185,8 +190,20 @@ func actionsGroupCrossSeeds(ac *models.ActionConditions) bool {
 	if move := ac.Move; move != nil && move.Enabled {
 		return true
 	}
+	for _, tag := range ac.TagActions() {
+		if tag != nil && tag.Enabled && tag.IncludeCrossSeeds && !tag.UseTrackerAsTag {
+			return true
+		}
+	}
 	cat := ac.Category
 	return cat != nil && cat.Enabled && (cat.IncludeCrossSeeds || len(cat.BlockIfCrossSeedInCategories) > 0)
+}
+
+// deleteKeepsFilesForOtherInstances reports whether the delete mode keeps the
+// files that a torrent on another instance needs.
+func deleteKeepsFilesForOtherInstances(del *models.DeleteAction) bool {
+	return del != nil && del.Enabled &&
+		(del.Mode == DeleteModeWithFilesPreserveCrossSeeds || del.Mode == DeleteModeWithFilesIncludeCrossSeeds)
 }
 
 // previewNeeds is NeedsFor of one rule as if it were enabled: the preview shows
@@ -233,7 +250,7 @@ func (n *RuleNeeds) addSorting(config *models.SortingConfig) {
 }
 
 // ruleTemplatesUseTrackerName reports whether an enabled action needs the tracker display-name map
-// outside its condition. The "Tracker" match pairs with the key resolveMovePath passes to path
+// outside its condition. The "Tracker" match pairs with the key pathTemplateData passes to path
 // templates, so it also catches {{ index . "Tracker" }}.
 func ruleTemplatesUseTrackerName(ac *models.ActionConditions) bool {
 	if move := ac.Move; move != nil && move.Enabled && strings.Contains(move.Path, "Tracker") {

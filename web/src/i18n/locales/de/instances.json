@@ -505,7 +505,6 @@
       "dryRun": "Probelauf",
       "removed": "Entfernt",
       "executed": "Ausgeführt",
-      "copyHash": "Hash kopieren",
       "original": "Original: {{domain}}",
       "programLabel": "Programm: {{name}}",
       "ruleLabel": "Regel: {{name}}",
@@ -617,6 +616,7 @@
         "cancel": "Abbrechen",
         "delete": "Löschen"
       },
+      "enableTagRule": "Tag-Regel aktivieren",
       "enableDeleteRule": "Löschregel aktivieren",
       "enableCategoryRule": "Kategorieregel aktivieren → {{category}}",
       "enableRuleImmediately": "Mit dem Bestätigen wird diese Regel sofort aktiviert.",
@@ -665,10 +665,27 @@
         "exportedTorrents": "{{count}} Torrents nach CSV exportiert",
         "exportFailed": "Vorschau konnte nicht exportiert werden",
         "deletedActivityEntries": "{{count}} Aktivitätseinträge gelöscht",
-        "deleteActivityFailed": "Aktivität konnte nicht gelöscht werden",
-        "hashCopied": "Hash kopiert"
+        "deleteActivityFailed": "Aktivität konnte nicht gelöscht werden"
       },
       "exported": "Exportiert"
+    },
+    "runWorkflowNow": {
+      "action": "Jetzt ausführen",
+      "title": "\"{{name}}\" jetzt ausführen?",
+      "description": "qui führt den gespeicherten Workflow jetzt einmal aus und wendet seine Aktionen auf die passenden Torrents an. Er läuft auch, wenn der Workflow deaktiviert ist.",
+      "dryRunDescription": "Dieser Workflow ist als Probelauf eingestellt, daher zeichnet qui nur auf, was es tun würde. Kein Torrent wird geändert.",
+      "actions": "Aktionen",
+      "cancel": "Abbrechen",
+      "confirm": "Jetzt ausführen",
+      "toast": {
+        "running": "\"{{name}}\" wird ausgeführt…",
+        "completed": "Ausführung für \"{{name}}\" abgeschlossen",
+        "noChanges": "Ausführung für \"{{name}}\" abgeschlossen. Kein Torrent musste geändert werden.",
+        "completedWithErrors": "Ausführung für \"{{name}}\" mit Fehlern abgeschlossen. Siehe Aktivitätsprotokoll.",
+        "dryRunCompleted": "Probelauf für \"{{name}}\" abgeschlossen",
+        "inProgress": "Eine Ausführung läuft bereits. Versuche es gleich noch einmal.",
+        "failed": "Workflow konnte nicht ausgeführt werden"
+      }
     },
     "workflowPreview": {
       "loadingPreview": "Vorschau wird geladen. Das kann einen Moment dauern...",
@@ -714,8 +731,8 @@
       "description": "Durchsucht Download-Verzeichnisse und identifiziert Orphan-Dateien zum Aufräumen.",
       "noLocalAccess": "Kein lokaler Zugriff",
       "noLocalAccessTooltip": "qui und qBittorrent müssen auf derselben Maschine laufen. Aktiviere \"Lokaler Dateisystemzugriff\" in den Instanzeinstellungen, um den Orphan-Scan zu nutzen.",
-      "remoteLimits": "Löschen und Auto-Cleanup laufen auf Remote-Instanzen noch nicht.",
-      "remoteNoIdentity": "qui erkennt außerdem nicht, wenn zwei Pfade dieselbe Datei sind. Eine Datei, die über einen zweiten Pfad erreichbar ist, etwa per Bind-Mount, kann daher gelistet werden, obwohl ein Torrent sie nutzt.",
+      "remoteLimits": "Löschen und Auto-Cleanup auf einer Remote-Instanz brauchen die Dateiidentität, die qui nur lesen kann, wenn der Server GNU find und stat ausführen lässt.",
+      "remoteNoIdentity": "Diese Remote-Instanz lässt das nicht zu. qui erkennt daher nicht, wenn zwei Pfade dieselbe Datei sind, und eine Datei, die über einen zweiten Pfad erreichbar ist, etwa per Bind-Mount, kann gelistet werden, obwohl ein Torrent sie nutzt. Scans hier lassen sich ansehen und exportieren, aber nicht löschen.",
       "on": "An",
       "off": "Aus",
       "summaryGrace": "Schonfrist {{grace}}min",
@@ -727,7 +744,7 @@
       "cancel": "Abbrechen",
       "autoCleanupEnabled": "Auto-Cleanup aktiviert (≤{{max}} Dateien)",
       "autoCleanupDisabled": "Auto-Cleanup deaktiviert",
-      "autoCleanupRemote": "Kein Auto-Cleanup auf Remote-Instanzen",
+      "autoCleanupRemote": "Kein Auto-Cleanup auf dieser Remote-Instanz",
       "pathsIgnored_one": " · {{count}} Pfad ignoriert",
       "pathsIgnored_other": " · {{count}} Pfade ignoriert",
       "scanNow": "Jetzt scannen",
@@ -748,7 +765,6 @@
       "deletedSeparator": ", ",
       "partialFailure": "Teilweise fehlgeschlagen – prüfe die letzten Scans",
       "partialFailureExpand": "Teilweise fehlgeschlagen – für Details ausklappen",
-      "copiedToClipboard": "In die Zwischenablage kopiert",
       "noScansYet": "Noch keine Scans durchgeführt. Klicke auf \"Jetzt scannen\", um Orphans zu finden.",
       "statusClean": "Sauber",
       "statusPartial": "Teilweiser Scan",
@@ -768,7 +784,9 @@
         "scanStartFailed": "Scan konnte nicht gestartet werden",
         "scanCanceled": "Scan abgebrochen",
         "cancelFailed": "Abbruch fehlgeschlagen"
-      }
+      },
+      "errorMessage": "Fehlermeldung",
+      "scanPaths": "Scan-Pfade"
     },
     "orphanScanPreview": {
       "title": "Orphan-Vorschau",
@@ -788,7 +806,7 @@
       "exportCSV": "CSV exportieren",
       "close": "Schließen",
       "deleteItems": "Löschen",
-      "remoteDeleteUnavailable": "Dieser Scan lief auf einer Remote-Instanz, wo Löschen noch nicht unterstützt wird. Exportiere die Liste, um die Dateien selbst auf dem Server zu entfernen.",
+      "remoteDeleteUnavailable": "Dieser Scan kann nicht löschen, weil die Remote-Instanz keine Dateiidentität meldet oder der Scan sie nicht für jede Datei lesen konnte. Exportiere die Liste, um die Dateien selbst auf dem Server zu entfernen.",
       "statusLabels": {
         "pending": "Ausstehend",
         "deleted": "Gelöscht",
@@ -917,8 +935,6 @@
       "ratio": "Ratio",
       "added": "Hinzugefügt",
       "original": "Original: {{domain}}",
-      "hashCopied": "Hash kopiert",
-      "copyHash": "Hash kopieren",
       "loading": "Wird geladen...",
       "notAvailable": "Lauf-Details nicht verfügbar (nur im Arbeitsspeicher).",
       "failedToLoad": "Laden der Lauf-Details fehlgeschlagen.",
@@ -982,8 +998,6 @@
       "tryDifferentSearch": "Versuche einen anderen Suchbegriff oder leere den Filter.",
       "eventsWillAppear": "Ereignisse erscheinen hier, sobald stehengebliebene Torrents erkannt werden.",
       "enableMonitoring": "Aktiviere die Überwachung, um stehengebliebene Torrents zu verfolgen.",
-      "hashCopied": "Hash kopiert",
-      "copyHash": "Hash kopieren",
       "outcomes": {
         "succeeded": "Erfolgreich",
         "failed": "Fehlgeschlagen",
@@ -1152,6 +1166,7 @@
         "title": "Aktion",
         "addAction": "Aktion hinzufügen",
         "selectAction": "Aktion auswählen...",
+        "runOrderHelp": "Aktionen laufen in der angezeigten Reihenfolge. Jede Aktion sieht den Torrent so, wie er zu Beginn des Durchlaufs war. Ein externes Programm, das nach einem Verschieben läuft, erhält daher noch den alten Speicherpfad.",
         "speedLimits": "Geschwindigkeitsbegrenzungen",
         "shareLimits": "Share-Limits",
         "pause": "Pausieren",
@@ -1204,6 +1219,7 @@
         "strategyReplace": "Im Client ersetzen",
         "replaceDescription": "Der Ersetzen-Modus erzwingt vor dem Anwenden dieser Regel ein vollständiges client-weites Zurücksetzen dieser Tags.",
         "managedDescription": "Der verwaltete Modus hält Tags mit diff-basierten Updates aktuell; voller Sync fügt Tags zu Treffern hinzu und entfernt sie von Nicht-Treffern.",
+        "includeAffectedCrossSeeds": "Betroffene Cross-Seeds einbeziehen",
         "useTrackerName": "Tracker-Namen als Tag verwenden",
         "useDisplayName": "Anzeigenamen verwenden",
         "aboutDisplayNames": "Über Anzeigenamen",
@@ -1246,7 +1262,10 @@
         "placeholder": "z. B. /data/torrents",
         "skipIfCrossSeedsDontMatch": "Überspringen, wenn Cross-Seeds nicht auf die Bedingungen der Regel passen",
         "aboutSkipping": "Über das Überspringen des Verschiebens, wenn Cross-Seeds vorhanden sind",
-        "skipDescription": "Überspringt das Verschieben, wenn es weitere Torrents in derselben Cross-Seed-Gruppe gibt, die nicht auf die Bedingungen der Regel passen. Andernfalls werden alle Cross-Seeds verschoben, auch wenn sie nicht von den Bedingungen der Regel erfasst werden."
+        "skipDescription": "Überspringt das Verschieben, wenn es weitere Torrents in derselben Cross-Seed-Gruppe gibt, die nicht auf die Bedingungen der Regel passen. Andernfalls werden alle Cross-Seeds verschoben, auch wenn sie nicht von den Bedingungen der Regel erfasst werden.",
+        "errors": {
+          "mustBeAbsolute": "Muss ein absoluter Pfad sein, zum Beispiel /data/archive oder D:\\Archive."
+        }
       },
       "templateHelp": {
         "absolutePath": "Muss ein absoluter Pfad sein. Werte stehen darin, zum Beispiel",
@@ -1345,11 +1364,13 @@
       "preview": {
         "confirmDeleteRule": "Löschregel bestätigen",
         "previewDeleteRule": "Löschregel-Vorschau",
+        "confirmTagChange": "Tag-Änderungen bestätigen",
         "confirmCategoryChange": "Kategorieänderung bestätigen → {{category}}",
         "deleteEnabledSummary": "Diese Regel betrifft {{count}} Torrent, der aktuell passt.",
         "deleteEnabledSummary_other": "Diese Regel betrifft {{count}} Torrents, die aktuell passen.",
         "deleteDisabledSummary": "{{count}} Torrent würde dieser Regel entsprechen, wenn sie aktiviert wäre.",
         "deleteDisabledSummary_other": "{{count}} Torrents würden dieser Regel entsprechen, wenn sie aktiviert wäre.",
+        "tagPrefix": "Diese Regel aktualisiert die Tags von",
         "categoryPrefix": "Diese Regel verschiebt",
         "torrents": "{{count}} Torrent",
         "torrents_other": "{{count}} Torrents",
@@ -1770,11 +1791,9 @@
       "lastBackup": "Letztes Backup",
       "loading": "Wird geladen...",
       "progress": "{{current}} von {{total}} Torrents ({{percentage}}%)",
-      "status": "Status: {{status}}",
       "noBackupsYet": "Noch keine Backups",
       "nextScheduledBackup": "Nächstes geplantes Backup",
       "loadingSchedule": "Zeitplan wird geladen...",
-      "instance": "Instanz",
       "automaticBackupsOff": "Automatische Backups sind für diese Instanz deaktiviert.",
       "enableCadenceToSchedule": "Aktiviere mindestens einen automatischen Rhythmus, um Backups zu planen.",
       "currentlyRunning": "Backup läuft gerade.",
@@ -1798,6 +1817,7 @@
       "schedule": {
         "title": "Automatische Rhythmen",
         "description": "Stündliche, tägliche, wöchentliche und monatliche Läufe starten, nachdem das vorherige Backup abgeschlossen ist und das jeweilige Intervall verstrichen ist. Lass sie alle aus, wenn du Backups nur manuell auslöst.",
+        "keep": "Behalten",
         "hourly": "Stündlich",
         "hourlyDescription": "Wie viele stündliche Snapshots aufbewahrt werden, bevor ältere entfernt werden.",
         "hourlyTooltip": "Läuft etwa einmal pro Stunde, wenn Backups aktiviert sind und seit dem letzten Lauf mindestens eine Stunde vergangen ist.",
@@ -1816,8 +1836,7 @@
         "saveChanges": "Änderungen speichern",
         "saveAll": "Änderungen für alle Instanzen speichern",
         "requiresCadence": "Wähle vor dem Speichern mindestens einen Rhythmus (stündlich, täglich, wöchentlich oder monatlich).",
-        "waitForCapabilities": "Warte, bis die Instanz-Fähigkeitsprüfungen abgeschlossen sind, bevor du für alle Instanzen speicherst.",
-        "changesApplyImmediately": "Änderungen gelten für zukünftige Backups, sobald du speicherst."
+        "waitForCapabilities": "Warte, bis die Instanz-Fähigkeitsprüfungen abgeschlossen sind, bevor du für alle Instanzen speicherst."
       }
     },
     "restore": {
