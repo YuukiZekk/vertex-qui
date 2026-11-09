@@ -123,6 +123,35 @@ func (s *Store) SetPlacement(ctx context.Context, id int64, placement []byte) er
 	return s.execOne(ctx, "record brush placement", "UPDATE brush_entries SET placement = ? WHERE id = ?", string(placement), id)
 }
 
+// AddedTorrent names a torrent brush added to an instance.
+type AddedTorrent struct {
+	InstanceID int
+	Hash       string
+}
+
+// AddedFeeds maps every torrent brush added since the given time to the feed that
+// added it. Hashes are lower-cased.
+func (s *Store) AddedFeeds(ctx context.Context, since time.Time) (map[AddedTorrent]int64, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT instance_id, info_hash, feed_id FROM brush_entries WHERE status = ? AND added_at >= ?",
+		StatusAdded, since.Unix())
+	if err != nil {
+		return nil, fmt.Errorf("list added brush torrents: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[AddedTorrent]int64)
+	for rows.Next() {
+		var t AddedTorrent
+		var feed int64
+		if err := rows.Scan(&t.InstanceID, &t.Hash, &feed); err != nil {
+			return nil, fmt.Errorf("scan added brush torrent: %w", err)
+		}
+		t.Hash = strings.ToLower(t.Hash)
+		out[t] = feed
+	}
+	return out, rows.Err()
+}
+
 type Reservation struct {
 	InfoHash  string
 	SizeBytes int64

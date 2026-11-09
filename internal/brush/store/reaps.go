@@ -21,6 +21,9 @@ const (
 	ReapEmergency = "emergency"
 	// ReapMakeRoom means a new torrent needed the space and no instance had it.
 	ReapMakeRoom = "make_room"
+	// ReapEarly means the torrent's feed checks young torrents and this one had
+	// uploaded too little of its size by the feed's check age.
+	ReapEarly = "early"
 )
 
 // Reap is one torrent brush deleted, with the numbers it decided on. Rows written

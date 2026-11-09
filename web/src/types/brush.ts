@@ -93,6 +93,10 @@ export interface BrushFeed {
   ageFromFirstSeen: boolean
   // qBittorrent category the feed's torrents are added with; empty for none.
   category: string
+  // When not zero, a torrent of this feed that has uploaded less than
+  // earlyMinRatio of its size by this age is deleted. Zero turns it off.
+  earlyCheckSeconds: number
+  earlyMinRatio: number
   // Brush puts each torrent on the least busy of these. Empty, only on feeds saved
   // before instances could be picked one by one, means every instance with a floor.
   instanceIds: number[]
@@ -164,7 +168,7 @@ export interface BrushDeletion {
   infoHash: string
   name: string
   sizeBytes: number
-  reason: "need_space" | "emergency" | "make_room"
+  reason: "need_space" | "emergency" | "make_room" | "early"
   deletedAt: number
   ageSeconds: number
   // Null when the torrent's value was still unknown, which only an emergency deletes.

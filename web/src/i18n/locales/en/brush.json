@@ -112,6 +112,11 @@
     "categoryPlaceholder": "e.g. brush",
     "categoryHelp": "Torrents are added with this qBittorrent category, created when it does not exist. Leave empty for none.",
     "categoryValue": "category {{category}}",
+    "early": "Early check",
+    "earlyHelp": "Deletes a torrent that has uploaded too little of its size by the given age, even when space is plentiful, so a torrent nobody wants stops taking download and disk. Turn it on only for feeds whose slow starters rarely recover; a site whose torrents often pick up later should leave it off. Applies until an hour past the age.",
+    "earlyMinutes": "Check after (minutes)",
+    "earlyPercent": "Minimum upload (% of size)",
+    "earlyValue": "early check {{minutes}} min < {{percent}}%",
     "groupsHelp": "Instances in the chosen groups, now and later, take part in this feed, alongside any instances checked below."
   },
   "test": {
@@ -159,7 +164,8 @@
     "reasons": {
       "need_space": "Room for new torrents",
       "emergency": "Below the safety floor",
-      "make_room": "Room for a new torrent"
+      "make_room": "Room for a new torrent",
+      "early": "Early check"
     },
     "filesKept": "files kept",
     "empty": "No torrent deleted yet.",

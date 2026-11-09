@@ -258,20 +258,23 @@ func (s *Service) handleDeleteSite(w http.ResponseWriter, r *http.Request) {
 var errSiteHasFeeds = errors.New("delete the site's feeds first")
 
 type feedBody struct {
-	SiteID           int64   `json:"siteId"`
-	Name             string  `json:"name"`
-	URL              string  `json:"url"`
-	IntervalSeconds  int     `json:"intervalSeconds"`
-	MinSizeBytes     int64   `json:"minSizeBytes"`
-	MaxSizeBytes     int64   `json:"maxSizeBytes"`
-	FreeOnly         bool    `json:"freeOnly"`
-	SkipHR           bool    `json:"skipHr"`
-	WindowSeconds    int     `json:"windowSeconds"`
-	AgeFromFirstSeen bool    `json:"ageFromFirstSeen"`
-	Category         string  `json:"category"`
-	InstanceIDs      []int   `json:"instanceIds"`
-	GroupIDs         []int64 `json:"groupIds"`
-	Enabled          bool    `json:"enabled"`
+	SiteID           int64  `json:"siteId"`
+	Name             string `json:"name"`
+	URL              string `json:"url"`
+	IntervalSeconds  int    `json:"intervalSeconds"`
+	MinSizeBytes     int64  `json:"minSizeBytes"`
+	MaxSizeBytes     int64  `json:"maxSizeBytes"`
+	FreeOnly         bool   `json:"freeOnly"`
+	SkipHR           bool   `json:"skipHr"`
+	WindowSeconds    int    `json:"windowSeconds"`
+	AgeFromFirstSeen bool   `json:"ageFromFirstSeen"`
+	Category         string `json:"category"`
+	// EarlyCheckSeconds zero turns the early check off.
+	EarlyCheckSeconds int     `json:"earlyCheckSeconds"`
+	EarlyMinRatio     float64 `json:"earlyMinRatio"`
+	InstanceIDs       []int   `json:"instanceIds"`
+	GroupIDs          []int64 `json:"groupIds"`
+	Enabled           bool    `json:"enabled"`
 }
 
 func (s *Service) handleListFeeds(w http.ResponseWriter, r *http.Request) {
@@ -296,6 +299,10 @@ func (s *Service) handleSaveFeed(w http.ResponseWriter, r *http.Request) {
 		IntervalSeconds: body.IntervalSeconds, MinSizeBytes: body.MinSizeBytes, MaxSizeBytes: body.MaxSizeBytes,
 		FreeOnly: body.FreeOnly, SkipHR: body.SkipHR, WindowSeconds: body.WindowSeconds, AgeFromFirstSeen: body.AgeFromFirstSeen, Category: strings.TrimSpace(body.Category),
 		InstanceIDs: normalizeIDs(body.InstanceIDs), GroupIDs: normalizeIDs(body.GroupIDs), Enabled: body.Enabled,
+		EarlyCheckSeconds: body.EarlyCheckSeconds, EarlyMinRatio: body.EarlyMinRatio,
+	}
+	if f.EarlyCheckSeconds == 0 {
+		f.EarlyMinRatio = 0
 	}
 	create := chi.URLParam(r, "id") == ""
 	if msg := validateFeed(f, create); msg != "" {
@@ -349,6 +356,10 @@ func validateFeed(f store.Feed, create bool) string {
 		return "windowSeconds must be positive"
 	case f.MinSizeBytes < 0 || f.MaxSizeBytes < 0 || (f.MaxSizeBytes > 0 && f.MaxSizeBytes < f.MinSizeBytes):
 		return "size range is invalid"
+	case f.EarlyCheckSeconds != 0 && (f.EarlyCheckSeconds < int(minEarlyCheck/time.Second) || f.EarlyCheckSeconds > int(maxEarlyCheck/time.Second)):
+		return "earlyCheckSeconds must be 0 or between 5 minutes and 6 hours"
+	case f.EarlyCheckSeconds != 0 && (f.EarlyMinRatio <= 0 || f.EarlyMinRatio > 1):
+		return "earlyMinRatio must be above 0 and at most 1"
 	}
 	return ""
 }

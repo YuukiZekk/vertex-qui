@@ -23,7 +23,7 @@ import { useBrushGroups } from "./useBrushGroups"
 import { EmptyState, Field, FormSection, SectionCard, StateBadge, ToggleRow } from "./section"
 import { SiteIcon } from "./SiteIcon"
 import { sectionHeaderRowClass, sectionTableClass } from "./sectionStyles"
-import { bytesPerSecondToMBs, bytesToGB, gbToBytes } from "./units"
+import { bytesPerSecondToMBs, bytesToGB, gbToBytes, ratioToPercent } from "./units"
 
 export function BrushFeedsCard() {
   const { t } = useTranslation("brush")
@@ -103,6 +103,10 @@ export function BrushFeedsCard() {
                       feed.skipHr && t("feeds.skipHr"),
                       feed.ageFromFirstSeen && t("feeds.ageFromFirstSeenShort"),
                       feed.category && t("feeds.categoryValue", { category: feed.category }),
+                      feed.earlyCheckSeconds > 0 && t("feeds.earlyValue", {
+                        minutes: feed.earlyCheckSeconds / 60,
+                        percent: ratioToPercent(feed.earlyMinRatio),
+                      }),
                       t("feeds.windowValue", { minutes: feed.windowSeconds / 60 }),
                       site?.torrentUploadLimit ? t("sites.uploadLimitValue", { value: bytesPerSecondToMBs(site.torrentUploadLimit) }) : "",
                       site?.torrentDownloadLimit ? t("sites.downloadLimitValue", { value: bytesPerSecondToMBs(site.torrentDownloadLimit) }) : "",
@@ -173,6 +177,9 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
     skipHr: feed?.skipHr ?? false,
     ageFromFirstSeen: feed?.ageFromFirstSeen ?? false,
     category: feed?.category ?? "",
+    early: (feed?.earlyCheckSeconds ?? 0) > 0,
+    earlyMinutes: feed?.earlyCheckSeconds ? String(feed.earlyCheckSeconds / 60) : "15",
+    earlyPercent: feed?.earlyCheckSeconds ? ratioToPercent(feed.earlyMinRatio) : "2",
     enabled: feed?.enabled ?? true,
   })
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((prev) => ({ ...prev, [key]: value }))
@@ -194,6 +201,8 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
         skipHr: form.skipHr,
         ageFromFirstSeen: form.ageFromFirstSeen,
         category: form.category.trim(),
+        earlyCheckSeconds: form.early ? Math.round(Number(form.earlyMinutes) * 60) : 0,
+        earlyMinRatio: form.early ? Number(form.earlyPercent) / 100 : 0,
         enabled: form.enabled,
       })
     },
@@ -316,6 +325,23 @@ function FeedDialog({ feed, onClose }: { feed: BrushFeed | null, onClose: () => 
                 checked={form.ageFromFirstSeen}
                 onCheckedChange={(v) => set("ageFromFirstSeen", v)}
               />
+              <ToggleRow
+                id="feed-early"
+                label={t("feeds.early")}
+                description={t("feeds.earlyHelp")}
+                checked={form.early}
+                onCheckedChange={(v) => set("early", v)}
+              />
+              {form.early && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field id="feed-early-minutes" label={t("feeds.earlyMinutes")}>
+                    <Input id="feed-early-minutes" type="number" min="5" max="360" step="any" value={form.earlyMinutes} onChange={(e) => set("earlyMinutes", e.target.value)} />
+                  </Field>
+                  <Field id="feed-early-percent" label={t("feeds.earlyPercent")}>
+                    <Input id="feed-early-percent" type="number" min="0" max="100" step="any" value={form.earlyPercent} onChange={(e) => set("earlyPercent", e.target.value)} />
+                  </Field>
+                </div>
+              )}
               <ToggleRow
                 id="feed-enabled"
                 label={t("feeds.enabled")}

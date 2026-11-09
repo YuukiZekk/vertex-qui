@@ -25,6 +25,11 @@ export function mbsToBytesPerSecond(mbs: string): number {
   return Math.round(Number(mbs) * BYTES_PER_MB)
 }
 
+// A share of a torrent's size is entered as a percentage.
+export function ratioToPercent(ratio: number): string {
+  return String(Math.round(ratio * 10000) / 100)
+}
+
 // Upload capacity is entered in Mbps as hosting providers sell it: 1 Mbps = 125,000 bytes/s.
 const BYTES_PER_SECOND_PER_MBPS = 125_000
 

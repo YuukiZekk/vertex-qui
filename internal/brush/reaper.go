@@ -43,7 +43,55 @@ const (
 	needRounds    = 2
 	reapRecent    = 100
 	deletedMemory = 5 * time.Minute
+	// A feed's early check applies from its check age until earlyWindow later, so a
+	// round missed while qui was down still catches the torrent, but a torrent that
+	// grew old is left to the space rules. The check age lies within
+	// [minEarlyCheck, maxEarlyCheck].
+	earlyWindow   = time.Hour
+	minEarlyCheck = 5 * time.Minute
+	maxEarlyCheck = 6 * time.Hour
 )
+
+// pickEarly returns the instance's torrents whose feed checks young torrents and
+// that, between the feed's check age and earlyWindow later, have uploaded less than
+// the feed's share of their size. It does not look at space: such a torrent is
+// still taking download and disk, and the feed's own history says it rarely
+// recovers.
+func pickEarly(instanceID int, torrents []torrentValue, added map[store.AddedTorrent]int64, feeds map[int64]store.Feed) []torrentValue {
+	var picks []torrentValue
+	for _, tv := range torrents {
+		feedID, ok := added[store.AddedTorrent{InstanceID: instanceID, Hash: strings.ToLower(tv.Hash)}]
+		if !ok {
+			continue
+		}
+		f, ok := feeds[feedID]
+		if !ok || f.EarlyCheckSeconds <= 0 || f.EarlyMinRatio <= 0 || tv.SizeBytes <= 0 {
+			continue
+		}
+		check := int64(f.EarlyCheckSeconds)
+		if tv.AgeSeconds < check || tv.AgeSeconds >= check+int64(earlyWindow/time.Second) {
+			continue
+		}
+		if float64(tv.Uploaded) < f.EarlyMinRatio*float64(tv.SizeBytes) {
+			picks = append(picks, tv)
+		}
+	}
+	return picks
+}
+
+// earlyFeeds returns the feeds with an early check by id, and how far back their
+// torrents need looking up.
+func earlyFeeds(feeds []store.Feed) (map[int64]store.Feed, time.Duration) {
+	out := make(map[int64]store.Feed)
+	var reach time.Duration
+	for _, f := range feeds {
+		if f.EarlyCheckSeconds > 0 && f.EarlyMinRatio > 0 {
+			out[f.ID] = f
+			reach = max(reach, time.Duration(f.EarlyCheckSeconds)*time.Second+earlyWindow)
+		}
+	}
+	return out, reach
+}
 
 // reannounceWait gives the trackers time to take the last upload before a torrent is
 // deleted, as the original Vertex does. A variable so tests need not wait.
@@ -268,6 +316,15 @@ func (s *Service) reap(ctx context.Context) {
 		return
 	}
 	need, rate := demand(feeds, arrivals, configs, now)
+	checked, reach := earlyFeeds(feeds)
+	var added map[store.AddedTorrent]int64
+	if enabled && len(checked) > 0 {
+		// A torrent's age counts from qBittorrent's add, a little after the entry's, so
+		// look a few minutes further back.
+		if added, err = s.store.AddedFeeds(ctx, now.Add(-reach-10*time.Minute)); err != nil {
+			s.log.Error().Err(err).Msg("read brush torrents for the early check")
+		}
+	}
 	byInstance := make(map[int][]torrentValue)
 	for _, tv := range s.values.values(now) {
 		byInstance[tv.InstanceID] = append(byInstance[tv.InstanceID], tv)
@@ -298,7 +355,17 @@ func (s *Service) reap(ctx context.Context) {
 			continue
 		}
 		st.Committed = space.Committed
-		if space.Committed-st.Need < st.FloorBytes {
+		if early := pickEarly(id, byInstance[id], added, checked); len(early) > 0 {
+			est := st
+			est.Mode = store.ReapEarly
+			st.Committed += s.deletePicks(ctx, est, early)
+			gone := make(map[string]bool, len(early))
+			for _, tv := range early {
+				gone[tv.Hash] = true
+			}
+			byInstance[id] = slices.DeleteFunc(byInstance[id], func(tv torrentValue) bool { return gone[tv.Hash] })
+		}
+		if st.Committed-st.Need < st.FloorBytes {
 			s.reaper.streak[id]++
 		} else {
 			s.reaper.streak[id] = 0

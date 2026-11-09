@@ -196,6 +196,70 @@ func TestReapDeletesBelowTheFloor(t *testing.T) {
 	require.Equal(t, []string{"dl"}, qb.resumed)
 }
 
+func TestPickEarly(t *testing.T) {
+	feeds := map[int64]store.Feed{1: {ID: 1, EarlyCheckSeconds: 900, EarlyMinRatio: 0.02}, 2: {ID: 2}}
+	added := map[store.AddedTorrent]int64{
+		{InstanceID: 1, Hash: "dud"}: 1, {InstanceID: 1, Hash: "good"}: 1, {InstanceID: 1, Hash: "young"}: 1,
+		{InstanceID: 1, Hash: "old"}: 1, {InstanceID: 1, Hash: "unchecked"}: 2,
+	}
+	tv := func(hash string, age time.Duration, uploaded int64) torrentValue {
+		return torrentValue{Hash: hash, SizeBytes: 10 * gib, AgeSeconds: int64(age / time.Second), Uploaded: uploaded}
+	}
+	torrents := []torrentValue{
+		tv("DUD", 20*time.Minute, 100<<20),       // 1% by the check age, hash case ignored
+		tv("good", 20*time.Minute, gib),          // 10%
+		tv("young", 10*time.Minute, 0),           // not checked yet
+		tv("old", 15*time.Minute+earlyWindow, 0), // past the window: left to the space rules
+		tv("unchecked", 20*time.Minute, 0),       // its feed has no early check
+		tv("manual", 20*time.Minute, 0),          // not added by brush
+	}
+	require.Equal(t, []string{"DUD"}, hashes(pickEarly(1, torrents, added, feeds)))
+	require.Empty(t, pickEarly(2, torrents, added, feeds), "another instance")
+}
+
+// The early check deletes a torrent nobody wants even with plenty of space, after
+// announcing it, and records why.
+func TestReapDeletesEarlyDuds(t *testing.T) {
+	ctx := t.Context()
+	db := testdb.NewMigratedSQLite(t, t.Name())
+	cipher, err := models.NewCredentialCipher(make([]byte, 32))
+	require.NoError(t, err)
+	now := time.Now().Truncate(time.Second)
+	dud := brushTorrent("dud", 0, now.Add(-20*time.Minute))
+	good := brushTorrent("good", 1<<30, now.Add(-20*time.Minute))
+	qb := &fakeQB{free: map[int]int64{1: 500 * gib}, listed: map[int][]qbt.Torrent{1: {dud, good}}}
+	svc, err := New(ctx, db, cipher, qb)
+	require.NoError(t, err)
+	svc.now = func() time.Time { return now }
+	old := reannounceWait
+	reannounceWait = time.Millisecond
+	defer func() { reannounceWait = old }()
+	require.NoError(t, svc.store.SetFloor(ctx, 1, 20*gib))
+	require.NoError(t, svc.store.SetEnabled(ctx, true))
+
+	siteID, err := svc.store.CreateSite(ctx, store.Site{Name: "pt", BaseURL: "https://pt.example"})
+	require.NoError(t, err)
+	feedID, err := svc.store.CreateFeed(ctx, store.Feed{SiteID: siteID, Name: "a", URL: "https://pt.example/a", IntervalSeconds: 60,
+		WindowSeconds: 300, InstanceIDs: []int{1}, Enabled: true, EarlyCheckSeconds: 900, EarlyMinRatio: 0.02})
+	require.NoError(t, err)
+	for i, h := range []string{"dud", "good"} {
+		id, _, err := svc.store.InsertEntry(ctx, store.Entry{FeedID: feedID, GUID: h, Title: h, Status: store.StatusPending, FirstSeenAt: int64(i)})
+		require.NoError(t, err)
+		require.NoError(t, svc.store.Claim(ctx, id, h, 4<<30, 1))
+		require.NoError(t, svc.store.MarkAdded(ctx, id))
+	}
+
+	listed, _ := qb.Torrents(ctx, 1)
+	svc.values.observe(1, now, listed)
+	svc.reap(ctx)
+	require.Equal(t, []fakeDeletion{{1, "dud", true}}, qb.deleted)
+	require.Equal(t, []string{"dud"}, qb.reannounced)
+	deletions, err := svc.store.RecentReaps(ctx, "", 10)
+	require.NoError(t, err)
+	require.Len(t, deletions, 1)
+	require.Equal(t, store.ReapEarly, deletions[0].Reason)
+}
+
 // Deleting for space announces the picks first.
 func TestDeletePicksReannouncesFirst(t *testing.T) {
 	ctx := t.Context()
