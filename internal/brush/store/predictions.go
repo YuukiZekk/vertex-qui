@@ -146,3 +146,50 @@ func (s *Store) RecentResolved(ctx context.Context, limit int) ([]Prediction, er
 	}
 	return out, rows.Err()
 }
+
+// CalibrationKey is one feed's torrents in one age band.
+type CalibrationKey struct {
+	FeedID int64
+	Band   int
+}
+
+// Calibration sums the checked predictions of one feed's torrents in one age band.
+type Calibration struct {
+	Count     int64
+	Predicted int64
+	Actual    int64
+}
+
+// FeedCalibration sums, per feed and age band, the predictions checked since a
+// moment for torrents a feed added. bands are the ages in seconds where a band ends:
+// band 0 is younger than bands[0], band len(bands) at least the last.
+func (s *Store) FeedCalibration(ctx context.Context, since time.Time, bands []int64) (map[CalibrationKey]Calibration, error) {
+	band := "0"
+	args := make([]any, 0, len(bands)+3)
+	for _, b := range bands {
+		band += " + CASE WHEN p.age_seconds >= ? THEN 1 ELSE 0 END"
+		args = append(args, b)
+	}
+	args = append(args, StatusAdded, OutcomeResolved, since.Unix())
+	rows, err := s.db.QueryContext(ctx, `SELECT e.feed_id, `+band+` AS band, COUNT(*),
+			COALESCE(SUM(p.predicted), 0), COALESCE(SUM(p.actual), 0)
+		FROM brush_predictions p
+		JOIN brush_entries e ON e.info_hash = p.info_hash AND e.instance_id = p.instance_id AND e.status = ?
+		WHERE p.outcome = ? AND p.made_at >= ?
+		GROUP BY e.feed_id, band`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read brush feed calibration: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[CalibrationKey]Calibration)
+	for rows.Next() {
+		var k CalibrationKey
+		var c Calibration
+		if err := rows.Scan(&k.FeedID, &k.Band, &c.Count, &c.Predicted, &c.Actual); err != nil {
+			return nil, fmt.Errorf("scan brush feed calibration: %w", err)
+		}
+		out[k] = c
+	}
+	return out, rows.Err()
+}

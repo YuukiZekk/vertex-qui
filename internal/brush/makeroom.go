@@ -7,7 +7,6 @@ import (
 	"context"
 	"math"
 	"slices"
-	"time"
 
 	"github.com/autobrr/qui/internal/brush/site"
 	"github.com/autobrr/qui/internal/brush/store"
@@ -23,15 +22,15 @@ type roomPlan struct {
 }
 
 // planRoom finds, on one instance refused for lack of space, the torrents to delete
-// so the new torrent fits above the floor: ones at least minKeep old that earn
-// clearly less per GiB than a new torrent does there, lowest value first. It
-// returns false when they do not free enough.
+// so the new torrent fits above the floor: ones at least minKeep old, or complete
+// and idle, that earn clearly less per GiB than a new torrent does there, lowest
+// value first. It returns false when they do not free enough.
 func planRoom(c candidate, size int64, yield float64, torrents []torrentValue) (roomPlan, bool) {
 	shortfall := size + c.Floor - c.Committed
 	limit := yield * reapMargin
 	var eligible []torrentValue
 	for _, tv := range torrents {
-		if tv.Density != nil && tv.AgeSeconds >= int64(minKeep/time.Second) && *tv.Density < limit {
+		if tv.Density != nil && replaceable(tv) && *tv.Density < limit {
 			eligible = append(eligible, tv)
 		}
 	}
@@ -71,8 +70,11 @@ func (s *Service) makeRoom(ctx context.Context, cands []candidate, tf site.Torre
 		s.log.Error().Err(err).Msg("read new torrent yield for making room")
 		return candidate{}, false
 	}
+	added, factors := s.loadCalibration(ctx, now)
+	values := s.values.values(now)
+	calibrate(values, added, factors)
 	byInstance := make(map[int][]torrentValue)
-	for _, tv := range s.values.values(now) {
+	for _, tv := range values {
 		byInstance[tv.InstanceID] = append(byInstance[tv.InstanceID], tv)
 	}
 	var best *roomPlan

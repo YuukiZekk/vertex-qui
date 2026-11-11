@@ -112,6 +112,8 @@ type torrentValue struct {
 	AgeSeconds int64  `json:"ageSeconds"`
 	Uploaded   int64  `json:"uploaded"`
 	Leechers   int    `json:"leechers"`
+	// Complete is whether qBittorrent has the whole torrent.
+	Complete bool `json:"complete"`
 	// Rate, Predicted and Density are nil until the torrent has a full window of readings.
 	Rate      *int64   `json:"rate"`
 	Predicted *int64   `json:"predicted"`
@@ -135,6 +137,7 @@ func (v *valueTracker) values(now time.Time) []torrentValue {
 			tv := torrentValue{
 				InstanceID: instanceID, Hash: t.Hash, Name: t.Name, SizeBytes: t.Size,
 				AgeSeconds: max(0, now.Unix()-t.AddedOn), Uploaded: t.Uploaded, Leechers: int(t.NumIncomplete),
+				Complete: t.AmountLeft == 0 && t.Size > 0,
 			}
 			if rate, ok := tt.rate(); ok {
 				p := model.Predict(model.Input{Age: time.Duration(tv.AgeSeconds) * time.Second, Rate: rate, Leechers: tv.Leechers})

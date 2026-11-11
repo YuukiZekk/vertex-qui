@@ -35,9 +35,9 @@ const (
 	newTorrentAge  = 30 * time.Minute
 	minYieldChecks = 5
 	// A torrent is replaced only when its value per GiB is below reapMargin of what a
-	// new torrent is expected to bring, it is at least minKeep old, and space has been
-	// short for needRounds evaluations in a row, so a torrent is not deleted on a
-	// momentary dip.
+	// new torrent is expected to bring, it is at least minKeep old or complete and
+	// idle, and space has been short for needRounds evaluations in a row, so a
+	// torrent is not deleted on a momentary dip.
 	reapMargin    = 0.8
 	minKeep       = 30 * time.Minute
 	needRounds    = 2
@@ -79,18 +79,15 @@ func pickEarly(instanceID int, torrents []torrentValue, added map[store.AddedTor
 	return picks
 }
 
-// earlyFeeds returns the feeds with an early check by id, and how far back their
-// torrents need looking up.
-func earlyFeeds(feeds []store.Feed) (map[int64]store.Feed, time.Duration) {
+// earlyFeeds returns the feeds with an early check by id.
+func earlyFeeds(feeds []store.Feed) map[int64]store.Feed {
 	out := make(map[int64]store.Feed)
-	var reach time.Duration
 	for _, f := range feeds {
 		if f.EarlyCheckSeconds > 0 && f.EarlyMinRatio > 0 {
 			out[f.ID] = f
-			reach = max(reach, time.Duration(f.EarlyCheckSeconds)*time.Second+earlyWindow)
 		}
 	}
-	return out, reach
+	return out
 }
 
 // reannounceWait gives the trackers time to take the last upload before a torrent is
@@ -153,9 +150,10 @@ func reapKey(instanceID int, hash string) string {
 // pickReaps decides what one instance should delete. Below the floor everything is
 // a candidate, lowest value first and unknown values last, until committed space is
 // back at the floor. When space will be short within needLookahead for needRounds
-// evaluations in a row, only torrents old enough and earning clearly less than a
-// replacement are candidates, until the predicted need fits. Otherwise nothing is
-// deleted, however little a torrent uploads, since keeping it costs nothing.
+// evaluations in a row, only torrents old enough, or complete and idle, and earning
+// clearly less than a replacement are candidates, until the predicted need fits.
+// Otherwise nothing is deleted, however little a torrent uploads, since keeping it
+// costs nothing.
 func pickReaps(committed, floor, need int64, streak int, repl *float64, torrents []torrentValue) (string, int64, []torrentValue, int) {
 	var mode string
 	var shortfall int64
@@ -174,7 +172,7 @@ func pickReaps(committed, floor, need int64, streak int, repl *float64, torrents
 		}
 		limit := *repl * reapMargin
 		for _, tv := range torrents {
-			if tv.Density != nil && tv.AgeSeconds >= int64(minKeep/time.Second) && *tv.Density < limit {
+			if tv.Density != nil && replaceable(tv) && *tv.Density < limit {
 				eligible = append(eligible, tv)
 			}
 		}
@@ -316,17 +314,14 @@ func (s *Service) reap(ctx context.Context) {
 		return
 	}
 	need, rate := demand(feeds, arrivals, configs, now)
-	checked, reach := earlyFeeds(feeds)
-	var added map[store.AddedTorrent]int64
-	if enabled && len(checked) > 0 {
-		// A torrent's age counts from qBittorrent's add, a little after the entry's, so
-		// look a few minutes further back.
-		if added, err = s.store.AddedFeeds(ctx, now.Add(-reach-10*time.Minute)); err != nil {
-			s.log.Error().Err(err).Msg("read brush torrents for the early check")
-		}
-	}
+	checked := earlyFeeds(feeds)
+	// added reaches back feedMemory, far past any early check, which looks at the
+	// torrent's age itself.
+	added, factors := s.loadCalibration(ctx, now)
+	values := s.values.values(now)
+	calibrate(values, added, factors)
 	byInstance := make(map[int][]torrentValue)
-	for _, tv := range s.values.values(now) {
+	for _, tv := range values {
 		byInstance[tv.InstanceID] = append(byInstance[tv.InstanceID], tv)
 	}
 	s.reaper.mu.Lock()
