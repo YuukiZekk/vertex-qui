@@ -163,6 +163,8 @@ type Calibration struct {
 // FeedCalibration sums, per feed and age band, the predictions checked since a
 // moment for torrents a feed added. bands are the ages in seconds where a band ends:
 // band 0 is younger than bands[0], band len(bands) at least the last.
+// The status is spelled out as the partial index on entries is, so SQLite uses it
+// instead of scanning every entry of the instance for each prediction.
 func (s *Store) FeedCalibration(ctx context.Context, since time.Time, bands []int64) (map[CalibrationKey]Calibration, error) {
 	band := "0"
 	args := make([]any, 0, len(bands)+3)
@@ -170,11 +172,12 @@ func (s *Store) FeedCalibration(ctx context.Context, since time.Time, bands []in
 		band += " + CASE WHEN p.age_seconds >= ? THEN 1 ELSE 0 END"
 		args = append(args, b)
 	}
-	args = append(args, StatusAdded, OutcomeResolved, since.Unix())
+	args = append(args, OutcomeResolved, since.Unix())
 	rows, err := s.db.QueryContext(ctx, `SELECT e.feed_id, `+band+` AS band, COUNT(*),
 			COALESCE(SUM(p.predicted), 0), COALESCE(SUM(p.actual), 0)
 		FROM brush_predictions p
-		JOIN brush_entries e ON e.info_hash = p.info_hash AND e.instance_id = p.instance_id AND e.status = ?
+		JOIN brush_entries e ON e.info_hash = p.info_hash AND e.instance_id = p.instance_id
+			AND e.status IN ('adding', 'added') AND e.status = 'added'
 		WHERE p.outcome = ? AND p.made_at >= ?
 		GROUP BY e.feed_id, band`, args...)
 	if err != nil {
