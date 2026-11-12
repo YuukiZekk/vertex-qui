@@ -1,5 +1,7 @@
 # qui
 
+> **vertex-qui**：这个分支在 qui 上加了刷流模块，使用说明见 [BRUSH.md](BRUSH.md)。
+
 A fast, modern web interface for qBittorrent. Supports managing multiple qBittorrent instances from a single, lightweight application.
 
 <div align="center">
