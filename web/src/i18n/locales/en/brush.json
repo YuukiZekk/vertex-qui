@@ -176,10 +176,8 @@
     "uploadSpeedShort": "Now",
     "averageUploadShort": "Average today",
     "mbs": "{{value}} MB/s",
-    "todayShort": "Today",
     "todayUploaded": "Uploaded today",
-    "todayDownloaded": "Downloaded today",
-    "currentSpeed": "Speed now"
+    "todayDownloaded": "Downloaded today"
   },
   "entryStatus": {
     "pending": "Checking",

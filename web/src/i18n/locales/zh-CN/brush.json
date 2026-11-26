@@ -176,10 +176,8 @@
     "uploadSpeedShort": "当前上传",
     "averageUploadShort": "今日平均上传",
     "mbs": "{{value}} MB/s",
-    "todayShort": "今日",
     "todayUploaded": "今日上传",
-    "todayDownloaded": "今日下载",
-    "currentSpeed": "当前速度"
+    "todayDownloaded": "今日下载"
   },
   "entryStatus": {
     "pending": "检查中",
