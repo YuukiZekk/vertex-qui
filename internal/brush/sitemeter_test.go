@@ -141,7 +141,7 @@ func TestSamplerReadsEachInstanceAtItsInterval(t *testing.T) {
 	db := testdb.NewMigratedSQLite(t, t.Name())
 	cipher, err := models.NewCredentialCipher(make([]byte, 32))
 	require.NoError(t, err)
-	qb := &fakeQB{listed: map[int][]qbt.Torrent{}}
+	qb := &fakeQB{free: map[int]int64{1: 100 * gib, 2: 100 * gib, 3: 100 * gib}, listed: map[int][]qbt.Torrent{}}
 	svc, err := New(ctx, db, cipher, qb)
 	require.NoError(t, err)
 	for _, id := range []int{1, 2, 3} {

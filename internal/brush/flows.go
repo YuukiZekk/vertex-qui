@@ -186,7 +186,7 @@ func (s *Service) sampleFlows(ctx context.Context) {
 		s.log.Error().Err(err).Msg("list instances for flows")
 		return
 	}
-	configs, err := s.store.InstanceConfigs(ctx)
+	configs, err := s.instanceConfigs(ctx)
 	if err != nil {
 		s.log.Error().Err(err).Msg("read brush instances for flows")
 		return

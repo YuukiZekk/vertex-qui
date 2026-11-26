@@ -98,7 +98,7 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	configs, err := s.store.InstanceConfigs(ctx)
+	configs, err := s.instanceConfigs(ctx)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

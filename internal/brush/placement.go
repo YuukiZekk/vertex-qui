@@ -65,7 +65,7 @@ func (s *Service) admit(ctx context.Context, f store.Feed, entryID int64, tf sit
 	s.admitMu.Lock()
 	defer s.admitMu.Unlock()
 
-	configs, err := s.store.InstanceConfigs(ctx)
+	configs, err := s.instanceConfigs(ctx)
 	if err != nil {
 		return 0, reasonSpaceCheck, err.Error()
 	}

@@ -123,7 +123,7 @@ func (s *Service) sample(ctx context.Context) {
 	sweep := start.Sub(s.lastSweep) >= defaultReadInterval
 	if sweep {
 		s.ensureFloors(ctx, start)
-		configs, err := s.store.InstanceConfigs(ctx)
+		configs, err := s.instanceConfigs(ctx)
 		if err != nil {
 			s.log.Error().Err(err).Msg("read brush instances for sampling")
 			return

@@ -72,3 +72,26 @@ func TestEnsureFloorsReadsTheDisk(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 200*gib, configs[1].FloorBytes, "not 40 GiB from 300 free + 100 used")
 }
+
+// TestDeletedInstanceIsNotRead: an instance deleted in qui keeps its brush row, and
+// the reaper must stop reading it instead of alerting about it forever.
+func TestDeletedInstanceIsNotRead(t *testing.T) {
+	ctx := t.Context()
+	db := testdb.NewMigratedSQLite(t, t.Name())
+	cipher, err := models.NewCredentialCipher(make([]byte, 32))
+	require.NoError(t, err)
+	qb := &fakeQB{free: map[int]int64{1: 100 * gib}}
+	svc, err := New(ctx, db, cipher, qb)
+	require.NoError(t, err)
+	require.NoError(t, svc.store.SetFloor(ctx, 1, 10*gib))
+	require.NoError(t, svc.store.SetFloor(ctx, 7, 10*gib))
+
+	configs, err := svc.instanceConfigs(ctx)
+	require.NoError(t, err)
+	require.Contains(t, configs, 1)
+	require.NotContains(t, configs, 7)
+
+	svc.reap(ctx)
+	require.Zero(t, qb.reads[7], "the reaper read an instance qui no longer has")
+	require.NotZero(t, qb.reads[1])
+}

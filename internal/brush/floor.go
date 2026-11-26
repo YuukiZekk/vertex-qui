@@ -8,6 +8,8 @@ import (
 	"time"
 
 	qbt "github.com/autobrr/go-qbittorrent"
+
+	"github.com/autobrr/qui/internal/brush/store"
 )
 
 const (
@@ -61,7 +63,7 @@ func (s *Service) ensureFloors(ctx context.Context, now time.Time) {
 		return
 	}
 	s.lastFloorCheck = now
-	configs, err := s.store.InstanceConfigs(ctx)
+	configs, err := s.instanceConfigs(ctx)
 	if err != nil {
 		s.log.Error().Err(err).Msg("read brush instances for default floors")
 		return
@@ -96,4 +98,27 @@ func (s *Service) ensureFloors(ctx context.Context, now time.Time) {
 		s.log.Info().Int("instance", inst.ID).Int64("floor", floor).Int64("total", total).
 			Bool("measured", measured).Msg("set default safety floor")
 	}
+}
+
+// instanceConfigs is brush's settings for the instances qui still has. Deleting an
+// instance in qui leaves its brush row behind, and brush would keep reading it.
+func (s *Service) instanceConfigs(ctx context.Context) (map[int]store.InstanceConfig, error) {
+	configs, err := s.store.InstanceConfigs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	instances, err := s.qui.Instances(ctx)
+	if err != nil {
+		return nil, err
+	}
+	present := make(map[int]bool, len(instances))
+	for _, inst := range instances {
+		present[inst.ID] = true
+	}
+	for id := range configs {
+		if !present[id] {
+			delete(configs, id)
+		}
+	}
+	return configs, nil
 }
