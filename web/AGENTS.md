@@ -5,11 +5,12 @@ Frontend rules for work under `web/`. Locale and translation rules live in `web/
 ## Frontend
 
 - Organize React modules by feature within `web/src/{pages,routes,components}`.
-- A user preference that must follow the user to other browsers uses `useClientSetting` from `web/src/lib/client-settings.ts`. A plain `localStorage` write stays in one browser. `SYNCED_KEYS` and `SYNCED_PREFIXES` only control which local values a page load copies to the server when the server lacks them.
+- A user preference that must follow the user to other browsers uses `useClientSetting` from `web/src/lib/client-settings.ts`. A plain `localStorage` write stays in one browser. `SYNCED_KEYS` and `SYNCED_PREFIXES` only control which local values a page load copies to the server when the server lacks them. A control that shows a default before the first read of the server takes no input until `useClientSettingsSettled` is true, as the **24 h** and **Live** tabs of the Dashboard do. A pick of the value that already shows saves nothing, and the server value then replaces it.
 - A new worktree has no `web/node_modules`. Run `pnpm install --frozen-lockfile` in `web/` before `pnpm exec tsc`, `eslint`, or `pnpm check:i18n`. `npx tsc` without it does not run the TypeScript compiler.
 - Before you write or run a frontend test, read `docs/standards/frontend-tests.md`.
+- Before you build or change a tab of Settings, or a module in `src/components/kit/`, read `src/components/kit/AGENTS.md`.
 - Before you change when a tab of `TorrentDetailsPanel.tsx` or the piece bar fetches, or change a `useSyncStream` listener, read "Torrent details" in `docs/agents/frontend-notes.md`.
-- Before you add an API call to the torrent list surface, or add demo-only UI, read "getqui.com demo" in `docs/agents/frontend-notes.md`.
+- Before you add or review an API call, a page, or demo-only UI, read "getqui.com demo" in `docs/agents/frontend-notes.md`. Only the `/instances` pages run in the demo, so another page needs no demo route.
 
 ## i18n
 
@@ -17,8 +18,7 @@ Frontend rules for work under `web/`. Locale and translation rules live in `web/
 - Translation fallbacks rely on the English locale only. Never hardcode one, not as `defaultValue: "English"` and not as `t(…) ?? "English"`. A computed key the checker cannot read falls back to a translated key outside its namespace (``t([`stateLabels.${state}`, "stateLabelFallback"])``), never to a raw backend value. A call that has to break this documents why in place.
 - When you touch UI strings, locale JSON, `web/src/i18n/index.ts`, or formatter hooks, run `pnpm check:i18n`. `web/package.json` has a `check:i18n:*` script for most single checks and each non-English locale.
 - When `check:i18n` flags a key, delete the key from every locale in the same change, or teach the scanner to see the reference if the UI does use it.
-- A data-only file that holds key properties but never calls `useTranslation` names its namespace with a `// i18n-namespace: <ns>` comment after its imports. A key written as `"ns:key"` names its own namespace and needs no directive: `resolveNamespaceAndKey` in `web/scripts/check-i18n-keys-lib.mjs` splits it.
-- No UI text names SSH until #2917 ships. Before you add remote-instance text, read rollout step 4 in `docs/remote-backend-design.md`.
+- A file that holds key properties, or calls a `t` that it gets as a parameter, but never calls `useTranslation` names its namespace with a `// i18n-namespace: <ns>` comment after its imports. `pnpm check:i18n` checks its keys against that namespace. A key written as `"ns:key"` names its own namespace and needs no directive: `resolveNamespaceAndKey` in `web/scripts/check-i18n-keys-lib.mjs` splits it.
 
 ## Code Review Rules
 

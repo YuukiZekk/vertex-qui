@@ -224,20 +224,107 @@ func TestIsEpisodeRange(t *testing.T) {
 	require.True(t, IsEpisodeRange(parser.Parse("Darker than Black S00E02-E05 720p BluRay x264-Headpatter")))
 	require.False(t, IsEpisodeRange(parser.Parse("Show.Name.S01E05.1080p.WEB-GRP")))
 	require.False(t, IsEpisodeRange(parser.Parse("Show.Name.S01.1080p.WEB-GRP")))
-	// A path naming the same episode twice is one episode, not a range.
 	require.False(t, IsEpisodeRange(parser.Parse("Show.Name.S11E11.1080p.WEB-GRP/Show.Name.S11E11.1080p.WEB-GRP.mkv")))
 	require.False(t, IsEpisodeRange(nil))
-	// One episode named under two schemes (SxxEyy plus an absolute "Episode N")
-	// is not a range, even though rls lists both numbers in SeriesEpisodes.
 	release := parser.Parse("Sea.Voyage.S23E19.Episode.1174.1080p.CR.WEB-DL.DDP2.0.H.264-Grp.mkv")
 	require.False(t, IsEpisodeRange(release))
 	require.Equal(t, 19, release.Episode)
 	require.Equal(t, rls.Episode, release.Type)
-	// A bare E continuation, an NxNN pair, or a pack folder with an
-	// "Episode N" file name is still a range.
 	require.True(t, IsEpisodeRange(parser.Parse("Show.Name.S01E05.E06.1080p.WEB-GRP")))
 	require.True(t, IsEpisodeRange(parser.Parse("Show.Name.1x05.1x06.1080p.WEB-GRP")))
 	require.True(t, IsEpisodeRange(parser.Parse("Show.Name.S01E01E02-GRP/Show.Name.Episode.1-2.mkv")))
-	// An absolute-only batch has no SxxEyy tag, so every tag counts.
 	require.True(t, IsEpisodeRange(parser.Parse("[Grp] Show Name - 01 - 12 [1080p]")))
+}
+
+// regression: #3286
+func TestParser_ReadsWebSourceAfterUHDAndAnotherTag(t *testing.T) {
+	t.Parallel()
+
+	parser := NewDefaultParser()
+	for name, want := range map[string]string{
+		"Harbor.Lights.2022.2160p.UHD.AMZN.WEB-DL.DDP5.1.x265-GRP": "UHD.WEB-DL",
+		"Harbor.Lights.2022.2160p.UHD.NF.WEBRip.DDP5.1.x265-GRP":   "UHD.WEBRiP",
+		"Harbor.Lights.2022.2160p.UHD.DDP5.1.x265-GRP":             "UHD.BluRay",
+		"Harbor.Lights.2022.2160p.UHD.BluRay.DDP5.1.x265-GRP":      "UHD.BluRay",
+	} {
+		require.Equal(t, want, parser.Parse(name).Source, name)
+	}
+}
+
+func TestParser_GivesTheReleaseOfParseString(t *testing.T) {
+	t.Parallel()
+
+	parser := NewDefaultParser()
+	for _, name := range []string{
+		"Harbor.Watch.S01.UHD.HDTV.x265-GRP",
+		"Quiet Tide - Harbor Sounds [FLAC 16bit 44.1kHz]",
+	} {
+		want := rls.ParseString(name)
+		got := parser.Parse(name)
+		require.Equal(t, want.Title, got.Title, name)
+		require.Equal(t, want.Resolution, got.Resolution, name)
+		require.Equal(t, want.Audio, got.Audio, name)
+		require.Equal(t, want.Language, got.Language, name)
+	}
+}
+
+func TestParser_KeepsATagListOfTheExactSize(t *testing.T) {
+	t.Parallel()
+
+	release := NewDefaultParser().Parse("Harbor.Watch.S01E02.The.Quiet.Tide.2160p.WEB-DL.DDP5.1.DV.HDR.H.265-GRP")
+	tags := release.Tags()
+	require.NotEmpty(t, tags)
+	// A copy of the tags can get room for some more, up to the next allocation size.
+	require.LessOrEqual(t, cap(tags), len(tags)+len(tags)/8+1)
+}
+
+// regression: #4289
+func TestParser_ReadsAKGListingAsItsDownloadName(t *testing.T) {
+	t.Parallel()
+
+	parser := NewDefaultParser()
+	for _, tc := range []struct {
+		name      string
+		wantTitle string
+		wantYear  int
+		wantGroup string
+	}{
+		{name: "Quiet Harbour AKA Stiller Hafen 1987 France [Quiet.Harbour.1987.DVDRip.x264-GRP.mkv]", wantTitle: "Quiet Harbour", wantYear: 1987, wantGroup: "GRP"},
+		{name: "Still Waters 1957 Czech Republic [Still.Waters.1957]", wantTitle: "Still Waters", wantYear: 1957},
+		{name: "Kein - Ein Wienerfilm 1997 Austria [Kein.Ein.Wienerfilm]", wantTitle: "Kein Ein Wienerfilm", wantYear: 1997},
+		{name: "Still Waters 1957  [Still.Waters]", wantTitle: "Still Waters", wantYear: 1957},
+		{name: "(1000) Nights of Rain 2009 United States [1000.Nights.of.Rain.2009.1080p.BluRay.x264-GRP.mkv]", wantTitle: "1000 Nights of Rain", wantYear: 2009, wantGroup: "GRP"},
+	} {
+		got := parser.Parse(tc.name)
+		require.Equal(t, tc.wantTitle, got.Title, tc.name)
+		require.Equal(t, tc.wantYear, got.Year, tc.name)
+		require.Equal(t, tc.wantGroup, got.Group, tc.name)
+	}
+}
+
+// regression: #4289
+func TestParser_KeepsABracketTagThatIsNoKGDownloadName(t *testing.T) {
+	t.Parallel()
+
+	parser := NewDefaultParser()
+	for _, name := range []string{
+		"Quiet Tide - Harbor Sounds 2011 [Remaster Vol.2]",
+		"Quiet Tide - Harbor Sounds 2011 [Deluxe]",
+		"Harbor Lights 2019 [H.264]",
+		"Harbor Lights 2019 WEB-DL [DD5.1]",
+		"Harbor Lights 2019 [Harbor.Subs]",
+		"Harbor Lights 2019 [Quiet.Harbor]",
+		"Harbor Lights 2019 (Dual Audio) [Dual.Audio]",
+		"[GRP] Kaiju Squad - 05 [1080p][Multi-Subs]",
+		"Harbor Lights [Harbor.Lights.2019.1080p.BluRay.x264-GRP]",
+		"Harbor Lights 2019 [.]",
+		"[GRP] Kaiju Squad - 05 (1080p) [Batch.Fix]",
+		"Harbor.Toolkit-GRP (2019) [Windows / Multi-Language / Full ISO]",
+	} {
+		want := rls.ParseString(name)
+		got := parser.Parse(name)
+		require.Equal(t, want.Title, got.Title, name)
+		require.Equal(t, want.Year, got.Year, name)
+		require.Equal(t, want.Group, got.Group, name)
+	}
 }

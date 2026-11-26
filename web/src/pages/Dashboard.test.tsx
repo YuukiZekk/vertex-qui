@@ -4,11 +4,15 @@
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, cleanup, renderHook } from "@testing-library/react"
+import { createMemoryHistory, createRootRoute, createRouter, RouterContextProvider } from "@tanstack/react-router"
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import "@/i18n"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import type { StreamState } from "@/contexts/SyncStreamContext"
+import { readRaw } from "@/lib/client-settings"
 import { createDashboardStatsFallbackQueryKey } from "@/lib/dashboard-stream"
 import { STREAM_ERROR_DISCONNECTED } from "@/lib/sync-stream-state"
 import type { InstanceResponse } from "@/types"
@@ -16,6 +20,8 @@ import type { InstanceResponse } from "@/types"
 const mocks = vi.hoisted(() => ({
   state: undefined as unknown as StreamState,
   getTorrents: vi.fn(),
+  getInstanceDisk: vi.fn(),
+  instances: [] as InstanceResponse[],
 }))
 
 vi.mock("@/contexts/SyncStreamContext", async (importOriginal) => {
@@ -31,9 +37,11 @@ vi.mock("@/contexts/SyncStreamContext", async (importOriginal) => {
     useSyncStreamManager: () => manager,
   }
 })
-vi.mock("@/lib/api", () => ({ api: { getTorrents: mocks.getTorrents } }))
+vi.mock("@/lib/api", () => ({ api: { getTorrents: mocks.getTorrents, getInstanceDisk: mocks.getInstanceDisk, getTransferHistoryStatus: async () => [] } }))
+vi.mock("@/hooks/useTitleBarSpeeds", () => ({ useTitleBarSpeeds: () => {} }))
+vi.mock("@/hooks/useInstances", () => ({ useInstances: () => ({ instances: mocks.instances, isLoading: false }) }))
 
-import { useAllInstanceStats } from "./Dashboard"
+import { Dashboard, useAllInstanceStats } from "./Dashboard"
 
 const healthy: StreamState = { connected: true, initialized: true, dataStalled: false, error: null, retrying: false, retryAttempt: 0 }
 const instances = [{ id: 1, name: "Example", isActive: true }] as InstanceResponse[]
@@ -41,7 +49,10 @@ const instances = [{ id: 1, name: "Example", isActive: true }] as InstanceRespon
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  vi.unstubAllGlobals()
   mocks.getTorrents.mockReset()
+  mocks.getInstanceDisk.mockReset()
+  localStorage.clear()
 })
 
 describe("useAllInstanceStats fallback poll", () => {
@@ -84,6 +95,62 @@ describe("useAllInstanceStats fallback poll", () => {
 
     expect(result.current[0].streamError).toBe("instance unreachable: connection refused")
     unmount()
+    client.clear()
+  })
+})
+
+describe("useAllInstanceStats disk", () => {
+  // regression: #4305
+  it("drops the measured disk when the instance loses its file access", async () => {
+    mocks.state = healthy
+    mocks.getTorrents.mockResolvedValue({ torrents: [], total: 0 })
+    mocks.getInstanceDisk.mockResolvedValue({ freeBytes: 400, totalBytes: 1000 })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    const local = [{ ...instances[0], filesystemMode: "local" }] as InstanceResponse[]
+    const { result, rerender, unmount } = renderHook(
+      ({ list }) => useAllInstanceStats(list, { enabled: true }),
+      { wrapper, initialProps: { list: local } }
+    )
+    await waitFor(() => expect(result.current[0].disk).toEqual({ freeBytes: 400, totalBytes: 1000 }))
+
+    rerender({ list: [{ ...local[0], filesystemMode: "none" }] })
+    expect(result.current[0].disk).toBeNull()
+    unmount()
+    client.clear()
+  })
+})
+
+describe("Dashboard header", () => {
+  it("turns incognito mode on and off", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    })
+    mocks.state = healthy
+    mocks.instances = instances
+    mocks.getTorrents.mockResolvedValue({ torrents: [], total: 0 })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const router = createRouter({ routeTree: createRootRoute(), history: createMemoryHistory() })
+    render(
+      <RouterContextProvider router={router}>
+        <QueryClientProvider client={client}>
+          <TooltipProvider>
+            <Dashboard />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </RouterContextProvider>
+    )
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Turn on incognito mode" })[0])
+    expect(readRaw("qui-incognito-mode")).toBe("true")
+    expect(screen.getAllByRole("button", { name: "Turn off incognito mode" }).map(button => button.getAttribute("aria-pressed"))).toEqual(["true"])
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Turn off incognito mode" })[0])
+    expect(readRaw("qui-incognito-mode")).toBe("false")
     client.clear()
   })
 })

@@ -15,49 +15,32 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/autobrr/qui/internal/dbinterface"
+	"github.com/autobrr/qui/internal/qbittorrent"
 )
 
-// InstanceLister lists all qBittorrent instances
 type InstanceLister interface {
 	ListInstanceIDs(ctx context.Context) ([]int, error)
 }
 
-// TorrentHashProvider provides current torrent hashes for an instance
 type TorrentHashProvider interface {
 	GetAllTorrentHashes(ctx context.Context, instanceID int) ([]string, error)
 }
 
-// Service manages cached torrent file information
 type Service struct {
 	repo *Repository
 }
 
-// NewService creates a new files manager service
 func NewService(db dbinterface.Querier) *Service {
 	return &Service{
 		repo: NewRepository(db),
 	}
 }
 
-// GetCachedFiles retrieves cached file information for a torrent.
-// Returns nil if no cache exists or cache is stale.
-//
-// CONCURRENCY NOTE: This function does NOT use transactions to avoid deadlocks.
-// There's a small TOCTOU race where cache could be invalidated between sync check
-// and file retrieval, but this is acceptable because:
-// 1. The worst case is serving slightly stale data (same as normal cache behavior)
-// 2. Cache invalidation is triggered by user actions (rename, delete, etc.)
-// 3. The cache has built-in freshness checks that limit staleness (5 min for active torrents, 30 min for completed)
-// 4. Avoiding transactions prevents deadlocks during concurrent operations (backups, writes, etc.)
-//
-// If absolute consistency is required, the caller should invalidate the cache
-// before calling this method, or use the qBittorrent API directly.
 func (s *Service) GetCachedFiles(ctx context.Context, instanceID int, hash string) (qbt.TorrentFiles, error) {
 	results, missing, err := s.GetCachedFilesBatch(ctx, instanceID, []string{hash}, 0)
 	if err != nil {
 		return nil, err
 	}
-	// If the requested hash was not returned or explicitly marked missing, behave like a cache miss.
 	if _, found := lookupMissing(hash, missing); found {
 		return nil, nil
 	}
@@ -68,8 +51,6 @@ func (s *Service) GetCachedFiles(ctx context.Context, instanceID int, hash strin
 	return files, nil
 }
 
-// GetCachedFilesBatch retrieves cached file information for multiple torrents.
-// Missing or stale entries are returned in the second slice so callers can decide what to refresh.
 func (s *Service) GetCachedFilesBatch(ctx context.Context, instanceID int, hashes []string, maxAge time.Duration) (map[string]qbt.TorrentFiles, []string, error) {
 	unique := dedupeHashes(hashes)
 	if len(unique) == 0 {
@@ -114,7 +95,6 @@ func (s *Service) GetCachedFilesBatch(ctx context.Context, instanceID int, hashe
 			results[hash] = convertCachedFiles(files)
 		}
 
-		// Ensure fresh hashes that lacked rows are marked missing.
 		for _, hash := range freshHashes {
 			if _, ok := results[hash]; !ok {
 				missing = append(missing, hash)
@@ -125,27 +105,46 @@ func (s *Service) GetCachedFilesBatch(ctx context.Context, instanceID int, hashe
 	return results, missing, nil
 }
 
-// CacheFilesBatch stores file information for multiple torrents in the database
-func (s *Service) CacheFilesBatch(ctx context.Context, instanceID int, files map[string]qbt.TorrentFiles) error {
-	var allCachedFiles []CachedFile
-	var allSyncInfos []SyncInfo
+func (s *Service) GetCachedFilesBatchWithMeta(ctx context.Context, instanceID int, hashes []string) (map[string]qbittorrent.CachedFilesEntry, error) {
+	rows, err := s.repo.getEntriesBatch(ctx, instanceID, hashes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cached files batch: %w", err)
+	}
+	entries := make(map[string]qbittorrent.CachedFilesEntry, len(rows))
+	for hash, row := range rows {
+		entries[hash] = qbittorrent.CachedFilesEntry{Files: convertCachedFiles(row.files), Print: row.print, SyncedAt: row.syncedAt}
+	}
+	return entries, nil
+}
 
-	for hash, torrentFiles := range files {
-		if len(torrentFiles) == 0 {
+func (s *Service) CacheFilesBatch(ctx context.Context, instanceID int, writes map[string]qbittorrent.CachedFilesWrite) error {
+	fileCount := 0
+	for _, write := range writes {
+		fileCount += len(write.Files)
+	}
+	allCachedFiles := make([]CachedFile, 0, fileCount)
+	allSyncInfos := make([]SyncInfo, 0, len(writes))
+	seed, notSeed := true, false
+	// TIMESTAMP has no zone: Postgres reads a local time back as UTC.
+	syncedAt := time.Now().UTC()
+
+	for hash, write := range writes {
+		if len(write.Files) == 0 {
 			continue
 		}
 
-		// Convert to cache format
-		cachedFiles := make([]CachedFile, len(torrentFiles))
-		for i, f := range torrentFiles {
+		for _, f := range write.Files {
 			pieceStart, pieceEnd := int64(0), int64(0)
 			if len(f.PieceRange) >= 2 {
 				pieceStart = int64(f.PieceRange[0])
 				pieceEnd = int64(f.PieceRange[1])
 			}
 
-			isSeed := f.IsSeed
-			cachedFiles[i] = CachedFile{
+			isSeed := &notSeed
+			if f.IsSeed {
+				isSeed = &seed
+			}
+			allCachedFiles = append(allCachedFiles, CachedFile{
 				InstanceID:      instanceID,
 				TorrentHash:     hash,
 				FileIndex:       f.Index,
@@ -153,49 +152,32 @@ func (s *Service) CacheFilesBatch(ctx context.Context, instanceID int, files map
 				Size:            f.Size,
 				Progress:        float64(f.Progress),
 				Priority:        f.Priority,
-				IsSeed:          &isSeed,
+				IsSeed:          isSeed,
 				PieceRangeStart: pieceStart,
 				PieceRangeEnd:   pieceEnd,
 				Availability:    float64(f.Availability),
-			}
+			})
 		}
 
-		allCachedFiles = append(allCachedFiles, cachedFiles...)
-
-		// Collect sync metadata
-		syncInfo := SyncInfo{
-			InstanceID:      instanceID,
-			TorrentHash:     hash,
-			LastSyncedAt:    time.Now(),
-			TorrentProgress: 0.0, // Not tracking progress anymore
-			FileCount:       len(torrentFiles),
-		}
-		allSyncInfos = append(allSyncInfos, syncInfo)
+		allSyncInfos = append(allSyncInfos, SyncInfo{
+			InstanceID:    instanceID,
+			TorrentHash:   hash,
+			LastSyncedAt:  syncedAt,
+			FileCount:     len(write.Files),
+			MaindataPrint: write.Print,
+		})
 	}
 
-	if len(allCachedFiles) > 0 {
-		// Store all files in database in one batch
-		if err := s.repo.UpsertFiles(ctx, allCachedFiles); err != nil {
-			return fmt.Errorf("failed to cache files: %w", err)
-		}
+	if err := s.repo.UpsertCache(ctx, allCachedFiles, allSyncInfos); err != nil {
+		return fmt.Errorf("failed to cache files: %w", err)
 	}
-
-	if len(allSyncInfos) > 0 {
-		// Update all sync metadata in one batch
-		if err := s.repo.UpsertSyncInfoBatch(ctx, allSyncInfos); err != nil {
-			return fmt.Errorf("failed to update sync info: %w", err)
-		}
-	}
-
 	return nil
 }
 
-// CacheFiles stores file information in the database
-func (s *Service) CacheFiles(ctx context.Context, instanceID int, hash string, files qbt.TorrentFiles) error {
-	return s.CacheFilesBatch(ctx, instanceID, map[string]qbt.TorrentFiles{hash: files})
+func (s *Service) CacheFiles(ctx context.Context, instanceID int, hash string, write qbittorrent.CachedFilesWrite) error {
+	return s.CacheFilesBatch(ctx, instanceID, map[string]qbittorrent.CachedFilesWrite{hash: write})
 }
 
-// InvalidateCache removes cached file information for a torrent
 func (s *Service) InvalidateCache(ctx context.Context, instanceID int, hash string) error {
 	if err := s.repo.DeleteTorrentCache(ctx, instanceID, []string{hash}); err != nil {
 		return fmt.Errorf("failed to invalidate torrent cache: %w", err)
@@ -209,7 +191,6 @@ func (s *Service) InvalidateCache(ctx context.Context, instanceID int, hash stri
 	return nil
 }
 
-// CleanupRemovedTorrentsCache removes cache entries for torrents that no longer exist
 func (s *Service) CleanupRemovedTorrentsCache(ctx context.Context, instanceID int, currentHashes []string) (int, error) {
 	deleted, err := s.repo.DeleteCacheForRemovedTorrents(ctx, instanceID, currentHashes)
 	if err != nil {
@@ -226,9 +207,6 @@ func (s *Service) CleanupRemovedTorrentsCache(ctx context.Context, instanceID in
 	return deleted, nil
 }
 
-// StartOrphanCleanup starts a background goroutine that periodically removes orphaned
-// cache entries (entries for torrents that no longer exist in qBittorrent).
-// Runs cleanup on startup and then hourly.
 func (s *Service) StartOrphanCleanup(ctx context.Context, instances InstanceLister, hashes TorrentHashProvider) {
 	go func() {
 		// Run cleanup on startup after a short delay to let instances connect
@@ -240,7 +218,6 @@ func (s *Service) StartOrphanCleanup(ctx context.Context, instances InstanceList
 
 		s.runOrphanCleanup(ctx, instances, hashes)
 
-		// Then run hourly
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
 
@@ -285,7 +262,6 @@ func (s *Service) runOrphanCleanup(ctx context.Context, instances InstanceLister
 	}
 }
 
-// GetCacheStats returns statistics about the cache
 func (s *Service) GetCacheStats(ctx context.Context, instanceID int) (*CacheStats, error) {
 	return s.repo.GetCacheStats(ctx, instanceID)
 }

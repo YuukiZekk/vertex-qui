@@ -107,9 +107,12 @@ export function createRoutes(store: DemoStore): Route[] {
   on("PUT", "/client-settings", () => noContent())
   on("GET", "/filter-views", () => json([]))
   on("GET", "/tracker-icons", () => json({}))
-  on("GET", "/license/licensed", () => json({ licensed: false }))
+  on("GET", "/license/licensed", () => json({ licensed: false, setupAt: new Date().toISOString() }))
+  on("GET", "/license/licenses", () => json([]))
   on("GET", "/version", () => json({ version: "demo", updateAvailable: false, selfUpdate: false, selfUpdateUnavailableReason: "development", restart: false }))
   on("GET", "/version/latest", () => json(null))
+  on("GET", "/system-notices", () => json([]))
+  on("GET", "/database/shrink", () => json({ available: false, fileBytes: 0, freeBytes: 0, needBytes: 0, restartAvailable: false, pending: false }))
 
   on("GET", "/instances", () => json(store.instanceResponses()))
   on("GET", "/instances/:instanceId/capabilities", () => json(CAPABILITIES))

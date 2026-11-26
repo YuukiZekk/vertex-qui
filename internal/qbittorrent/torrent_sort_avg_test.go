@@ -14,7 +14,7 @@ func TestSortTorrentsByAverageUploadSpeed(t *testing.T) {
 	t.Parallel()
 
 	sm := NewSyncManager(nil, nil)
-	torrents := []qbt.Torrent{
+	torrents := []*qbt.Torrent{
 		{Hash: "never", Uploaded: 0, TimeActive: 0},
 		{Hash: "slow", Uploaded: 1000, TimeActive: 100},  // 10 B/s
 		{Hash: "fast", Uploaded: 9000, TimeActive: 30},   // 300 B/s

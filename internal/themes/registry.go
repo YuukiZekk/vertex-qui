@@ -20,7 +20,6 @@ import (
 //go:embed assets
 var assetsFS embed.FS
 
-// Theme is one built-in theme: its metadata and raw CSS.
 type Theme struct {
 	ID          string
 	Name        string
@@ -39,13 +38,15 @@ type Preview struct {
 
 var (
 	nameRe        = regexp.MustCompile(`@name:\s*(.+?)\s*(?:\n|\*)`)
+	idRe          = regexp.MustCompile(`(?m)^[\s/*]*@id:[ \t]*([^\s*]+)`)
 	descriptionRe = regexp.MustCompile(`@description:\s*(.+?)\s*(?:\n|\*)`)
 	premiumRe     = regexp.MustCompile(`@premium:\s*true`)
 	slugRe        = regexp.MustCompile(`[^a-z0-9]+`)
 )
 
-// GenerateID derives a theme id from its name. The rule is frozen: derived
-// ids are stored in the database and in browsers, so it must never change.
+// GenerateID derives a theme id from its name when the file has no @id
+// line. The rule is frozen: derived ids are stored in the database and in
+// browsers, so it must never change.
 // TestRegistryIDsPinned enforces this for every committed theme.
 func GenerateID(name string) string {
 	return strings.Trim(slugRe.ReplaceAllString(strings.ToLower(name), "-"), "-")
@@ -53,13 +54,10 @@ func GenerateID(name string) string {
 
 var registry = load()
 
-// All returns every embedded theme, "minimal" (the default) first, then by
-// name, matching the order the old bundled loader presented.
 func All() []Theme {
 	return registry
 }
 
-// Exists reports whether id names an embedded built-in theme.
 func Exists(id string) bool {
 	return slices.ContainsFunc(registry, func(t Theme) bool { return t.ID == id })
 }
@@ -101,7 +99,11 @@ func parse(css, fallbackID string, fromPremiumDir bool) Theme {
 	if m := descriptionRe.FindStringSubmatch(css); m != nil {
 		t.Description = m[1]
 	}
-	t.ID = cmp.Or(GenerateID(t.Name), fallbackID)
+	// An @id line keeps the stored id of a renamed theme.
+	if m := idRe.FindStringSubmatch(css); m != nil {
+		t.ID = m[1]
+	}
+	t.ID = cmp.Or(t.ID, GenerateID(t.Name), fallbackID)
 
 	t.Preview = Preview{
 		Light: extractPreviewVars(css, ":root"),
@@ -133,7 +135,6 @@ func extractPreviewVars(css, selector string) map[string]string {
 	return vars
 }
 
-// blockVars parses every custom property in the first block for selector.
 func blockVars(css, selector string) map[string]string {
 	start := strings.Index(css, selector+" {")
 	if start < 0 {

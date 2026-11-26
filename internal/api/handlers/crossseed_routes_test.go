@@ -76,6 +76,7 @@ func newRouteFixtureWithBackend(t *testing.T, backend fsops.Backend) *routeFixtu
 	sshPool := sshpool.NewPool(sshpool.NewDialer(instances))
 	t.Cleanup(sshPool.Close)
 	instancesHandler := NewInstancesHandler(instances, nil, nil, clientPool, nil, nil, sshpool.NewDialer(instances), sshPool)
+	t.Cleanup(instancesHandler.connectionTests.Wait)
 	instancesHandler.SetCrossSeedRoutes(routes)
 	router.Route("/api/instances/{instanceID}", func(r chi.Router) {
 		r.Put("/", instancesHandler.UpdateInstance)
@@ -465,11 +466,16 @@ type fakeRouteTorrents struct {
 	asked [][]string
 }
 
-func (f *fakeRouteTorrents) GetAllTorrents(_ context.Context, instanceID int) ([]qbt.Torrent, error) {
+func (f *fakeRouteTorrents) GetAllTorrentRefs(_ context.Context, instanceID int) ([]*qbt.Torrent, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
-	return f.torrents[instanceID], nil
+	torrents := f.torrents[instanceID]
+	refs := make([]*qbt.Torrent, len(torrents))
+	for i := range torrents {
+		refs[i] = &torrents[i]
+	}
+	return refs, nil
 }
 
 func (f *fakeRouteTorrents) GetTorrentFilesBatch(_ context.Context, _ int, hashes []string) (map[string]qbt.TorrentFiles, error) {

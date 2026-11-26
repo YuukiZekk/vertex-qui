@@ -28,7 +28,7 @@ func planTestRun(t *testing.T, torrents []qbt.Torrent, rules []*models.Automatio
 func planTestRunWith(t *testing.T, svc *Service, torrents []qbt.Torrent, rules []*models.Automation, deletions *deletionSelection, sharing map[string][]string) runPlan {
 	t.Helper()
 	evalCtx := &EvalContext{SameInstanceContentByHash: sharing}
-	states := processTorrents(torrents, rules, evalCtx, buildCrossSeedGroups(torrents, evalCtx), qbittorrent.NewSyncManager(nil, nil), nil, nil, nil)
+	states := processTorrents(torrentRefs(torrents), rules, evalCtx, buildCrossSeedGroups(torrentRefs(torrents), evalCtx), noSkipWindow(rules...), nil, nil)
 	if deletions == nil {
 		deletions = &deletionSelection{}
 	}
@@ -43,11 +43,12 @@ func planTestRunWith(t *testing.T, svc *Service, torrents []qbt.Torrent, rules [
 	return svc.buildRunPlan(t.Context(), runPlanInput{
 		states:        states,
 		deletions:     deletions,
-		torrents:      torrents,
-		torrentByHash: torrentByHash,
+		torrents:      torrentRefs(torrents),
+		torrentByHash: torrentRefMap(torrentByHash),
 		ruleByID:      ruleByID,
-		crossSeeds:    buildCrossSeedGroups(torrents, evalCtx),
+		crossSeeds:    buildCrossSeedGroups(torrentRefs(torrents), evalCtx),
 		evalCtx:       evalCtx,
+		scope:         noSkipWindow(rules...),
 	})
 }
 
@@ -237,12 +238,19 @@ func TestRunPlan_DeletionSelectionGetsNoOtherAction(t *testing.T) {
 }
 
 // fakeTargetLookup answers with the torrents in onTarget, and fails for the hashes in fail.
+// A slow lookup answers no check before the context of the check ends, as a target
+// behind a lost connection does.
 type fakeTargetLookup struct {
 	onTarget map[string]bool
 	fail     map[string]bool
+	slow     bool
 }
 
-func (f fakeTargetLookup) HasTorrentByAnyHash(_ context.Context, _ int, hashes []string) (*qbt.Torrent, bool, error) {
+func (f fakeTargetLookup) HasTorrentByAnyHash(ctx context.Context, _ int, hashes []string) (*qbt.Torrent, bool, error) {
+	if f.slow {
+		<-ctx.Done()
+		return nil, false, ctx.Err()
+	}
 	if f.fail[hashes[0]] {
 		return nil, false, errors.New("target offline")
 	}

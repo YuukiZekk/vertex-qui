@@ -10,19 +10,12 @@ import (
 	"github.com/autobrr/qui/internal/models"
 )
 
-// Pool resolves an instance ID to the appropriate Backend. For instances with
-// local filesystem access it returns the local backend; for instances pinned
-// for SSH access it returns a remote backend built for that instance; for
-// instances without access it returns a noop backend that errors on every
-// call.
 type Pool struct {
 	instanceStore instanceGetter
 	local         Backend
 	remote        func(*models.Instance) Backend
 }
 
-// instanceGetter is the subset of models.InstanceStore that Pool needs.
-// Using an interface keeps the dependency narrow and simplifies testing.
 type instanceGetter interface {
 	Get(ctx context.Context, id int) (*models.Instance, error)
 }
@@ -45,9 +38,6 @@ func NewPoolWithRemote(store instanceGetter, local Backend, remote func(*models.
 	}
 }
 
-// GetBackend returns the appropriate Backend for the given instance ID.
-// Returns ErrNoFilesystemAccess wrapped in a noop backend for instances
-// without filesystem access configured.
 func (p *Pool) GetBackend(ctx context.Context, instanceID int) (Backend, error) {
 	backend, _, err := p.Resolve(ctx, instanceID)
 	return backend, err
@@ -113,18 +103,4 @@ func (p *Pool) backendFor(instance *models.Instance) (Backend, models.Filesystem
 	// No default arm, so exhaustive flags a new mode here instead of letting
 	// it fall through to "not configured".
 	return nil, "", fmt.Errorf("instance %d: unknown filesystem mode %q", instance.ID, mode)
-}
-
-// LocalBackend is Resolve for a caller that admitted the instance on local
-// access from an earlier read of it. Any other mode fails with ErrNotLocal, so
-// a caller whose read went stale never runs local paths against another host.
-func (p *Pool) LocalBackend(ctx context.Context, instanceID int) (Backend, error) {
-	backend, mode, err := p.Resolve(ctx, instanceID)
-	if err != nil {
-		return nil, err
-	}
-	if mode != models.FilesystemModeLocal {
-		return nil, fmt.Errorf("instance %d is in %s filesystem mode: %w", instanceID, mode, ErrNotLocal)
-	}
-	return backend, nil
 }

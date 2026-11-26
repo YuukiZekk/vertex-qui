@@ -39,6 +39,7 @@ import (
 type Backend struct {
 	pool *sshpool.Pool
 	inst *models.Instance
+	conn *sftp.Client
 }
 
 func New(pool *sshpool.Pool, inst *models.Instance) *Backend {
@@ -48,6 +49,7 @@ func New(pool *sshpool.Pool, inst *models.Instance) *Backend {
 var (
 	_ fsops.Backend     = (*Backend)(nil)
 	_ fsops.BatchStater = (*Backend)(nil)
+	_ fsops.Connector   = (*Backend)(nil)
 )
 
 // errNoIdentity is what sftp cannot answer: its attrs carry no device or inode
@@ -65,6 +67,9 @@ func (b *Backend) client(ctx context.Context) (*sftp.Client, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if b.conn != nil {
+		return b.conn, nil
+	}
 	client, err := b.pool.SFTP(ctx, b.inst)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -73,6 +78,24 @@ func (b *Backend) client(ctx context.Context) (*sftp.Client, error) {
 		return nil, lost(err)
 	}
 	return client, nil
+}
+
+func (b *Backend) Connections(ctx context.Context, n int) ([]fsops.Backend, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	clients, err := b.pool.SFTPConns(ctx, b.inst, n)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, lost(err)
+	}
+	out := make([]fsops.Backend, len(clients))
+	for i, client := range clients {
+		out[i] = &Backend{pool: b.pool, inst: b.inst, conn: client}
+	}
+	return out, nil
 }
 
 func (b *Backend) Stat(ctx context.Context, p string) (*fsops.LstatInfo, error) {
@@ -225,7 +248,7 @@ type walker struct {
 	mu      sync.Mutex
 	cond    sync.Cond
 	jobs    []walkJob
-	pending int // directories queued or being listed
+	pending int
 
 	once sync.Once
 	cut  *fsops.WalkEntry
@@ -239,8 +262,6 @@ func (w *walker) enqueue(job walkJob) {
 	w.cond.Signal()
 }
 
-// next hands out the next directory, or false once nothing is queued and no
-// worker is listing, so nothing more can be queued, or the walk is cancelled.
 func (w *walker) next() (walkJob, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -340,8 +361,6 @@ func lostConnection(err error) bool {
 	return errors.Is(err, io.EOF) && errors.Unwrap(err) != nil
 }
 
-// poolSentinels are the answers sshpool gives on purpose. They say why the
-// pool would not serve the read, which a caller may want to tell apart.
 var poolSentinels = []error{sshpool.ErrConnect, sshpool.ErrPinUnusable, sshpool.ErrPoolClosed, sshpool.ErrNotRemote}
 
 // connectionLostError is ErrConnectionLost plus whichever pool sentinels its cause
@@ -369,8 +388,6 @@ func lost(err error) error {
 	return &connectionLostError{msg: fsops.ErrConnectionLost.Error() + ": " + err.Error(), kept: kept}
 }
 
-// requestError is pathError for a failed sftp request: a server answer keeps
-// pkg/sftp's sentinel, a dropped transport becomes ErrConnectionLost.
 func requestError(op, p string, err error) error {
 	if lostConnection(err) {
 		err = lost(err)
@@ -562,8 +579,6 @@ func (b *Backend) Remove(ctx context.Context, p string, opts fsops.RemoveOptions
 func removeDir(ctx context.Context, client *sftp.Client, dir string) error {
 	entries, err := readDir(ctx, client, dir)
 	if err != nil {
-		// Gone since the parent listing: nothing left to do, as for every
-		// other vanished entry on this walk.
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
@@ -675,7 +690,6 @@ func (b *Backend) HardlinkTree(ctx context.Context, plan *hardlinktree.TreePlan)
 		return nil, err
 	}
 
-	// A flat tree pays one stat for its directory rather than one per file.
 	known := map[string]struct{}{}
 	for _, fp := range plan.Files {
 		dir := path.Dir(fp.TargetPath)
@@ -775,8 +789,6 @@ func transient(ctx context.Context, err error) error {
 	return nil
 }
 
-// identities stats paths in one command and returns each one's identity and
-// file type. Errors name errPath, the path the caller is deciding about.
 func identities(ctx context.Context, conn *sshpool.Conn, errPath string, follow bool, paths ...string) ([]hardlink.FileID, []string, error) {
 	options := []string{"--printf", `%d %i %h %F\0`}
 	if follow {
@@ -818,7 +830,6 @@ func (b *Backend) ReflinkTree(ctx context.Context, _ *hardlinktree.TreePlan) (*f
 // algorithm is repeated rather than shared because the local one is bound to
 // os.Remove and an errno; a second copy is smaller than the seam.
 func (b *Backend) RemoveTree(ctx context.Context, created *fsops.TreeCreateResult) error {
-	// A nil handle is nothing to remove, per the interface.
 	if created == nil {
 		return ctx.Err()
 	}
@@ -888,13 +899,6 @@ func await[T any](ctx context.Context, call func() (T, error)) (T, error) {
 	}
 }
 
-// awaitMutation runs a write and always waits for its answer. A read may be
-// abandoned at cancel because nothing changed; a write abandoned mid-flight
-// leaves the server in a state the caller cannot know, so the call completes
-// and the caller records what it made before honouring the cancel. pkg/sftp
-// gives a request no timeout, so only an answer or a closed connection ends
-// the wait: about 45 s when keepalives fail, the pool's idle close when they
-// do not, and no bound while other callers keep that instance busy.
 func awaitMutation(_ context.Context, call func() error) error {
 	return call()
 }

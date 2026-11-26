@@ -1,25 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * find-raw-backend-values.mjs
- *
- * Scans all TSX files for potential raw backend values rendered directly in JSX
- * without i18n translation via t(). This catches cases like:
- *   - {item.status}         → should be t(`namespace.statusLabels.${item.status}`)
- *   - {item.contentType}    → should be t(`namespace.contentTypeLabels.${item.contentType}`)
- *   - {item.linkMode}       → should be t(`namespace.linkModeLabels.${item.linkMode}`)
- *   - {item.phase}          → should be t(`namespace.phases.${item.phase}`)
- *   - {item.type}           → should be t(`namespace.typeLabels.${item.type}`)
- *   - {item.state}          → should be t(`namespace.stateLabels.${item.state}`)
- *   - {item.mode}           → should be t(`namespace.modeLabels.${item.mode}`)
- *
- * It also detects .toUpperCase() / .toLowerCase() calls on t() results,
- * which should use dedicated i18n keys instead.
- *
- * Usage: node scripts/find-raw-backend-values.mjs [--strict]
- *   --strict: exit with code 1 if any findings are reported
- */
-
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,7 +7,6 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const srcDir = path.resolve(__dirname, "../src");
 
-// Properties that are typically backend enum values and should be localized
 const SUSPECT_PROPERTIES = [
   "status",
   "contentType",
@@ -44,21 +23,17 @@ const SUSPECT_PROPERTIES = [
   "severity",
   "level",
   "kind",
-  "category", // only when rendered standalone, not in templates
+  "category",
 ];
 
-// Known safe patterns (these are intentionally raw, e.g. for CSS classes, data attributes, logic)
 const SAFE_PATTERNS = [
-  // className or variant usage
   /className/,
   /variant[=(]/,
-  // Object key access for styling/logic
   /statusConfig\[/,
   /statusVariant/,
   /StatusVariant/,
   /statusColor/,
   /StatusColor/,
-  // Known safe prop passing
   /value=\{/,
   /reason=\{/,
   /currentCategory=\{/,
@@ -70,7 +45,6 @@ const SAFE_PATTERNS = [
   /entry\.level/,
   /stream\.kind/,
   /fieldDef\?\.type/,
-  // Conditional checks (not rendering)
   /===\s/,
   /!==\s/,
   /\?\s/,
@@ -79,7 +53,6 @@ const SAFE_PATTERNS = [
   /switch\s*\(/,
   /case\s/,
   /if\s*\(/,
-  // Array/object methods
   /\.filter\(/,
   /\.find\(/,
   /\.map\(/,
@@ -90,10 +63,8 @@ const SAFE_PATTERNS = [
   /\.reduce\(/,
   /\.sort\(/,
   /\.forEach\(/,
-  // Assignment / setter
   /\w+\s*=\s/,
   /set[A-Z]/,
-  // API / data layer
   /mutate/,
   /queryKey/,
   /queryFn/,
@@ -101,27 +72,19 @@ const SAFE_PATTERNS = [
   /onError/,
   /console\./,
   /toast\./,
-  // Type annotations
   /:\s*(string|number|boolean|Record|Array)/,
-  // Comments
   /^\s*\/\//,
   /^\s*\*/,
-  // JSON key access for non-display purposes
   /\[["']/,
-  // Event handlers
   /onClick/,
   /onChange/,
   /onSubmit/,
-  // Template literal used as object key
   /\[`/,
-  // Already wrapped in t()
   /\bt\s*\(/,
   /\bt\s*\(`/,
-  // interpolation inside t()
   /t\([^)]*\$\{/,
 ];
 
-// Files to skip entirely (test files, type definitions, etc.)
 const SKIP_FILE_PATTERNS = [
   /\.test\.(tsx?|jsx?)$/,
   /\.spec\.(tsx?|jsx?)$/,
@@ -146,7 +109,6 @@ function getAllTsxFiles(dir) {
 }
 
 function isInJsxContext(line) {
-  // Heuristic: line contains JSX-like patterns
   return (
     /[<>]/.test(line) ||
     /\{[^}]*\}/.test(line) ||
@@ -155,34 +117,49 @@ function isInJsxContext(line) {
   );
 }
 
+// React never renders a key prop, so it cannot show a raw value. A key= counts as a prop
+// only inside a tag that opens on the same line. A line cannot tell a key prop on its own
+// line from text, so that case stays reported.
+// A < or > inside a {...} expression (() => x, count > 0) or a quoted attribute is not a tag bracket.
+function withoutKeyProps(line) {
+  return line.replace(/(^|\s)key=\{(?:[^{}]|\{[^{}]*\})*\}/g, (match, space, offset) => {
+    let depth = 0;
+    let quote = "";
+    let lastOpen = -1;
+    let lastClose = -1;
+    for (let i = 0; i < offset; i++) {
+      const c = line[i];
+      if (quote) {
+        if (c === quote) quote = "";
+      } else if (depth === 0 && (c === '"' || c === "'") && line[i - 1] === "=") quote = c;
+      else if (c === "{") depth++;
+      else if (c === "}") depth = Math.max(0, depth - 1);
+      else if (depth === 0 && c === "<") lastOpen = i;
+      else if (depth === 0 && c === ">") lastClose = i;
+    }
+    return lastOpen > lastClose ? space : match;
+  });
+}
+
 function scanFile(filePath) {
   const content = fs.readFileSync(filePath, "utf8");
   const lines = content.split(/\r?\n/);
   const findings = [];
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = withoutKeyProps(lines[i]);
     const lineNum = i + 1;
 
-    // Check 1: Raw backend property rendered in JSX
-    // Pattern: {something.suspectProperty} in a JSX context
     for (const prop of SUSPECT_PROPERTIES) {
-      // Match patterns like {foo.status} or {foo?.status} or {item.status}
-      // But NOT t(...status...) or className={...status...}
       const regex = new RegExp(
         `\\{[^}]*\\b\\w+(?:\\.|\\?\\.)${prop}\\b[^}]*\\}`
       );
       if (!regex.test(line)) continue;
 
-      // Skip if any safe pattern matches
       if (SAFE_PATTERNS.some((pat) => pat.test(line))) continue;
 
-      // Extra check: is this likely a JSX render context?
-      // Look for surrounding JSX or if this is inside a JSX return
       if (!isInJsxContext(line)) continue;
 
-      // Check if the expression is just the property (direct render)
-      // vs being part of a larger expression
       const simpleRender = new RegExp(
         `\\{\\s*\\w+(?:\\.|\\?\\.)${prop}\\s*\\}|>\\s*\\{\\s*\\w+(?:\\.|\\?\\.)${prop}\\s*\\}\\s*<`
       );
@@ -191,40 +168,36 @@ function scanFile(filePath) {
           line: lineNum,
           type: "RAW_BACKEND_VALUE",
           property: prop,
-          code: line.trim(),
+          code: lines[i].trim(),
           suggestion: `Use t(\`namespace.${prop}Labels.\${variable.${prop}}\`, variable.${prop}) instead`,
         });
       }
     }
 
-    // Check 2: .toUpperCase() on t() results
     if (/\bt\s*\([^)]*\)\s*\.toUpperCase\s*\(\s*\)/.test(line)) {
       findings.push({
         line: lineNum,
         type: "RUNTIME_CASE_TRANSFORM",
         property: null,
-        code: line.trim(),
+        code: lines[i].trim(),
         suggestion:
           "Use a dedicated i18n key (e.g. statusLabelsUpper) instead of runtime .toUpperCase()/.toLowerCase()",
       });
     }
 
-    // Check 3: String interpolation with backend values without t()
-    // Pattern: `${foo.status}` not inside t()
     for (const prop of SUSPECT_PROPERTIES) {
       const interpolationRegex = new RegExp(
         `\`[^\\x60]*\\$\\{\\w+\\.${prop}\\}[^\\x60]*\``,
         "g"
       );
       if (interpolationRegex.test(line)) {
-        // Make sure it's not inside a t() call
         if (!/\bt\s*\(/.test(line) && isInJsxContext(line)) {
           if (SAFE_PATTERNS.some((pat) => pat.test(line))) continue;
           findings.push({
             line: lineNum,
             type: "RAW_INTERPOLATION",
             property: prop,
-            code: line.trim(),
+            code: lines[i].trim(),
             suggestion: `Backend value '${prop}' interpolated without t() - consider localizing`,
           });
         }
@@ -235,7 +208,6 @@ function scanFile(filePath) {
   return findings;
 }
 
-// Main
 const strict = process.argv.includes("--strict");
 const files = getAllTsxFiles(srcDir);
 let totalFindings = 0;

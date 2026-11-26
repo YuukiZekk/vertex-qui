@@ -13,7 +13,7 @@ qui provides tools to manage torrent lists: tags, categories, tracker URLs, save
 
 When a delete reaches 10 torrents or more, or when Ctrl/Cmd + A selected all torrents, the delete dialog names the first three torrents and gives the number of the others. The **Delete** button shows the count, for example **Delete 7500 torrents**. After Ctrl/Cmd + A, the dialog also tells you that select all is on, and how many of the selected torrents are not loaded in the table.
 
-qBittorrent removes a torrent's own folder when you delete it with its files, but not the folders above it, and a move leaves the old folder behind. On an instance with **Local Filesystem Access**, qui removes these leftover folders after it deletes a torrent with its files, changes its location, changes its category, turns on Automatic Torrent Management, or changes a category's save path. This covers the qui UI, automations, and requests from Sonarr, Radarr, autobrr, and other clients that go through the [reverse proxy](./reverse-proxy.md), when the request is sent as a URL-encoded form. There is no setting.
+qBittorrent removes a torrent's own folder when you delete it with its files, but not the folders above it, and a move leaves the old folder behind. On an instance with **Local Filesystem Access**, and on a [remote instance](./ssh-access.md), qui removes these leftover folders after it deletes a torrent with its files, changes its location, changes its category, turns on Automatic Torrent Management, or changes a category's save path. This covers the qui UI, automations, and requests from Sonarr, Radarr, autobrr, and other clients that go through the [reverse proxy](./reverse-proxy.md), when the request is sent as a URL-encoded form. There is no setting.
 
 qui removes a folder only when it is empty, or holds nothing but `Thumbs.db`, `desktop.ini`, `.directory`, `.DS_Store`, or files whose names end in `~`. It starts at the torrent's own folder and works up, one empty folder at a time. It stops at:
 
@@ -30,7 +30,7 @@ qui waits up to two minutes for qBittorrent to finish deleting or moving the fil
 
 Before it sends a delete or move, qui checks the content for at most 5 seconds for a request that comes through the reverse proxy, and for at most 30 seconds for one from the qui UI or an automation, even when a disk or network mount stops answering. Content it has not checked by then is left to orphan scan.
 
-qui does not clean up after a delete made in the qBittorrent WebUI, by qBittorrent's share limits, or by a client that talks to qBittorrent directly. Orphan scan's **Delete Abandoned Directories** covers those.
+qui does not clean up after a delete made in the qBittorrent WebUI, by qBittorrent's share limits, or by a client that talks to qBittorrent directly. Orphan scan's **Delete Abandoned Directories** covers those. On a remote instance where orphan scan cannot delete, a folder that this cleanup leaves stays in place. See [Remote instances](./orphan-scan.md#remote-instances).
 
 ## Tags and categories
 
@@ -48,6 +48,12 @@ Manage tags and categories from the **Tags** and **Categories** sections in the 
 ### Subcategories
 
 qBittorrent stores a subcategory as a name with `/` separators, for example `media/movies`. qui shows the categories as a collapsible tree sorted by name when the instance supports subcategories (qBittorrent WebUI API 2.9.0 or newer). The qBittorrent preference **Enable Subcategories** (Instance Preferences > Files) must also be on. From WebUI API 2.15.0, subcategories are always on. In other cases, qui shows a flat list.
+
+## Free space when you add a torrent
+
+The Add Torrent dialog shows the free space at the destination it resolves for the torrent: the save path you enter, or, with automatic torrent management on, the assigned category's path. qBittorrent measures that path on its own host, so the value needs qBittorrent 5.3 (WebAPI 2.15.2) or later. Older instances show no line here. The value is informational and never blocks the add.
+
+If qBittorrent cannot measure the path, the dialog shows the space as unavailable.
 
 ## Exclude a filter
 
@@ -110,9 +116,11 @@ A view stores the sidebar filter selection only. It does not include search text
 | Ctrl/Cmd + A | Selects all torrents in the current view |
 | Arrow Up / Arrow Down | Moves the selection one row |
 | Enter | Opens the details panel for the focused row |
-| Escape | Closes the details panel and clears the selection |
+| Escape | Closes the details panel and clears the selection. If no row is selected and the panel is closed, Escape clears the search text of the list. |
 
 The arrow keys replace the selection with the focused row, the same as a plain click. When the details panel is open, it follows the arrow keys. If you type in an input field or open a dialog, hotkeys are inactive.
+
+On phones, swipe a card to the left to show two buttons for that torrent: **Pause** or **Resume**, and **Delete**. **Delete** opens the delete dialog. To hide the buttons, swipe the card to the right, or tap anywhere outside the buttons. A card does not swipe while torrents are selected.
 
 ## Table columns
 
@@ -120,7 +128,39 @@ The arrow keys replace the selection with the focused row, the same as a plain c
 
 Drag the edge of a column header to change the width of that column. The button next to **Toggle columns** decides how the Name column gets its width.
 
-Stretch mode is the default. In stretch mode, the Name column takes the width that the other columns leave, so the table fills the window. You cannot resize the Name column in stretch mode. In scroll mode, you set the width of the Name column, and the table scrolls sideways when the columns do not fit. If the visible columns leave no room for the Name column, qui scrolls anyway and the button turns gray until you hide a column. qui remembers the choice for each instance.
+Stretch mode is the default. In stretch mode, the Name column takes the width that the other columns leave, so the table fills the window. You cannot resize the Name column in stretch mode. In scroll mode, you set the width of the Name column, and the table scrolls sideways when the columns do not fit. If the visible columns leave no room for the Name column, qui scrolls anyway and the button turns gray until you hide a column.
+
+qui keeps the column setup in the [Display profile](./dashboard.md#display-profiles) of the browser. The column setup is which columns show, their order, their widths, and the stretch or scroll mode. The profile chip in the status bar under the table shows the icon and the name of the profile. Click the chip to use a different profile, or to make a new profile from the current setup. From 768 to 1023 px, the chip shows only the icon. To see the name, put the pointer on the chip. Below 768 px, qui shows the mobile layout, which has no table and no chip.
+
+The **Toggle columns** menu starts with a line that tells you where a change goes. Examples are **Columns in Laptop · every instance** and **Columns in Laptop · seedbox only**.
+
+### Same columns on every instance
+
+The switch **Same columns on every instance** decides if every instance uses one column setup. The switch is in the **Toggle columns** menu, under the first line, and in **Settings → Display profiles**. Each profile has its own switch.
+
+When the switch is on, every instance and the Unified view use the same column setup. The Instance column shows only in the Unified view. When the switch is off, each instance has its own column setup. The sort and the column filters stay separate for each instance, also when the switch is on.
+
+When you turn the switch on in the menu, every instance gets the column setup of the instance on the screen. In Settings, no instance is on the screen. There, qui uses the last instance that this browser showed, and the help line under the switch names it. When you turn the switch off, each instance starts with a copy of the shared column setup, so no table changes at that moment.
+
+Until you set the switch, qui selects its position. If you changed the columns of an instance in this profile, the switch starts off, so each instance keeps its own column setup. If you never changed the columns, the switch starts on.
+
+## Group copies
+
+A copy is a torrent of the same release on another tracker or another instance. **Group copies** shows all copies of a release as one row. The switch is off by default. On a computer, it is the button next to the search bar. On phones, it is in the sort menu above the cards.
+
+qui saves the switch with your other settings, so it applies in each browser that you sign in to. If a Display profile has [Own sort and filters](./dashboard.md#own-sort-and-filters) on, that profile keeps its own value of the switch.
+
+Two torrents are copies when qui matches them as cross-seeds and their files have the same sizes. Equal sizes keep a season pack apart from its episodes. A torrent with no file list, for example a magnet without metadata, stays a row of its own.
+
+Each group starts closed. The top row is the oldest copy, and a badge such as **+2** gives the number of hidden copies. A warning icon on the badge tells you that a hidden copy has a problem. The color of the badge shows the worst problem of the hidden copies. Red means that a copy has missing files, has an error, or is unregistered. Purple means a tracker error. Yellow means that the tracker of a copy is down. Click or tap the badge to open or close one group.
+
+Grouping changes only how the list looks:
+
+- Filters and the search apply to torrents before qui groups them. A group holds only the copies that match.
+- A tick, a right-click, and Shift + click select only the rows that you see. To act on all copies, use Ctrl/Cmd + A, or the cross-seed option in the delete dialog.
+- The torrent count in the status bar counts torrents, not rows.
+
+qui finds the copies in the background from its start, also while the switch is off. The first time, it reads the file lists of the torrents that can have a copy. Until the first search after a start of qui finishes, the list stays flat, and the status bar shows **Grouping…**. On phones, the bar above the cards shows it. **Filter Cross-Seeds** always shows flat rows.
 
 ## Live updates paused
 

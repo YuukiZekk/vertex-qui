@@ -4,7 +4,10 @@ import ts from "typescript"
 
 import { walkFiles } from "./find-hardcoded-i18n-literals.mjs"
 
-const webRoot = path.resolve(import.meta.dirname, "..")
+// With --preserve-symlinks-main, import.meta.filename can be a symlink outside the repository, so the root comes from
+// the real path.
+const scriptPath = fs.realpathSync(import.meta.filename)
+const webRoot = path.resolve(path.dirname(scriptPath), "..")
 const srcRoot = path.join(webRoot, "src")
 const englishLocaleRoot = path.join(srcRoot, "i18n", "locales", "en")
 
@@ -82,8 +85,6 @@ export function collectKeyReferencesFromSource(source, fileName) {
     }
   }
 
-  // `dateTime.units.` -> `dateTime.units`; `sort.` -> `sort`. A head ending mid-segment
-  // (`preferences.orphan` in `` `preferences.orphan${x}` ``) keeps only whole segments.
   function addPrefix(headText) {
     const lastDotIndex = headText.lastIndexOf(".")
     if (lastDotIndex === -1) {
@@ -138,7 +139,6 @@ export function collectKeyReferencesFromSource(source, fileName) {
   return { literals, prefixes }
 }
 
-// Nearest `const name = "..."` visible from the identifier, by lexical block.
 function resolveStringConst(identifier) {
   for (let scope = identifier.parent; scope; scope = scope.parent) {
     for (const statement of scope.statements ?? []) {
@@ -226,7 +226,9 @@ function loadEnglishBundles() {
   return bundles
 }
 
-if (process.argv[1] === import.meta.filename) {
+// A path through a symlink, such as /var on macOS, resolves before the compare. The test runner can pass a glob that
+// names no file.
+if (fs.existsSync(process.argv[1] ?? "") && fs.realpathSync(process.argv[1]) === scriptPath) {
   const localeKeys = collectLocaleKeys(loadEnglishBundles())
   const references = mergeReferences(
     walkFiles(srcRoot).map((file) => collectKeyReferencesFromSource(

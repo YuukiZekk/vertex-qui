@@ -30,7 +30,10 @@ const (
 	EventAutomationsActionsApplied    EventType = "automations_actions_applied"
 	EventAutomationsRunFailed         EventType = "automations_run_failed"
 	// EventBrushAlert is raised by vertex-qui's brush module when something needs attention.
-	EventBrushAlert EventType = "brush_alert"
+	EventBrushAlert       EventType = "brush_alert"
+	EventTransferFailed   EventType = "transfer_failed"
+	EventTransferFinished EventType = "transfer_finished"
+	EventSystemNotice     EventType = "system_notice"
 )
 
 type EventDefinition struct {
@@ -59,6 +62,15 @@ var eventDefinitions = []EventDefinition{
 	{Type: EventAutomationsActionsApplied, Label: "Automations actions applied", Description: "Automation rules applied actions (summary counts and samples; only when actions occur)."},
 	{Type: EventAutomationsRunFailed, Label: "Automations run failed", Description: "Automation rules failed to run for an instance (system error)."},
 	{Type: EventBrushAlert, Label: "Brush alert", Description: "Brushing needs attention: a downloader below its safety floor, a failed deletion, a feed or site that cannot be read, or a downloader that cannot be reached."},
+	{Type: EventTransferFailed, Label: "Transfer failed", Description: "A Transfer that you or a rule started fails."},
+	{Type: EventTransferFinished, Label: "Transfer finished", Description: "A Transfer that you or a rule started moves its torrents to the target."},
+	{Type: EventSystemNotice, Label: "System notice", Description: "A fault in qui needs an action from you, for example when qui cannot record the Transfer history."},
+}
+
+// optIn reports whether a target must pick the event type. Targets from
+// before a new event type existed then do not get it at the upgrade.
+func optIn(eventType EventType) bool {
+	return eventType == EventSystemNotice
 }
 
 var eventTypeIndex = func() map[string]int {

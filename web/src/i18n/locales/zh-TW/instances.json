@@ -3,29 +3,17 @@
   "card": {
     "status": {
       "disabled": "已停用",
-      "enabled": "已啟用",
       "connected": "已連線",
       "disconnected": "已斷開"
     },
     "tooltips": {
-      "disableInstance": "停用實例",
-      "enableInstance": "啟用實例",
       "moveUp": "上移",
       "moveDown": "下移"
     },
     "actions": {
-      "edit": "編輯",
       "testConnection": "測試連線",
-      "delete": "刪除"
-    },
-    "labels": {
-      "username": "使用者名稱：",
-      "basicAuth": "基本認證：",
-      "tlsVerification": "TLS 驗證：",
-      "tlsSkipped": "已跳過",
-      "tlsStrict": "嚴格",
-      "localFileAccess": "本機檔案系統存取：",
-      "testingConnection": "正在測試連線..."
+      "delete": "刪除",
+      "changeIcon": "變更圖示"
     },
     "deleteDialog": {
       "title": "刪除實例",
@@ -35,7 +23,6 @@
     },
     "toast": {
       "instanceDisabledTitle": "實例已停用",
-      "testDisabledDescription": "請先啟用實例，再測試連線。",
       "testSuccessTitle": "連線測試成功",
       "testSuccessDescription": "已成功連線到 qBittorrent 實例",
       "testFailedTitle": "連線測試失敗",
@@ -56,7 +43,13 @@
     "passwordRequired": "需要密碼",
     "decryptionDescription": "無法解密已儲存的密碼。這通常是因為工作階段金鑰已更改。",
     "reenterPassword": "重新輸入密碼",
-    "recentErrors": "近期錯誤（{{count}}）"
+    "recentErrors": "近期錯誤（{{count}}）",
+    "errorTypes": {
+      "connection": "連線",
+      "authentication": "身分驗證",
+      "ban": "封鎖",
+      "api": "API"
+    }
   },
   "form": {
     "labels": {
@@ -88,30 +81,32 @@
     },
     "validation": {
       "nameRequired": "實例名稱為必填項",
-      "basicAuthPasswordRequired": "啟用基本認證時，基本認證密碼為必填項"
+      "basicAuthPasswordRequired": "啟用基本認證時，基本認證密碼為必填項",
+      "usernameRequired": "必須填寫使用者名稱",
+      "passwordRequired": "必須填寫密碼",
+      "apiKeyRequired": "必須填寫 API 金鑰"
     },
     "buttons": {
-      "saving": "儲存中...",
       "updateInstance": "更新實例",
-      "addInstance": "新增實例",
-      "cancel": "取消"
+      "addInstance": "新增實例"
     },
     "toast": {
-      "missingCredentialsTitle": "缺少憑據",
       "instanceUpdatedTitle": "實例已更新",
       "instanceUpdatedDescription": "實例更新成功。正在後臺測試連線...",
-      "updateFailedTitle": "更新失敗",
       "updateFailedDescription": "無法更新實例",
       "instanceCreatedTitle": "實例已建立",
       "instanceCreatedDescription": "實例建立成功。正在後臺測試連線...",
-      "createFailedTitle": "建立失敗",
       "createFailedDescription": "無法建立實例"
     },
     "authType": {
       "none": "無",
       "usernamePassword": "使用者名稱和密碼",
       "apiKey": "API 金鑰"
-    }
+    },
+    "sshAfterSave": "儲存後，可在實例設定中設定透過 SSH 存取該實例的檔案。",
+    "addTitle": "新增實例",
+    "addDescription": "配置一個新的 qBittorrent 實例",
+    "editTitle": "編輯實例"
   },
   "settingsButton": {
     "tooltip": "實例設定"
@@ -150,7 +145,8 @@
         "downloads": "下載",
         "bittorrent": "BitTorrent",
         "rss": "RSS",
-        "webui": "WebUI"
+        "webui": "WebUI",
+        "ssh": "SSH"
       },
       "sections": {
         "instanceConfig": {
@@ -162,6 +158,10 @@
         },
         "seedingLimits": {
           "title": "做種限制"
+        },
+        "ssh": {
+          "title": "SSH 存取",
+          "description": "當 qui 與 qBittorrent 在不同機器上執行時，透過 SSH 存取此實例的檔案"
         }
       }
     },
@@ -554,7 +554,9 @@
         "move": "移動",
         "externalProgram": "外部程式",
         "dryRun": "模擬執行",
-        "exportToInstance": "匯出到實例"
+        "exportToInstance": "匯出到實例",
+        "transferToInstance": "傳輸到實例",
+        "ruleSkipped": "規則未執行"
       },
       "shareLimit": {
         "global": "全域",
@@ -590,7 +592,8 @@
         "deleteLabelCondition": "條件",
         "exported_other": "已匯出 {{count}} 個種子",
         "exportedDryRun_other": "將匯出 {{count}} 個種子",
-        "exportFailed_other": "{{count}} 個種子匯出失敗"
+        "exportFailed_other": "{{count}} 個種子匯出失敗",
+        "transferredDryRun_other": "將傳輸 {{count}} 個種子"
       },
       "deleteDialog": {
         "title": "刪除規則",
@@ -649,7 +652,9 @@
         "deletedActivityEntries": "已刪除 {{count}} 條活動記錄",
         "deleteActivityFailed": "刪除活動失敗"
       },
-      "exported": "已匯出"
+      "exported": "已匯出",
+      "transferStarted": "已開始",
+      "skipped": "已略過"
     },
     "runWorkflowNow": {
       "action": "立即執行",
@@ -666,7 +671,8 @@
         "completedWithErrors": "「{{name}}」執行完成，但有錯誤。請查看活動記錄。",
         "dryRunCompleted": "「{{name}}」的模擬執行已完成",
         "inProgress": "已有執行正在進行。請稍後再試。",
-        "failed": "執行工作流失敗"
+        "failed": "執行工作流失敗",
+        "skipped": "「{{name}}」未執行。請查看活動記錄。"
       }
     },
     "workflowPreview": {
@@ -709,10 +715,8 @@
     "orphanScanOverview": {
       "title": "孤立項目掃描",
       "noInstancesDescription": "未配置實例。請在設定中新增實例以使用此服務。",
-      "tooltip": "查詢磁碟上與 qBittorrent 中任何種子都不關聯的檔案。\n需要為每個實例啟用本機檔案系統存取。",
+      "tooltip": "查詢磁碟上與 qBittorrent 中任何種子都不關聯的檔案。\n需要存取每個實例的檔案。請在實例設定中啟用「本機檔案系統存取」或設定 SSH 存取。",
       "description": "掃描下載目錄並識別孤立檔案以進行清理。",
-      "noLocalAccess": "無本機存取權限",
-      "noLocalAccessTooltip": "qui 和 qBittorrent 必須執行在同一臺機器上。在實例設定中啟用\"本機檔案系統存取\"以使用孤立項目掃描。",
       "remoteLimits": "在遠端實例上刪除和自動清理需要檔案識別資訊，只有伺服器允許 qui 執行 GNU find 和 stat 時才能讀取。",
       "remoteNoIdentity": "此遠端實例不允許這樣做，因此 qui 無法判斷兩個路徑是否指向同一檔案，可透過第二個路徑存取的檔案（例如透過 bind mount）即使正被種子使用，也可能出現在清單中。此處的掃描只能預覽和匯出，無法刪除。",
       "on": "開",
@@ -735,6 +739,8 @@
       "viewPreview": "檢視預覽",
       "recentScans": "近期掃描",
       "scannedPaths": "選定的掃描路徑（{{total}}）",
+      "scanPathsLoading": "正在載入掃描路徑…",
+      "scanPathsLoadFailed": "無法載入掃描路徑",
       "zeroOrphans": "0 個孤立項目",
       "deletedStats": "已刪除 {{deleted}} · {{size}}",
       "deletedFiles_other": "{{count}} 個檔案",
@@ -763,7 +769,9 @@
         "cancelFailed": "取消失敗"
       },
       "errorMessage": "錯誤訊息",
-      "scanPaths": "掃描路徑"
+      "scanPaths": "掃描路徑",
+      "noFilesystemAccess": "無檔案系統存取權限",
+      "noFilesystemAccessTooltip": "孤立項目掃描需要存取此實例的檔案。請在實例設定中啟用「本機檔案系統存取」或設定 SSH 存取。"
     },
     "orphanScanPreview": {
       "title": "孤立項目預覽",
@@ -934,7 +942,9 @@
         "external_program": "外部程式",
         "auto_managed": "自動管理",
         "dry_run_no_match": "模擬執行（無匹配）",
-        "exported_to_instance": "匯出到實例"
+        "exported_to_instance": "匯出到實例",
+        "transferred_to_instance": "傳輸到實例",
+        "rule_skipped": "規則未執行"
       }
     },
     "reannounceOverview": {
@@ -1110,6 +1120,11 @@
         "skipChecking": "跳過檢查",
         "addPaused": "以暫停狀態新增"
       },
+      "transfer": {
+        "title": "傳輸到實例",
+        "description": "將每個符合的種子連同檔案移到目標實例，並在移除任何內容之前核實副本。傳輸頁面會顯示每次傳輸。",
+        "remove": "移除「傳輸到實例」"
+      },
       "priority": {
         "title": "種子優先順序",
         "description": "控制種子的處理順序。",
@@ -1133,6 +1148,7 @@
         "notSupportedForScoreMultiplier": "不支援得分乘數"
       },
       "conditionsLabel": "條件（可選）",
+      "mixedActionConditions": "此工作流中的每個操作都有各自的條件。qui 現在每個工作流只使用一個條件。儲存後，所有操作都會使用上方的條件。若要保留其他條件，請先為每個條件建立一個工作流。",
       "actions": {
         "title": "操作",
         "addAction": "新增操作",
@@ -1151,7 +1167,8 @@
         "category": "分類",
         "move": "移動",
         "externalProgram": "執行外部程式",
-        "exportToInstance": "匯出到實例"
+        "exportToInstance": "匯出到實例",
+        "transferToInstance": "傳輸到實例"
       },
       "option": {
         "noChange": "不更改",
@@ -1246,19 +1263,38 @@
       "freeSpace": {
         "title": "可用空間來源",
         "aria": "關於可用空間來源",
-        "description": "選擇從哪裡讀取可用空間。預設使用 qBittorrent 報告的可用空間。使用\"伺服器路徑\"以檢查特定磁碟或掛載點的可用空間。",
+        "description": "選擇從哪裡讀取可用空間。預設使用 qBittorrent 報告的可用空間。使用\"伺服器路徑\"以檢查特定磁碟或掛載點的可用空間。\"qBittorrent 主機上的路徑\"直接詢問 qBittorrent，需要 qBittorrent 5.3。",
         "selectSource": "選擇來源",
         "defaultSource": "預設（qBittorrent）",
         "pathSource": "伺服器路徑",
         "pathSourceWindowsUnsupported": "伺服器路徑（Windows 不支援）",
-        "pathSourceLocalAccessRequired": "伺服器路徑（需要本機存取權限）",
+        "qbitPathSource": "qBittorrent 主機上的路徑",
+        "qbitPathSourceUnsupported": "qBittorrent 主機上的路徑（需要 qBittorrent 5.3）",
         "pathPlaceholder": "/mnt/downloads",
         "pathHelp": "輸入要檢查可用空間的路徑（例如掛載點）",
+        "qbitPathHelp": "輸入 qBittorrent 主機上的路徑。可用空間由 qBittorrent 量測，qui 不需要存取該磁碟。",
         "errors": {
           "unsupportedWindows": "Windows 不支援基於路徑的可用空間來源。",
-          "localAccessRequired": "基於路徑的可用空間來源需要本機檔案系統存取權限。",
-          "pathRequired": "使用\"伺服器路徑\"時，路徑為必填項。"
-        }
+          "qbitPathUnsupported": "此執行個體的版本早於 qBittorrent 5.3，無法回報某個路徑的可用空間。",
+          "pathRequired": "使用\"伺服器路徑\"時，路徑為必填項。",
+          "filesystemAccessRequired": "基於路徑的可用空間來源需要本機或 SSH 檔案系統存取權限。",
+          "allowanceRequired": "請輸入大於 0 的允許空間。",
+          "allowanceAccessRequired": "允許空間來源需要本機檔案系統存取權限，或具有 shell 的 SSH 存取權限。"
+        },
+        "pathSourceFilesystemAccessRequired": "伺服器路徑（需要本機或 SSH 存取）",
+        "allowanceSource": "路徑上的允許空間",
+        "allowanceSourceWindowsUnsupported": "路徑上的允許空間（Windows 不支援）",
+        "allowanceSourceAccessRequired": "路徑上的允許空間（需要本機存取，或具有 shell 的 SSH 存取）",
+        "allowanceLabel": "允許空間",
+        "allowancePathLabel": "要統計的資料夾",
+        "allowanceUnitAria": "允許空間單位",
+        "allowanceHelp": "依供應商使用的單位輸入方案允許使用的空間。qui 會減去該路徑下檔案的大小。多數供應商以 1000 進位（{{decimalUnit}}），而不是 1024（{{binaryUnit}}），兩者相差約 9%。",
+        "allowanceUnits": {
+          "MB": "MB",
+          "GB": "GB",
+          "TB": "TB"
+        },
+        "allowancePathHelp": "例如你的家目錄"
       },
       "grouping": {
         "title": "分組條件組",
@@ -1353,8 +1389,7 @@
       "enableDryRunPrompt": {
         "title": "啟用模擬執行？",
         "description": "模擬執行會模擬所有操作而不做任何實際更改。您可以在活動日誌中檢視受影響的種子。",
-        "enableWithout": "不啟用模擬執行",
-        "enableWith": "啟用模擬執行"
+        "saveAndEnable": "儲存並啟用"
       },
       "customGroup": {
         "title": "新增自訂分組",
@@ -1403,7 +1438,9 @@
           "moved": "移動",
           "externalProgram": "外部程式",
           "noMatches": "無匹配",
-          "exportedToInstance": "匯出到實例"
+          "exportedToInstance": "匯出到實例",
+          "transferredToInstance": "傳輸到實例",
+          "ruleSkipped": "規則未執行"
         },
         "actionFallback": "未知操作（{{action}}）",
         "summary": {
@@ -1448,8 +1485,8 @@
         "switchedDeleteModeForFreeSpace": "已切換到\"移除並清除檔案\"，因為可用空間條件需要實際釋放磁碟空間",
         "switchedIntervalForFreeSpace": "已切換到 5 分鐘間隔，因為可用空間刪除有約 5 分鐘的冷卻時間",
         "pathSourceUnsupportedWindows": "Windows 不支援基於路徑的可用空間來源。已切換到 qBittorrent 預設值。",
+        "qbitPathSourceUnsupported": "此執行個體無法回報某個路徑的可用空間，已切換至預設來源。",
         "switchFreeSpaceSourceDefault": "將可用空間來源切換為預設（qBittorrent）",
-        "enableLocalAccessOrDefault": "請在實例設定中啟用本機檔案系統存取，或使用預設（qBittorrent）",
         "enterPathOrDefault": "請輸入路徑或將可用空間來源切換回預設（qBittorrent）",
         "addScoreRule": "得分排序至少需要一條得分規則",
         "fieldMultiplierInvalid": "欄位乘數必須是有效數字",
@@ -1466,7 +1503,8 @@
         "groupIdInvalid": "分組 ID 只能包含字母、數字和底線",
         "selectGroupKey": "請至少選擇一個鍵",
         "groupExists": "已存在具有此 ID 的分組",
-        "customGroupAdded": "已新增自訂分組"
+        "customGroupAdded": "已新增自訂分組",
+        "setUpFilesystemAccessOrDefault": "請在實例設定中設定本機或 SSH 檔案系統存取，或使用預設（qBittorrent）"
       },
       "trackerMatchInclude": "包含",
       "trackerMatchExclude": "排除"
@@ -1716,6 +1754,92 @@
       "testEmailQueued": "qBittorrent 已將測試郵件加入佇列",
       "testEmailQueuedDescription": "qBittorrent 使用已儲存的設定。請檢查收件匣，並在 qBittorrent 記錄中查看錯誤。",
       "testEmailFailed": "傳送測試郵件失敗"
+    },
+    "ssh": {
+      "localWins": "本機檔案系統存取已開啟，qui 會在本機讀取此實例的檔案，不使用這些 SSH 設定。",
+      "labels": {
+        "host": "SSH 主機",
+        "hostDescription": "存放此實例檔案的機器的主機名稱或 IP 位址，不含協定和連接埠。變更主機或連接埠會捨棄已釘選的主機金鑰，下次測試將再次視為首次連線。",
+        "port": "連接埠",
+        "username": "使用者名稱",
+        "privateKey": "私密金鑰",
+        "privateKeyDescription": "不含密碼片語的 OpenSSH 私密金鑰。qui 會加密儲存且不再顯示。主機、連接埠或使用者名稱變更後需要重新提供。"
+      },
+      "placeholders": {
+        "host": "seedbox.example.com",
+        "privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----",
+        "privateKeyStored": "已儲存一把金鑰。貼上新金鑰即可取代。"
+      },
+      "validation": {
+        "hostRequired": "SSH 主機為必填項",
+        "portRange": "連接埠必須介於 1 到 65535 之間",
+        "usernameRequired": "使用者名稱為必填項",
+        "keyRequired": "主機、連接埠或使用者名稱變更後需要提供私密金鑰"
+      },
+      "buttons": {
+        "save": "儲存 SSH 設定",
+        "clear": "移除 SSH 存取",
+        "test": "測試連線",
+        "testing": "測試中...",
+        "confirm": "確認主機金鑰",
+        "replace": "取代主機金鑰"
+      },
+      "test": {
+        "title": "連線",
+        "pinnedAtRest": "主機金鑰已釘選。測試連線以查看主機允許的功能。",
+        "unpinnedAtRest": "尚未釘選主機金鑰。測試連線以確認主機的指紋。",
+        "saveFirst": "請先儲存變更。測試會使用已儲存的憑證。"
+      },
+      "status": {
+        "unpinned": {
+          "title": "首次連線",
+          "text": "確認前請將此指紋與主機的指紋比對。之後的連線將拒絕任何其他金鑰。"
+        },
+        "pinned": {
+          "title": "主機金鑰已釘選"
+        },
+        "mismatch": {
+          "title": "主機金鑰已變更",
+          "text": "主機提供的金鑰與已釘選的不同。僅在預期會變更時（例如伺服器重新安裝後）才取代釘選的金鑰。"
+        },
+        "pinUnreadable": {
+          "title": "釘選的金鑰無法讀取",
+          "text": "無法解密已儲存的釘選金鑰，通常是因為 qui 的加密金鑰已變更。請取代後繼續。",
+          "noKey": "主機未回應，因此沒有可用來取代的金鑰。"
+        },
+        "error": {
+          "title": "連線失敗"
+        }
+      },
+      "fingerprint": {
+        "label": "指紋",
+        "pinned": "已釘選",
+        "presented": "本次提供"
+      },
+      "probes": {
+        "tier": "等級：{{tier}}",
+        "tierSftp": "SFTP",
+        "tierExec": "SFTP + 命令執行",
+        "tierHint": "命令執行需要主機上有含 GNU find 和 stat 的 POSIX shell。否則 qui 僅使用 SFTP，無法讀取檔案識別資訊。",
+        "sftp": "SFTP",
+        "statvfs": "可用空間（statvfs）",
+        "hardlink": "硬連結（hardlink@openssh.com）",
+        "limits": "limits 擴充",
+        "exec": "命令執行",
+        "gnuUserland": "GNU find 和 stat",
+        "yes": "可使用",
+        "no": "無法使用"
+      },
+      "replaceDialog": {
+        "title": "取代已釘選的主機金鑰？",
+        "description": "qui 今後將信任此主機本次提供的金鑰，並拒絕已釘選的金鑰。",
+        "cancel": "取消",
+        "confirm": "取代"
+      },
+      "toast": {
+        "saved": "SSH 設定已儲存",
+        "cleared": "已移除 SSH 存取"
+      }
     }
   },
   "backups": {
@@ -1963,6 +2087,126 @@
       "failedToDeleteBackup": "刪除備份失敗",
       "allBackupsDeleted": "所有備份已刪除",
       "failedToDeleteBackups": "刪除備份失敗"
+    }
+  },
+  "access": {
+    "local": "本機檔案",
+    "remote": "透過 SSH 存取檔案",
+    "none": "無檔案存取",
+    "limits": {
+      "noIdentity": "無檔案識別資訊：qui 無法判斷兩個路徑是否指向同一檔案。孤立項目掃描在此無法刪除，且已存在的硬連結目標會阻止硬連結新增。",
+      "noReflinks": "遠端實例不支援引用連結。",
+      "noHardlinkExtension": "無硬連結：伺服器未宣告支援 hardlink@openssh.com。交叉做種的硬連結新增在此會失敗；若已開啟「出錯時回退到一般模式」，則以一般模式新增。"
+    }
+  },
+  "deleteHistory": {
+    "label": "同時刪除其傳輸歷史",
+    "description": "不勾選時，qui 會以該實例的名稱保留歷史。",
+    "failed": "實例已刪除，但 qui 未能刪除其全部歷史。請在設定 > 統計中查看並刪除其餘部分。"
+  },
+  "list": {
+    "label": "實例",
+    "emptyTitle": "尚未配置任何實例",
+    "emptyDescription": "新增一個 qBittorrent 用戶端，讓 qui 管理它的種子。",
+    "tlsSkipped": "已關閉 TLS 驗證",
+    "reorderFailed": "重新排序實例失敗"
+  },
+  "publicPeerAddress": {
+    "label": "公開節點位址",
+    "noResolvedAddress": "qui 暫時無法判斷位址",
+    "description": "其他 BitTorrent 用戶端連到此 qBittorrent 所用的位址和連接埠，用於轉移和分享。留空則每次使用時由 qui 從 qBittorrent 推斷位址。當 qBittorrent 在 Docker 中執行或位於 NAT 之後時，請設定此項。"
+  },
+  "mark": {
+    "picker": {
+      "title": "{{name}} 的圖示",
+      "previewCollapsed": "收合的側邊欄",
+      "previewElsewhere": "其他位置",
+      "automatic": "自動",
+      "letters": "字母",
+      "color": "顏色",
+      "colorCurrent": "顏色 · {{color}}",
+      "reset": "重設為預設值",
+      "description": "請擇一：自動、字母（僅收合側邊欄顯示）或圖示。",
+      "iconHeading": "圖示",
+      "arrowHint": "使用方向鍵在圖示之間移動。"
+    },
+    "colors": {
+      "none": "無顏色",
+      "sky": "天藍",
+      "violet": "紫羅蘭",
+      "pink": "粉紅",
+      "orange": "橘色",
+      "amber": "琥珀",
+      "lime": "萊姆",
+      "emerald": "翠綠",
+      "teal": "青綠"
+    },
+    "iconGroups": {
+      "servers": "伺服器",
+      "hardware": "硬體",
+      "places": "地點",
+      "media": "媒體",
+      "nature": "自然",
+      "symbols": "符號",
+      "objects": "物品"
+    },
+    "icons": {
+      "server": "伺服器",
+      "nas": "NAS",
+      "tower": "直立式電腦",
+      "homeServer": "家用伺服器",
+      "seedbox": "Seedbox",
+      "container": "容器",
+      "cloud": "雲",
+      "cloudDownload": "雲端下載",
+      "hardDrive": "硬碟",
+      "driveDownload": "下載硬碟",
+      "database": "資料庫",
+      "cpu": "處理器",
+      "memory": "記憶體",
+      "router": "路由器",
+      "monitor": "螢幕",
+      "laptop": "筆電",
+      "house": "房子",
+      "building": "大樓",
+      "warehouse": "倉庫",
+      "globe": "地球",
+      "mapPin": "地圖標記",
+      "flag": "旗幟",
+      "mountain": "山",
+      "tent": "帳篷",
+      "film": "膠捲",
+      "tv": "電視",
+      "music": "音樂",
+      "podcast": "Podcast",
+      "book": "書",
+      "audiobook": "有聲書",
+      "gamepad": "遊戲手把",
+      "image": "圖片",
+      "cat": "貓",
+      "dog": "狗",
+      "bird": "鳥",
+      "fish": "魚",
+      "rabbit": "兔子",
+      "turtle": "烏龜",
+      "bug": "蟲子",
+      "leaf": "樹葉",
+      "star": "星星",
+      "heart": "愛心",
+      "flame": "火焰",
+      "zap": "閃電",
+      "rocket": "火箭",
+      "crown": "皇冠",
+      "shield": "盾牌",
+      "ghost": "幽靈",
+      "box": "盒子",
+      "archive": "封存",
+      "software": "軟體",
+      "disc": "光碟",
+      "layers": "圖層",
+      "anchor": "錨",
+      "magnet": "磁鐵",
+      "satellite": "衛星"
     }
   }
 }

@@ -120,18 +120,6 @@
     "skipIndividualEpisodesAutomationOff": "季度包自动组装已关闭。本次运行不会搜索季度包。",
     "maxAddedAgeLabel": "种子最长添加时间（天）",
     "maxAddedAgeDescription": "跳过添加时间超过该天数的种子。0 表示不限制。从未搜索过某个种子的索引器始终包含在内。",
-    "categories": "分类",
-    "tags": "标签",
-    "allCategoriesAll": "所有分类（留空表示全部）",
-    "allTagsAll": "所有标签（留空表示全部）",
-    "selectInstanceToLoadCategories": "选择一个实例以加载分类",
-    "selectInstanceToLoadTags": "选择一个实例以加载标签",
-    "categoriesLoadAfterInstance": "选择实例后加载分类；你仍可手动输入分类名称。",
-    "allCategoriesIncluded": "所有分类都将包含在扫描中。",
-    "selectedCategoriesScanned": "仅扫描已选择的 {{count}} 个分类。",
-    "tagsLoadAfterInstance": "选择实例后加载标签；你仍可手动输入标签。",
-    "allTagsIncluded": "所有标签都将包含在扫描中。",
-    "selectedTagsScanned": "仅扫描已选择的 {{count}} 个标签。",
     "sourceInstance": "源实例",
     "selectAnInstance": "选择一个实例",
     "addInstanceToSearch": "添加一个实例以搜索你已做种的种子。",
@@ -193,6 +181,49 @@
     "cancelDialog": {
       "title": "取消做种库扫描？",
       "description": "这会停止当前的做种库扫描。已添加的交叉做种会保留，但不会再搜索更多种子。"
+    },
+    "gazelleSummary": {
+      "line": "RED/OPS：{{sites}}",
+      "site": "{{name}}：已查询 {{asked}}，匹配 {{matched}}，失败 {{failed}}",
+      "siteWithNotAsked": "{{counts}}，未查询 {{notAsked}}（{{reasons}}）",
+      "reasonCount": "{{count}} {{reason}}",
+      "reasons": {
+        "disabled": "已关闭",
+        "noApiKey": "无 API 密钥",
+        "cooldown": "最近已搜索",
+        "sourceSite": "来自该站点",
+        "alreadySeeded": "已在做种",
+        "notMusic": "不是音乐",
+        "other": "其他"
+      }
+    },
+    "schedule": {
+      "enableLabel": "按计划运行",
+      "enableHelp": "qui 每隔几小时使用此卡片中已保存的设置启动一次计划运行。计划运行只搜索最近添加的种子，从最新的开始，并在达到搜索上限时停止。失败的索引器仍保持待搜索状态，下一次计划运行会再次查询它。“立即运行计划”会马上启动一次计划运行，并重新开始计时。",
+      "intervalLabel": "运行间隔（小时）",
+      "intervalHelp": "从一次计划运行开始到下一次计划运行开始的时间。qui 重启后仍保留这段时间。",
+      "maxSearchesLabel": "每次运行的最大搜索数",
+      "maxSearchesHelp": "当这么多种子发送过搜索后，计划运行停止。被冷却时间或筛选条件跳过的种子不计入。剩余的种子等待下一次运行。",
+      "maxAgeLabel": "只搜索最近添加的种子（天）",
+      "maxAgeHelp": "计划运行会跳过添加时间早于这么多天的每个种子，对从未搜索过它的索引器也是如此。“开始运行”不使用此限制。",
+      "runNow": "立即运行计划",
+      "runStarted": "计划运行已启动",
+      "runAlreadyActive": "做种库扫描已在运行。",
+      "nextRun": "下次计划运行：{{time}}",
+      "dueNow": "计划运行现在到期",
+      "dueAfterCurrentRun": "计划运行将在当前运行结束后开始",
+      "scheduledRunActive": "计划运行正在进行。"
+    },
+    "runKind": {
+      "scheduled": "计划",
+      "manual": "手动"
+    },
+    "stoppedAtLimit_other": "已在 {{limit}} 次搜索的上限处停止。{{count}} 个种子等待下一次运行。",
+    "runFilters": {
+      "include": "包含：{{filters}}",
+      "exclude": "排除：{{filters}}",
+      "categories": "分类 {{list}}",
+      "tags": "标签 {{list}}"
     }
   },
   "rules": {
@@ -201,7 +232,7 @@
     "hardlinkDescription": "为辅种创建硬链接或引用链接（写时复制）文件树。每个实例可独立配置。基础目录必须与实例的下载路径位于同一文件系统。",
     "reflinkNote": " 引用链接模式允许安全辅种包含额外/缺失文件的种子。当存在额外文件时，qui 会触发重新校验；如果低于阈值，种子将保持暂停状态以供手动审查。",
     "crossSeedMode": "辅种模式",
-    "enableLocalFilesystem": "在实例设置中启用“本地文件系统访问”以使用硬链接或引用链接模式。",
+    "enableLocalFilesystem": "硬链接模式需要文件系统写入权限：请在实例设置中启用“本地文件系统访问”或设置 SSH 访问。引用链接模式需要“本地文件系统访问”。",
     "regular": "常规",
     "regularDescription": "直接使用现有文件。速度快，无额外磁盘空间占用。",
     "hardlink": "硬链接",
@@ -218,7 +249,7 @@
     "fallbackToRegular": "出错时回退到常规模式",
     "fallbackDescription": "如果 {{mode}} 失败（例如不同文件系统），则回退到使用现有文件的常规模式。",
     "saveChanges": "保存更改",
-    "noLocalAccess": "无本地访问权限",
+    "noLocalAccess": "无文件系统写入权限",
     "seasonPack": {
       "title": "季度包",
       "description": "当 autobrr 抓取季度包时，qui 会检查你是否已有足够的本地数据来注入它，然后让 qBittorrent 下载仍然缺失的内容。",
@@ -416,7 +447,7 @@
     "settingsSaved": "设置已保存",
     "failedToSaveSettings": "保存设置失败",
     "cannotEnableMode": "无法启用 {{mode}} 模式",
-    "noLocalFilesystemAccess": "实例“{{name}}”未启用本地文件系统访问。",
+    "noLocalFilesystemAccess": "实例“{{name}}”无法使用此模式。硬链接模式需要本地或通过 SSH 的文件系统写入权限；引用链接模式需要“本地文件系统访问”。",
     "baseDirRequired": "必须先设置基础目录。",
     "unknownError": "未知错误",
     "noIndexersConfigured": "未配置 Torznab 索引器",
@@ -463,6 +494,7 @@
       "applyFailed": "{{completedPrefix}}{{failed}} 个失败 - 请查看结果了解详情",
       "applyCompletedUnavailable": "辅种请求已完成（详情不可用）",
       "applyNoChanges": "未添加任何辅种",
+      "applyAlreadyInClient": "已在客户端中",
       "applyCompletedPart": "，{{count}} 个已完成",
       "applyCompletedPrefix": "{{count}} 个已完成，"
     }
@@ -470,7 +502,8 @@
   "validation": {
     "minInterval": "最少 {{min}} 分钟",
     "minIntervalSeconds": "最少 {{min}} 秒",
-    "minCooldown": "最少 {{min}} 分钟"
+    "minCooldown": "最少 {{min}} 分钟",
+    "atLeast": "最少为 {{min}}"
   },
   "blocklist": {
     "title": "辅种屏蔽列表",
@@ -517,7 +550,7 @@
     "settings": "设置",
     "enabled": "已启用",
     "disabled": "已禁用",
-    "noLocalAccessWarning": "没有 qBittorrent 实例启用了本地文件系统访问。请在实例设置中启用以使用目录扫描器。",
+    "noLocalAccessWarning": "没有 qBittorrent 实例具有文件系统访问权限。要使用目录扫描器，请在实例设置中启用“本地文件系统访问”或设置 SSH 访问。",
     "scanDirectories": "扫描目录",
     "scanDirectoriesDescription": "配置要扫描辅种内容的目录。",
     "addDirectory": "添加目录",
@@ -629,7 +662,7 @@
       "defaultCategory": "默认分类",
       "defaultCategoryHelp": "扫描目录未覆盖时，注入种子使用的分类。",
       "tags": "标签",
-      "noLocalInstances": "没有具有本地访问权限的 qBittorrent 实例",
+      "noLocalInstances": "没有具有文件系统访问权限的 qBittorrent 实例",
       "typeToAddCategory": "输入以添加分类",
       "noCategory": "无分类",
       "typeToAddTags": "输入以添加标签",
@@ -650,6 +683,7 @@
       "enabledLabel": "已启用",
       "instanceLabel": "目标 qBittorrent 实例",
       "selectInstance": "选择实例",
+      "remoteNoIdentityNote": "qui 无法判断此远程实例上哪些文件已在做种，因此会对每个文件搜索一次。",
       "intervalLabel": "扫描间隔（分钟）",
       "intervalHelp": "最小：60 分钟（1 小时）。默认：1440 分钟（24 小时）。",
       "skipIndividualEpisodesLabel": "跳过单集",
@@ -664,7 +698,7 @@
       "typeToAddTags": "输入以添加标签",
       "tagsLoadError": "无法从 qBittorrent 加载标签。你仍可输入自定义值。",
       "regularModeTitle": "此实例已启用常规模式",
-      "regularModeHelp": "要避免此风险，请在 Cross-Seed > 注入后 > 硬链接 / 引用链接模式中选择<hardlink>硬链接</hardlink>或<reflink>引用链接</reflink>。请先在实例设置中启用“本地文件系统访问”。",
+      "regularModeHelp": "要避免此风险，请在辅种 > 注入后 > 硬链接 / 引用链接模式中选择<hardlink>硬链接</hardlink>或<reflink>引用链接</reflink>。硬链接模式需要文件系统写入权限：请在实例设置中启用“本地文件系统访问”或设置 SSH 访问。引用链接模式需要“本地文件系统访问”。",
       "regularModeAcknowledge": "我了解在媒体目录中使用常规模式的风险",
       "cancel": "取消",
       "addButton": "添加目录",

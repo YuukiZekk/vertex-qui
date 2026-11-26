@@ -3,29 +3,17 @@
   "card": {
     "status": {
       "disabled": "Desactivada",
-      "enabled": "Activada",
       "connected": "Connectada",
       "disconnected": "Desconnectada"
     },
     "tooltips": {
-      "disableInstance": "Desactiva la instància",
-      "enableInstance": "Activa la instància",
       "moveUp": "Mou cap amunt",
       "moveDown": "Mou cap avall"
     },
     "actions": {
-      "edit": "Edita",
       "testConnection": "Prova la connexió",
-      "delete": "Elimina"
-    },
-    "labels": {
-      "username": "Nom d'usuari:",
-      "basicAuth": "Autenticació bàsica:",
-      "tlsVerification": "Verificació TLS:",
-      "tlsSkipped": "Omesa",
-      "tlsStrict": "Estricta",
-      "localFileAccess": "Accés als fitxers locals:",
-      "testingConnection": "S'està provant la connexió..."
+      "delete": "Elimina",
+      "changeIcon": "Canvia la icona"
     },
     "deleteDialog": {
       "title": "Elimina la instància",
@@ -35,7 +23,6 @@
     },
     "toast": {
       "instanceDisabledTitle": "Instància desactivada",
-      "testDisabledDescription": "Activa la instància abans de provar la connexió.",
       "testSuccessTitle": "La prova de connexió ha anat bé",
       "testSuccessDescription": "S'ha connectat correctament a la instància de qBittorrent",
       "testFailedTitle": "Ha fallat la prova de connexió",
@@ -56,7 +43,13 @@
     "passwordRequired": "Cal la contrasenya",
     "decryptionDescription": "No s'ha pogut desxifrar la contrasenya desada. Això sol passar quan ha canviat el secret de la sessió.",
     "reenterPassword": "Torna a introduir la contrasenya",
-    "recentErrors": "Errors recents ({{count}})"
+    "recentErrors": "Errors recents ({{count}})",
+    "errorTypes": {
+      "connection": "Connexió",
+      "authentication": "Autenticació",
+      "ban": "Bloqueig",
+      "api": "API"
+    }
   },
   "form": {
     "labels": {
@@ -88,30 +81,32 @@
     },
     "validation": {
       "nameRequired": "El nom de la instància és obligatori",
-      "basicAuthPasswordRequired": "La contrasenya de l'autenticació bàsica és obligatòria quan aquesta autenticació està activada"
+      "basicAuthPasswordRequired": "La contrasenya de l'autenticació bàsica és obligatòria quan aquesta autenticació està activada",
+      "usernameRequired": "Cal un nom d'usuari",
+      "passwordRequired": "Cal una contrasenya",
+      "apiKeyRequired": "Cal una clau d'API"
     },
     "buttons": {
-      "saving": "S'està desant...",
       "updateInstance": "Actualitza la instància",
-      "addInstance": "Afegeix la instància",
-      "cancel": "Cancel·la"
+      "addInstance": "Afegeix la instància"
     },
     "toast": {
-      "missingCredentialsTitle": "Falten credencials",
       "instanceUpdatedTitle": "Instància actualitzada",
       "instanceUpdatedDescription": "S'ha actualitzat la instància correctament. S'està provant la connexió en segon pla...",
-      "updateFailedTitle": "No s'ha pogut actualitzar",
       "updateFailedDescription": "No s'ha pogut actualitzar la instància",
       "instanceCreatedTitle": "Instància creada",
       "instanceCreatedDescription": "S'ha creat la instància correctament. S'està provant la connexió en segon pla...",
-      "createFailedTitle": "No s'ha pogut crear",
       "createFailedDescription": "No s'ha pogut crear la instància"
     },
     "authType": {
       "none": "Cap",
       "usernamePassword": "Nom d'usuari i contrasenya",
       "apiKey": "Clau API"
-    }
+    },
+    "sshAfterSave": "L'accés SSH als fitxers de la instància es configura a la configuració de la instància després de desar.",
+    "addTitle": "Afegeix una instància",
+    "addDescription": "Configura una instància nova de qBittorrent",
+    "editTitle": "Edita la instància"
   },
   "settingsButton": {
     "tooltip": "Configuració de la instància"
@@ -150,7 +145,8 @@
         "downloads": "Baixades",
         "bittorrent": "BitTorrent",
         "rss": "RSS",
-        "webui": "WebUI"
+        "webui": "WebUI",
+        "ssh": "SSH"
       },
       "sections": {
         "instanceConfig": {
@@ -162,6 +158,10 @@
         },
         "seedingLimits": {
           "title": "Límits de sembra"
+        },
+        "ssh": {
+          "title": "Accés SSH",
+          "description": "Accedeix als fitxers d'aquesta instància per SSH quan qui i qBittorrent s'executen en màquines diferents"
         }
       }
     },
@@ -590,7 +590,9 @@
         "move": "Mou",
         "externalProgram": "Programa extern",
         "dryRun": "Execució de prova",
-        "exportToInstance": "Exporta a una instància"
+        "exportToInstance": "Exporta a una instància",
+        "transferToInstance": "Transfereix a una instància",
+        "ruleSkipped": "Regla no executada"
       },
       "shareLimit": {
         "global": "Global",
@@ -643,7 +645,9 @@
         "exportedDryRun_one": "{{count}} torrent s'exportaria",
         "exportedDryRun_other": "{{count}} torrents s'exportarien",
         "exportFailed_one": "No s'ha pogut exportar {{count}} torrent",
-        "exportFailed_other": "No s'han pogut exportar {{count}} torrents"
+        "exportFailed_other": "No s'han pogut exportar {{count}} torrents",
+        "transferredDryRun_one": "{{count}} torrent es transferiria",
+        "transferredDryRun_other": "{{count}} torrents es transferirien"
       },
       "deleteDialog": {
         "title": "Elimina la regla",
@@ -703,8 +707,10 @@
         "deleteActivityFailed": "No s'ha pogut eliminar l'activitat"
       },
       "exported": "Exportat",
+      "transferStarted": "Iniciat",
       "tagActions_one": "{{count}} acció d'etiqueta",
-      "tagActions_other": "{{count}} accions d'etiqueta"
+      "tagActions_other": "{{count}} accions d'etiqueta",
+      "skipped": "Omesa"
     },
     "runWorkflowNow": {
       "action": "Executa ara",
@@ -721,7 +727,8 @@
         "completedWithErrors": "S'ha completat l'execució de \"{{name}}\" amb errors. Consulta el registre d'activitat.",
         "dryRunCompleted": "S'ha completat l'execució de prova de \"{{name}}\"",
         "inProgress": "Hi ha una execució en curs. Torna-ho a provar d'aquí a un moment.",
-        "failed": "No s'ha pogut executar el workflow"
+        "failed": "No s'ha pogut executar el workflow",
+        "skipped": "\"{{name}}\" no s'ha executat. Consulta el registre d'activitat."
       }
     },
     "workflowDialog": {
@@ -794,6 +801,11 @@
         "skipChecking": "Omet la verificació",
         "addPaused": "Afegeix-lo aturat"
       },
+      "transfer": {
+        "title": "Transfereix a una instància",
+        "description": "Mou cada torrent coincident amb els seus fitxers a la instància de destinació i en comprova la còpia abans d'eliminar res. La pàgina Transferències mostra cada transferència.",
+        "remove": "Elimina «Transfereix a una instància»"
+      },
       "priority": {
         "title": "Prioritat dels torrents",
         "description": "Controla l'ordre en què es processen els torrents.",
@@ -817,6 +829,7 @@
         "notSupportedForScoreMultiplier": "No compatible amb els multiplicadors de puntuació"
       },
       "conditionsLabel": "Condicions (opcional)",
+      "mixedActionConditions": "Cada acció d'aquest workflow té la seva pròpia condició. Ara qui fa servir una sola condició per workflow. Si deses, totes les accions rebran la condició de dalt. Per conservar les altres, crea abans un workflow per a cada condició.",
       "actions": {
         "title": "Acció",
         "addAction": "Afegeix una acció",
@@ -835,7 +848,8 @@
         "category": "Categoria",
         "move": "Mou",
         "externalProgram": "Executa un programa extern",
-        "exportToInstance": "Exporta a una instància"
+        "exportToInstance": "Exporta a una instància",
+        "transferToInstance": "Transfereix a una instància"
       },
       "option": {
         "noChange": "Sense canvis",
@@ -936,25 +950,43 @@
       "enableDryRunPrompt": {
         "title": "Vols activar l'execució de prova?",
         "description": "L'execució de prova simula totes les accions sense canviar res. Pots revisar els torrents afectats al registre d'activitat.",
-        "enableWithout": "Activa-ho sense execució de prova",
-        "enableWith": "Activa-ho amb execució de prova"
+        "saveAndEnable": "Desa i activa"
       },
       "freeSpace": {
         "title": "Origen de l'espai lliure",
         "aria": "Sobre l'origen de l'espai lliure",
-        "description": "Tria d'on s'ha de llegir l'espai lliure. El valor predeterminat fa servir l'espai lliure que informa qBittorrent. Fes servir «Camí al servidor» per comprovar l'espai lliure d'un disc o d'un punt de muntatge concret.",
+        "description": "Tria d'on s'ha de llegir l'espai lliure. El valor predeterminat fa servir l'espai lliure que informa qBittorrent. Fes servir «Camí al servidor» per comprovar l'espai lliure d'un disc o d'un punt de muntatge concret. «Camí a l'amfitrió de qBittorrent» ho pregunta al mateix qBittorrent i necessita qBittorrent 5.3.",
         "selectSource": "Selecciona un origen",
         "defaultSource": "Predeterminat (qBittorrent)",
         "pathSource": "Camí al servidor",
         "pathSourceWindowsUnsupported": "Camí al servidor (no compatible amb Windows)",
-        "pathSourceLocalAccessRequired": "Camí al servidor (cal accés local)",
+        "qbitPathSource": "Camí a l'amfitrió de qBittorrent",
+        "qbitPathSourceUnsupported": "Camí a l'amfitrió de qBittorrent (necessita qBittorrent 5.3)",
         "pathPlaceholder": "/mnt/downloads",
         "pathHelp": "Introdueix el camí on vols comprovar l'espai lliure (p. ex., un punt de muntatge)",
+        "qbitPathHelp": "Introdueix un camí a l'amfitrió de qBittorrent. qBittorrent mesura l'espai lliure, de manera que qui no necessita accés a aquest disc.",
         "errors": {
           "unsupportedWindows": "L'origen d'espai lliure basat en un camí no és compatible amb Windows.",
-          "localAccessRequired": "L'origen d'espai lliure basat en un camí necessita accés al sistema de fitxers local.",
-          "pathRequired": "El camí és obligatori quan es fa servir «Camí al servidor»."
-        }
+          "qbitPathUnsupported": "Aquesta instància és anterior a qBittorrent 5.3 i no pot informar de l'espai lliure d'un camí.",
+          "pathRequired": "El camí és obligatori quan es fa servir «Camí al servidor».",
+          "filesystemAccessRequired": "L'origen d'espai lliure basat en un camí necessita accés al sistema de fitxers local o per SSH.",
+          "allowanceRequired": "Introdueix un espai permès superior a 0.",
+          "allowanceAccessRequired": "L'origen d'espai permès necessita accés al sistema de fitxers local, o accés SSH amb intèrpret d'ordres."
+        },
+        "pathSourceFilesystemAccessRequired": "Camí al servidor (necessita accés local o SSH)",
+        "allowanceSource": "Espai permès en un camí",
+        "allowanceSourceWindowsUnsupported": "Espai permès en un camí (no compatible amb Windows)",
+        "allowanceSourceAccessRequired": "Espai permès en un camí (necessita accés local, o accés SSH amb intèrpret d'ordres)",
+        "allowanceLabel": "Espai permès",
+        "allowancePathLabel": "Carpeta que cal mesurar",
+        "allowanceUnitAria": "Unitat de l'espai permès",
+        "allowanceHelp": "Introdueix l'espai que permet el teu pla, en la unitat que fa servir el teu proveïdor. qui en resta la mida dels fitxers que hi ha sota el camí. La majoria de proveïdors compten en passos de 1000 ({{decimalUnit}}), no de 1024 ({{binaryUnit}}): la diferència és d'un 9%.",
+        "allowanceUnits": {
+          "MB": "MB",
+          "GB": "GB",
+          "TB": "TB"
+        },
+        "allowancePathHelp": "Per exemple, el teu directori d'inici"
       },
       "grouping": {
         "title": "Grups de condicions agrupades",
@@ -1087,7 +1119,9 @@
           "moved": "Mou",
           "externalProgram": "Programa extern",
           "noMatches": "Cap coincidència",
-          "exportedToInstance": "Exporta a una instància"
+          "exportedToInstance": "Exporta a una instància",
+          "transferredToInstance": "Transfereix a una instància",
+          "ruleSkipped": "Regla no executada"
         },
         "actionFallback": "Acció desconeguda ({{action}})",
         "summary": {
@@ -1132,8 +1166,8 @@
         "switchedDeleteModeForFreeSpace": "S'ha canviat a «Suprimeix amb els fitxers» perquè la condició d'espai lliure necessita alliberar espai real al disc",
         "switchedIntervalForFreeSpace": "S'ha canviat a un interval de 5 minuts perquè les supressions per espai lliure tenen un temps d'espera d'uns 5 minuts",
         "pathSourceUnsupportedWindows": "L'origen d'espai lliure basat en un camí no és compatible amb Windows. S'ha canviat al valor predeterminat de qBittorrent.",
+        "qbitPathSourceUnsupported": "Aquesta instància no pot informar de l'espai lliure d'un camí. S'ha canviat a l'origen predeterminat.",
         "switchFreeSpaceSourceDefault": "Canvia l'origen de l'espai lliure a Predeterminat (qBittorrent)",
-        "enableLocalAccessOrDefault": "Activa l'accés al sistema de fitxers local a la configuració de la instància, o fes servir Predeterminat (qBittorrent)",
         "enterPathOrDefault": "Introdueix un camí o torna a posar l'origen de l'espai lliure a Predeterminat (qBittorrent)",
         "addScoreRule": "Afegeix com a mínim una regla de puntuació per ordenar per puntuació",
         "fieldMultiplierInvalid": "El multiplicador de camp ha de ser un número vàlid",
@@ -1150,7 +1184,8 @@
         "groupIdInvalid": "L'ID del grup només pot contenir caràcters alfanumèrics i guions baixos",
         "selectGroupKey": "Selecciona com a mínim una clau",
         "groupExists": "Ja hi ha un grup amb aquest ID",
-        "customGroupAdded": "S'ha afegit el grup personalitzat"
+        "customGroupAdded": "S'ha afegit el grup personalitzat",
+        "setUpFilesystemAccessOrDefault": "Configura l'accés al sistema de fitxers local o per SSH a la configuració de la instància, o fes servir Predeterminat (qBittorrent)"
       },
       "trackerMatchInclude": "Inclou",
       "trackerMatchExclude": "Exclou"
@@ -1345,16 +1380,16 @@
         "external_program": "Programa extern",
         "auto_managed": "Gestionat automàticament",
         "dry_run_no_match": "Execució de prova (cap coincidència)",
-        "exported_to_instance": "Exporta a una instància"
+        "exported_to_instance": "Exporta a una instància",
+        "transferred_to_instance": "Transfereix a una instància",
+        "rule_skipped": "Regla no executada"
       }
     },
     "orphanScanOverview": {
       "title": "Exploració d'orfes",
       "noInstancesDescription": "No hi ha cap instància configurada. Afegeix-ne una a Configuració per fer servir aquest servei.",
-      "tooltip": "Troba els fitxers del disc que no estan associats a cap torrent de qBittorrent.\nCal activar l'accés al sistema de fitxers local per a cada instància.",
+      "tooltip": "Troba els fitxers del disc que no estan associats a cap torrent de qBittorrent.\nNecessita accés als fitxers de cada instància. Activa «Accés al sistema de fitxers local» o configura l'accés SSH a la configuració de la instància.",
       "description": "Explora els directoris de baixada i identifica els fitxers orfes per netejar-los.",
-      "noLocalAccess": "Sense accés local",
-      "noLocalAccessTooltip": "qui i qBittorrent s'han d'executar a la mateixa màquina. Activa «Accés al sistema de fitxers local» a la configuració de la instància per fer servir l'exploració d'orfes.",
       "remoteLimits": "La supressió i la neteja automàtica en una instància remota necessiten la identitat dels fitxers, que qui només pot llegir si el servidor li permet executar GNU find i stat.",
       "remoteNoIdentity": "Aquesta instància remota no li permet executar-los, de manera que qui no pot saber quan dos camins són el mateix fitxer, i un fitxer accessible per un segon camí, per exemple amb un muntatge bind, pot aparèixer a la llista encara que un torrent l'utilitzi. Les exploracions d'aquí es poden previsualitzar i exportar, però no suprimir.",
       "on": "Activada",
@@ -1374,6 +1409,8 @@
       "viewPreview": "Mostra la previsualització",
       "recentScans": "Exploracions recents",
       "scannedPaths": "Camins d'exploració seleccionats ({{total}})",
+      "scanPathsLoading": "Carregant els camins d'exploració...",
+      "scanPathsLoadFailed": "No s'han pogut carregar els camins d'exploració",
       "zeroOrphans": "0 orfes",
       "deletedStats": "{{deleted}} eliminats · {{size}}",
       "partialFailure": "Error parcial: comprova les exploracions recents",
@@ -1410,7 +1447,9 @@
       "deletedDirs_other": "{{count}} directoris",
       "deletedSeparator": ", ",
       "errorMessage": "Missatge d'error",
-      "scanPaths": "Camins d'exploració"
+      "scanPaths": "Camins d'exploració",
+      "noFilesystemAccess": "Sense accés al sistema de fitxers",
+      "noFilesystemAccessTooltip": "L'exploració d'orfes necessita accés als fitxers d'aquesta instància. Activa «Accés al sistema de fitxers local» o configura l'accés SSH a la configuració de la instància."
     },
     "orphanScanPreview": {
       "title": "Previsualització d'orfes",
@@ -1745,6 +1784,92 @@
       "testEmailQueued": "El qBittorrent ha posat a la cua el correu de prova",
       "testEmailQueuedDescription": "El qBittorrent fa servir la configuració desada. Comproveu la safata d'entrada i el registre del qBittorrent per si hi ha errors.",
       "testEmailFailed": "No s'ha pogut enviar el correu de prova"
+    },
+    "ssh": {
+      "localWins": "L'accés al sistema de fitxers local està activat, així que qui llegeix els fitxers d'aquesta instància localment i no fa servir aquesta configuració SSH.",
+      "labels": {
+        "host": "Amfitrió SSH",
+        "hostDescription": "Nom d'amfitrió o adreça IP de la màquina que conté els fitxers d'aquesta instància, sense esquema ni port. Canviar l'amfitrió o el port descarta la clau d'amfitrió fixada, de manera que la propera prova torna a ser un primer contacte.",
+        "port": "Port",
+        "username": "Nom d'usuari",
+        "privateKey": "Clau privada",
+        "privateKeyDescription": "Una clau privada OpenSSH sense contrasenya. qui la desa xifrada i no la torna a mostrar mai. Torna a fer falta quan canvia l'amfitrió, el port o el nom d'usuari."
+      },
+      "placeholders": {
+        "host": "seedbox.example.com",
+        "privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----",
+        "privateKeyStored": "Hi ha una clau desada. Enganxa'n una de nova per substituir-la."
+      },
+      "validation": {
+        "hostRequired": "L'amfitrió SSH és obligatori",
+        "portRange": "El port ha d'estar entre 1 i 65535",
+        "usernameRequired": "El nom d'usuari és obligatori",
+        "keyRequired": "La clau privada és necessària quan canvia l'amfitrió, el port o el nom d'usuari"
+      },
+      "buttons": {
+        "save": "Desa la configuració SSH",
+        "clear": "Suprimeix l'accés SSH",
+        "test": "Prova la connexió",
+        "testing": "S'està provant...",
+        "confirm": "Confirma la clau d'amfitrió",
+        "replace": "Substitueix la clau d'amfitrió"
+      },
+      "test": {
+        "title": "Connexió",
+        "pinnedAtRest": "Clau d'amfitrió fixada. Prova la connexió per veure què permet l'amfitrió.",
+        "unpinnedAtRest": "Encara no hi ha cap clau d'amfitrió fixada. Prova la connexió per confirmar l'empremta de l'amfitrió.",
+        "saveFirst": "Desa primer els canvis. La prova utilitza les credencials desades."
+      },
+      "status": {
+        "unpinned": {
+          "title": "Primer contacte",
+          "text": "Compara aquesta empremta amb la de l'amfitrió abans de confirmar-la. Les connexions posteriors rebutjaran qualsevol altra clau."
+        },
+        "pinned": {
+          "title": "Clau d'amfitrió fixada"
+        },
+        "mismatch": {
+          "title": "La clau d'amfitrió ha canviat",
+          "text": "L'amfitrió ha presentat una clau diferent de la fixada. Substitueix-la només si esperes el canvi, per exemple després de reinstal·lar el servidor."
+        },
+        "pinUnreadable": {
+          "title": "La clau fixada no es pot llegir",
+          "text": "La clau fixada no es pot desxifrar, normalment perquè la clau de xifratge de qui ha canviat. Substitueix-la per continuar.",
+          "noKey": "L'amfitrió no ha respost, així que no hi ha cap clau amb què substituir-la."
+        },
+        "error": {
+          "title": "Ha fallat la connexió"
+        }
+      },
+      "fingerprint": {
+        "label": "Empremta",
+        "pinned": "Fixada",
+        "presented": "Presentada"
+      },
+      "probes": {
+        "tier": "Nivell: {{tier}}",
+        "tierSftp": "SFTP",
+        "tierExec": "SFTP + ordres",
+        "tierHint": "Les ordres necessiten un shell POSIX amb GNU find i stat a l'amfitrió. Sense ells, qui només fa servir SFTP i no pot llegir la identitat dels fitxers.",
+        "sftp": "SFTP",
+        "statvfs": "Espai lliure (statvfs)",
+        "hardlink": "Enllaços durs (hardlink@openssh.com)",
+        "limits": "Extensió limits",
+        "exec": "Ordres",
+        "gnuUserland": "GNU find i stat",
+        "yes": "Disponible",
+        "no": "No disponible"
+      },
+      "replaceDialog": {
+        "title": "Vols substituir la clau d'amfitrió fixada?",
+        "description": "A partir d'ara qui confiarà en la clau presentada per a aquest amfitrió i rebutjarà la fixada.",
+        "cancel": "Cancel·la",
+        "confirm": "Substitueix"
+      },
+      "toast": {
+        "saved": "S'ha desat la configuració SSH",
+        "cleared": "S'ha suprimit l'accés SSH"
+      }
     }
   },
   "backups": {
@@ -1993,6 +2118,126 @@
       "failedToDeleteBackup": "No s'ha pogut eliminar l'execució de còpia de seguretat",
       "allBackupsDeleted": "S'han eliminat totes les còpies de seguretat",
       "failedToDeleteBackups": "No s'han pogut eliminar les còpies de seguretat"
+    }
+  },
+  "access": {
+    "local": "Fitxers locals",
+    "remote": "Fitxers per SSH",
+    "none": "Sense accés als fitxers",
+    "limits": {
+      "noIdentity": "Sense identitat dels fitxers: qui no pot saber quan dos camins són el mateix fitxer. L'exploració d'orfes no pot suprimir aquí, i una destinació de hardlink existent atura una addició per hardlink.",
+      "noReflinks": "Sense reflinks en una instància remota.",
+      "noHardlinkExtension": "Sense hardlinks: el servidor no anuncia hardlink@openssh.com. Una addició de cross-seed per hardlink falla aquí, o s'afegeix en mode normal quan «Recorre al mode normal si hi ha un error» està activat."
+    }
+  },
+  "deleteHistory": {
+    "label": "Elimina també l'historial de transferències",
+    "description": "Sense aquesta opció, qui conserva l'historial amb el nom de la instància.",
+    "failed": "La instància s'ha eliminat, però qui no ha pogut eliminar tot el seu historial. Mira a Configuració > Estadístiques i elimina-hi la resta."
+  },
+  "list": {
+    "label": "Instàncies",
+    "emptyTitle": "Encara no hi ha cap instància configurada",
+    "emptyDescription": "Afegeix un client qBittorrent perquè qui en gestioni els torrents.",
+    "tlsSkipped": "Sense comprovació TLS",
+    "reorderFailed": "No s'han pogut reordenar les instàncies"
+  },
+  "publicPeerAddress": {
+    "label": "Adreça pública del parell",
+    "noResolvedAddress": "qui encara no pot determinar cap adreça",
+    "description": "L'adreça i el port amb què altres clients BitTorrent arriben a aquest qBittorrent, per a Transferències i Comparticions. Deixa-ho buit per fer servir l'adreça que qui obté de qBittorrent a cada ús. Defineix-la quan qBittorrent s'executa a Docker o darrere de NAT."
+  },
+  "mark": {
+    "picker": {
+      "title": "Icona de {{name}}",
+      "previewCollapsed": "Barra lateral plegada",
+      "previewElsewhere": "A la resta de llocs",
+      "automatic": "Automàtic",
+      "letters": "Lletres",
+      "color": "Color",
+      "colorCurrent": "Color · {{color}}",
+      "reset": "Restableix el valor per defecte",
+      "description": "Tria'n un: Automàtic, lletres (només barra lateral plegada) o icona.",
+      "iconHeading": "Icona",
+      "arrowHint": "Fes servir les tecles de fletxa per moure't entre les icones."
+    },
+    "colors": {
+      "none": "Sense color",
+      "sky": "Cel",
+      "violet": "Violeta",
+      "pink": "Rosa intens",
+      "orange": "Taronja",
+      "amber": "Ambre",
+      "lime": "Llima",
+      "emerald": "Maragda",
+      "teal": "Verd blavós"
+    },
+    "iconGroups": {
+      "servers": "Servidors",
+      "hardware": "Maquinari",
+      "places": "Llocs",
+      "media": "Multimèdia",
+      "nature": "Natura",
+      "symbols": "Símbols",
+      "objects": "Objectes"
+    },
+    "icons": {
+      "server": "Servidor",
+      "nas": "NAS",
+      "tower": "PC de torre",
+      "homeServer": "Servidor domèstic",
+      "seedbox": "Seedbox",
+      "container": "Contenidor",
+      "cloud": "Núvol",
+      "cloudDownload": "Baixada al núvol",
+      "hardDrive": "Disc dur",
+      "driveDownload": "Disc de baixades",
+      "database": "Base de dades",
+      "cpu": "Processador",
+      "memory": "Memòria",
+      "router": "Encaminador",
+      "monitor": "Monitor",
+      "laptop": "Portàtil",
+      "house": "Casa",
+      "building": "Edifici",
+      "warehouse": "Magatzem",
+      "globe": "Globus",
+      "mapPin": "Xinxeta",
+      "flag": "Bandera",
+      "mountain": "Muntanya",
+      "tent": "Tenda",
+      "film": "Pel·lícula",
+      "tv": "TV",
+      "music": "Música",
+      "podcast": "Pòdcast",
+      "book": "Llibre",
+      "audiobook": "Audiollibre",
+      "gamepad": "Comandament",
+      "image": "Imatge",
+      "cat": "Gat",
+      "dog": "Gos",
+      "bird": "Ocell",
+      "fish": "Peix",
+      "rabbit": "Conill",
+      "turtle": "Tortuga",
+      "bug": "Insecte",
+      "leaf": "Fulla",
+      "star": "Estrella",
+      "heart": "Cor",
+      "flame": "Flama",
+      "zap": "Llamp",
+      "rocket": "Coet",
+      "crown": "Corona",
+      "shield": "Escut",
+      "ghost": "Fantasma",
+      "box": "Capsa",
+      "archive": "Arxiu",
+      "software": "Programari",
+      "disc": "Disc",
+      "layers": "Capes",
+      "anchor": "Àncora",
+      "magnet": "Imant",
+      "satellite": "Satèl·lit"
     }
   }
 }

@@ -39,7 +39,7 @@ export function useTodayTransfer(): TodayTransfer {
   return { rows, totals: { uploaded, downloaded, uploadSpeed, averageUpload: average(uploaded) } }
 }
 
-// useTodayMetrics gives one instance's today figures for the mobile detail drawer.
+// useTodayMetrics gives one instance's today figures for the dashboard's instance details.
 export function useTodayMetrics() {
   const { t } = useTranslation("brush")
   const speed = (bytes: number | null) => bytes === null ? "-" : t("today.mbs", { value: bytesPerSecondToMBs(bytes) })

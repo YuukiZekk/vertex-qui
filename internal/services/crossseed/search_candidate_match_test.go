@@ -1471,8 +1471,8 @@ func TestClassifySearchCandidateExactSizeHardIdentity(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			source := base
 			candidate := base
-			source.Collection = "ATV"
-			candidate.Collection = "ATVP"
+			source.Collection = "NF"
+			candidate.Collection = "AMZN"
 			if test.name == "different checksum" {
 				source.Sum = "AAAAAAAA"
 			}
@@ -1548,8 +1548,8 @@ func TestClassifySearchCandidateExactSizeDateIdentity(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			source := base
 			candidate := base
-			source.Collection = "ATV"
-			candidate.Collection = "ATVP"
+			source.Collection = "NF"
+			candidate.Collection = "AMZN"
 			source.Year, source.Month, source.Day = test.sourceYear, test.sourceMonth, test.sourceDay
 			candidate.Year, candidate.Month, candidate.Day = test.candidateYear, test.candidateMonth, test.candidateDay
 
@@ -1636,7 +1636,6 @@ func TestSearchCandidateInternalMetadataIsNotJSON(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotContains(t, string(resultBytes), "title-rescue")
-	require.NotContains(t, string(resultBytes), "secret difference")
 	require.NotContains(t, string(resultBytes), "ARR secret result alias")
 
 	requestBytes, err := json.Marshal(CrossSeedRequest{
@@ -1651,7 +1650,6 @@ func TestSearchCandidateInternalMetadataIsNotJSON(t *testing.T) {
 	require.NotContains(t, string(requestBytes), "title-rescue")
 	require.NotContains(t, string(requestBytes), "12345")
 	require.NotContains(t, string(requestBytes), "secret source hash")
-	require.NotContains(t, string(requestBytes), "secret request difference")
 	require.NotContains(t, string(requestBytes), "ARR secret request alias")
 
 	privateBytes, err := json.Marshal(struct {
@@ -2109,7 +2107,7 @@ func TestTitleRescueSkipRecheckStopsBeforeFileLoading(t *testing.T) {
 	withAdder(service)
 	result := service.processCrossSeedCandidate(
 		context.Background(),
-		CrossSeedCandidate{InstanceID: instanceID, InstanceName: instance.Name, Torrents: []qbt.Torrent{existing}, titleRescue: true},
+		CrossSeedCandidate{InstanceID: instanceID, InstanceName: instance.Name, Torrents: []*qbt.Torrent{&existing}, titleRescue: true},
 		nil,
 		"incoming",
 		"",
@@ -2517,7 +2515,7 @@ func TestARRAliasSurvivesSearchToManualAndAutomatedApply(t *testing.T) {
 
 	search := func(titles []string) *TorrentSearchResponse {
 		arrLookup.result.Titles = append([]string(nil), titles...)
-		response, _, _, searchErr := service.searchTorrentMatches(
+		response, searchErr := service.searchTorrentMatches(
 			context.Background(),
 			instanceID,
 			sourceHash,

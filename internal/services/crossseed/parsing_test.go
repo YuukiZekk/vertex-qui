@@ -4,10 +4,12 @@
 package crossseed
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
 	qbt "github.com/autobrr/go-qbittorrent"
+	"github.com/autobrr/go-torrent/bencode"
 	"github.com/autobrr/go-torrent/metainfo"
 	"github.com/autobrr/rls"
 	"github.com/stretchr/testify/assert"
@@ -560,56 +562,58 @@ func TestRuleContentTypeInfo(t *testing.T) {
 	}
 }
 
-// TestGameSceneGroupDetection verifies that releases from known game scene groups
-// are correctly detected as games via the rls library's group detection.
-func TestGameSceneGroupDetection(t *testing.T) {
-	tests := []struct {
-		name     string
-		release  string
-		wantType string
-		wantCats []int
-	}{
-		{
-			name:     "RUNE game release",
-			release:  "Oddsparks.An.Automation.Adventure.Coaster.Rush-RUNE",
-			wantType: "game",
-			wantCats: []int{4000},
-		},
-		{
-			name:     "CODEX game release",
-			release:  "Some.Game.v1.0-CODEX",
-			wantType: "game",
-			wantCats: []int{4000},
-		},
-		{
-			name:     "SKIDROW game release",
-			release:  "Another.Game-SKIDROW",
-			wantType: "game",
-			wantCats: []int{4000},
-		},
-		{
-			name:     "PLAZA game release",
-			release:  "Game.Update.v1.2-PLAZA",
-			wantType: "game",
-			wantCats: []int{4000},
-		},
-		{
-			name:     "Movie release unchanged",
-			release:  "Random.Movie.2024.1080p.BluRay.x264-GROUP",
-			wantType: "movie",
-			wantCats: []int{2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060, 2070, 2080},
-		},
-	}
+// regression: #4211
+func TestParseTorrentMetadata_DirectionalControls(t *testing.T) {
+	const controls = "\u200e\u200f\u202a\u202b\u202c\u202d\u202e"
+	for _, multi := range []bool{false, true} {
+		name := "single file"
+		if multi {
+			name = "nested files"
+		}
+		t.Run(name, func(t *testing.T) {
+			rawName := "Mira Calder - Étoiles " + controls + "(2000) [FLAC]"
+			wantName := "Mira Calder - Étoiles (2000) [FLAC]"
+			info := metainfo.Info{Name: rawName, Length: 1, PieceLength: 16384}
+			wantPath := wantName
+			if multi {
+				info.Length = 0
+				info.Files = []metainfo.FileInfo{{Path: []string{"Disc" + controls + " 1", "", "01 - Étoiles" + controls + ".flac"}, Length: 1}}
+				wantPath += "/Disc 1/_/01 - Étoiles.flac"
+			}
+			infoBytes, err := bencode.Marshal(info)
+			require.NoError(t, err)
+			mi := metainfo.MetaInfo{InfoBytes: infoBytes}
+			var buf bytes.Buffer
+			require.NoError(t, mi.Write(&buf))
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			parsed := rls.ParseString(tt.release)
-			result := DetermineContentType(&parsed)
+			meta, err := ParseTorrentMetadataWithInfo(buf.Bytes())
+			require.NoError(t, err)
+			require.Equal(t, wantName, meta.Name)
+			require.Equal(t, mi.HashInfoBytes().HexString(), meta.HashV1)
+			require.Equal(t, rawName, meta.Info.Name)
+			require.Equal(t, info.Files, meta.Info.Files)
+			require.Len(t, meta.Files, 1)
+			require.Equal(t, wantPath, meta.Files[0].Name)
+			require.Equal(t, int64(1), meta.Files[0].Size)
 
-			assert.Equal(t, tt.wantType, result.ContentType, "content type mismatch for %s", tt.release)
-			assert.Equal(t, tt.wantCats, result.Categories, "categories mismatch for %s", tt.release)
+			files, err := BuildTorrentFilesFromInfo(rawName, info)
+			require.NoError(t, err)
+			require.Equal(t, meta.Files, files)
+			boundaries := BuildFilesForBoundaryCheck(&info, func(path string) bool { return path == wantPath })
+			require.Len(t, boundaries, 1)
+			require.Equal(t, wantPath, boundaries[0].Path)
+			require.True(t, boundaries[0].IsContent)
 		})
 	}
+
+	t.Run("control-only component refused", func(t *testing.T) {
+		data := buildMultiFileTorrent(t, "Example Album", 16384, map[string][]byte{controls + "/track.flac": {1}})
+		_, info := mustLoadTorrent(t, data)
+		_, err := BuildTorrentFilesFromInfo(info.Name, info)
+		require.Error(t, err)
+		_, err = ParseTorrentMetadataWithInfo(data)
+		require.Error(t, err)
+	})
 }
 
 func TestBuildTorrentFilesFromInfo_EmptyPathComponents(t *testing.T) {
@@ -625,7 +629,8 @@ func TestBuildTorrentFilesFromInfo_EmptyPathComponents(t *testing.T) {
 		},
 	}
 
-	files := BuildTorrentFilesFromInfo("Release", info)
+	files, err := BuildTorrentFilesFromInfo("Release", info)
+	require.NoError(t, err)
 
 	require.Len(t, files, 2)
 	assert.Equal(t, "Release/_/file.mkv", files[0].Name)

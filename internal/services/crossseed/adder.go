@@ -77,6 +77,8 @@ const (
 // AddFacts are what a caller knows about one cross-seed add. A caller can ask
 // for the Add verdict early with the facts it has so far.
 type AddFacts struct {
+	// MappedFiles have a retained complete source-to-target file correspondence.
+	MappedFiles bool
 	// PendingFiles is set when some source files are not on disk.
 	PendingFiles bool
 	// Align is set when the caller renames files to the matched torrent after the add.
@@ -88,6 +90,24 @@ type AddFacts struct {
 	Verify     VerifyReason
 	// ExactMatch is set when the match type is exact.
 	ExactMatch bool
+	// UnvalidatedManual is set for a Manual match with no validated file mapping.
+	// VerifyManual also covers a Manual match that validated.
+	UnvalidatedManual bool
+	// SizeMismatch is set when a content file differs in size from the matched
+	// file, which points to corruption or to a different release.
+	SizeMismatch bool
+	// UnsafePieces is set when a Pending file shares a piece with a file on disk,
+	// because the download can change that file.
+	UnsafePieces bool
+	// UnsafeFallbackPieces is UnsafePieces for a regular add after a link mode
+	// fallback, where the download would change the original files.
+	UnsafeFallbackPieces bool
+	// FolderToRootless is set when a folder torrent with Pending files targets
+	// rootless content. A regular add would scatter them in the base folder.
+	FolderToRootless bool
+	// ReflinkAdd is set while reflink mode makes the add: a clone keeps the
+	// original files safe. It turns off when reflink mode falls back.
+	ReflinkAdd bool
 	// LinkFallback is set when hardlink or reflink mode fell back to a regular add.
 	LinkFallback bool
 	// LinkFallbackRecheck is set when link mode asked for a full recheck after its fallback.
@@ -114,10 +134,24 @@ type AddFacts struct {
 	SkipRecheck    bool
 	SkipAutoResume bool
 	StartRunning   bool
+	// SkipPieceBoundaryCheck is the Piece boundary safety check switch. It turns
+	// off UnsafePieces, not UnsafeFallbackPieces.
+	SkipPieceBoundaryCheck bool
 	// DirScan is set for a Dir Scan add. Dir Scan has no Max auto-start download
 	// budget: it adds an alignment paused, resumes a link tree with Pending files
 	// after its recheck, and resumes each other add in Settle at 100%.
 	DirScan bool
+}
+
+const (
+	sizeMismatchMessage         = "Content file sizes do not match - possible corruption or different release"
+	unsafePiecesMessage         = "Skipped: extra files share pieces with content. Disable 'Piece boundary safety check' in Cross-Seed settings to allow"
+	unsafeFallbackPiecesMessage = "Skipped: link-mode fallback files share pieces with unmaterialized files"
+	folderToRootlessMessage     = "Skipped: cross-seed with extra files and rootless content requires hardlink or reflink mode to avoid scattering files in base directory"
+)
+
+func refuseAdd(status, message string) AddVerdict {
+	return AddVerdict{Refused: true, Status: status, Message: message}
 }
 
 // AddVerdict is the decision for one cross-seed add: refuse with a status,
@@ -135,12 +169,22 @@ type AddVerdict struct {
 	linkRecheck  bool
 }
 
+// exactInPlace is an exact match with every file at its path, so an add reads
+// only bytes that the matched torrent already verified.
+func (f AddFacts) exactInPlace() bool {
+	return f.ExactMatch && !f.Align && !f.PendingFiles
+}
+
+func (f AddFacts) alignmentPauses() bool {
+	return (f.Align && (f.MappedFiles || f.DirScan)) || (f.SkipRecheck && f.RenameOnly)
+}
+
 // Verdict makes the Add verdict from the facts. A later fact only adds a
-// reason for a recheck, except for the link-fallback rule and pool membership.
-// A pool member skips Settle, because its partial pool resumes it.
+// reason for a refusal or a recheck, except for the link-fallback rule and pool
+// membership. A pool member skips Settle, because its partial pool resumes it.
 func (f AddFacts) Verdict() AddVerdict {
 	disc := f.DiscMarker != ""
-	exactInPlace := f.ExactMatch && !f.Align && !f.PendingFiles
+	exactInPlace := f.exactInPlace()
 	linkRecheck := f.LinkFallbackRecheck || (f.LinkFallback && !exactInPlace)
 	// A byte-complete pair needs no recheck after a link-mode fallback: every file
 	// exists at the matched size, and the renames of a rename-only pair are
@@ -152,14 +196,24 @@ func (f AddFacts) Verdict() AddVerdict {
 	verify := f.Verify != VerifyNone
 	dirScanPendingTree := f.DirScan && f.LinkTree && f.PendingFiles
 
-	if f.SkipRecheck && !f.ManualAssembly && (verify || alignRecheck || disc || linkRecheck) {
-		return AddVerdict{Refused: true, Status: "skipped_recheck", Message: skippedRecheckMessage}
+	switch {
+	case f.SizeMismatch && !f.ReflinkAdd && !f.UnvalidatedManual:
+		return refuseAdd("rejected", sizeMismatchMessage)
+	case f.UnsafePieces && !f.ReflinkAdd && !f.SkipPieceBoundaryCheck:
+		return refuseAdd("skipped_unsafe_pieces", unsafePiecesMessage)
+	case f.UnsafeFallbackPieces && f.LinkFallback && !exactInPlace:
+		return refuseAdd("skipped_unsafe_pieces", unsafeFallbackPiecesMessage)
+	case f.SkipRecheck && !f.ManualAssembly && (verify || alignRecheck || disc || linkRecheck):
+		return refuseAdd("skipped_recheck", skippedRecheckMessage)
+	case f.FolderToRootless && !f.UnvalidatedManual:
+		return refuseAdd("requires_hardlink_reflink", folderToRootlessMessage)
 	}
 
 	v := AddVerdict{
 		// A rename-only add with Skip recheck on must not run before its renames land.
-		// Dir Scan renames the paths of an alignment before qBittorrent uses them.
-		paused: !f.StartRunning || verify || disc || linkRecheck || (f.SkipRecheck && f.RenameOnly) || (f.DirScan && f.Align),
+		// Dir Scan and a mapped-file add rename the paths of an alignment before
+		// qBittorrent uses them.
+		paused: !f.StartRunning || verify || disc || linkRecheck || f.alignmentPauses(),
 		// qBittorrent blocks renames while it checks a torrent, so an add that aligns
 		// skips the check and Settle rechecks after the renames.
 		skipChecking: !f.PendingFiles || f.Align,
@@ -189,7 +243,7 @@ func (f AddFacts) Verdict() AddVerdict {
 	case dirScanPendingTree:
 		// Download missing files lets the tree fetch its Pending files, also for a disc layout.
 		v.gate = GateAfterRecheck
-	case disc || linkRecheck || f.DirScan:
+	case disc || linkRecheck || f.DirScan || (f.MappedFiles && !f.LinkTree && !f.ReflinkAdd):
 		v.gate = GateComplete
 	default:
 		v.gate = GateBudget
@@ -224,7 +278,7 @@ const existsInThisInstance = "Torrent already exists in this instance"
 // AddResult is the result of a Pre-add check refusal or of an add.
 type AddResult struct {
 	Outcome AddOutcome
-	// Status names a refusal: blocked, exists, skipped_recheck, or error.
+	// Status names a refusal: a Pre-add check status, a status of the Add verdict, or error.
 	Status string
 	// Message is the text of a refusal. For an added torrent, it is the text
 	// that the caller appends to its own message.
@@ -265,7 +319,7 @@ func (a *Adder) Check(ctx context.Context, instanceID int, facts AddFacts, hashe
 			Str("existingHash", existing.Hash).
 			Str("existingName", existing.Name).
 			Msg("Cross-seed apply skipped: torrent already exists in instance")
-		return PreAddCheck{}, &AddResult{Status: "exists", Message: existsInThisInstance, Existing: existing}
+		return PreAddCheck{}, &AddResult{Status: StatusExists, Message: existsInThisInstance, Existing: existing}
 	}
 	if a.routes != nil {
 		linked, where, err := a.routes.FindLinked(ctx, a.sync, instanceID, check.hashes)
@@ -280,7 +334,7 @@ func (a *Adder) Check(ctx context.Context, instanceID int, facts AddFacts, hashe
 				Str("existingName", linked.Name).
 				Str("linkedInstance", where).
 				Msg("Cross-seed apply skipped: torrent already exists in a linked instance")
-			return PreAddCheck{}, &AddResult{Status: "exists", Message: "Torrent already exists in " + where, Existing: linked}
+			return PreAddCheck{}, &AddResult{Status: StatusExists, Message: "Torrent already exists in " + where, Existing: linked}
 		}
 	}
 
@@ -295,7 +349,7 @@ func (a *Adder) Check(ctx context.Context, instanceID int, facts AddFacts, hashe
 				Strs("torrentHashes", check.hashes).
 				Str("blockedHash", blockedHash).
 				Msg("Cross-seed apply skipped: infohash is blocked")
-			return PreAddCheck{}, &AddResult{Status: "blocked", Message: "Blocked by cross-seed blocklist"}
+			return PreAddCheck{}, &AddResult{Status: StatusBlocked, Message: "Blocked by cross-seed blocklist"}
 		}
 	}
 	return check, nil
@@ -355,6 +409,7 @@ func (a *Adder) Add(ctx context.Context, req AddRequest) AddResult {
 	options["paused"] = paused
 	options["stopped"] = paused
 	if v.skipChecking {
+		// go-qbittorrent also sends this as seedMode, the name that qBittorrent 5.3 (WebAPI 2.16.0) reads.
 		options["skip_checking"] = "true"
 	}
 

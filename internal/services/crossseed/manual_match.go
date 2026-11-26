@@ -16,7 +16,9 @@ import (
 
 	"github.com/autobrr/qui/internal/fsops"
 	"github.com/autobrr/qui/internal/models"
+	"github.com/autobrr/qui/internal/qbittorrent"
 	"github.com/autobrr/qui/internal/services/crossseedroute"
+	"github.com/autobrr/qui/internal/services/linktree"
 	"github.com/autobrr/qui/pkg/hardlinktree"
 )
 
@@ -48,7 +50,7 @@ func (s *Service) findManualTargetCandidate(ctx context.Context, req *FindCandid
 	if err != nil {
 		return nil, fmt.Errorf("failed to get instance: %w", err)
 	}
-	torrents, err := s.syncManager.GetTorrents(ctx, instanceID, qbt.TorrentFilterOptions{Filter: qbt.TorrentFilterAll})
+	torrents, err := s.syncManager.GetTorrentRefs(ctx, instanceID, qbittorrent.TorrentRefFilter{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get torrents: %w", err)
 	}
@@ -58,18 +60,21 @@ func (s *Service) findManualTargetCandidate(ctx context.Context, req *FindCandid
 		if normalizeHash(torrent.Hash) != want {
 			continue
 		}
-		if torrent.Progress < 1 {
+		switch s.sourceGate().check(torrent, sourceFilter{}) {
+		case sourceIncomplete:
 			return nil, fmt.Errorf("%w: manual match target %q is not complete", ErrTorrentNotComplete, torrent.Name)
-		}
-		if !isSettledSource(&torrent) {
+		case sourceErrored:
+			return nil, ErrSourceErrored
+		case sourceMovingOrChecking:
 			return nil, ErrSourceNotSettled
+		default:
 		}
 		return &FindCandidatesResponse{
 			SourceTorrent: &TorrentInfo{Name: req.TorrentName},
 			Candidates: []CrossSeedCandidate{{
 				InstanceID:   instanceID,
 				InstanceName: instance.Name,
-				Torrents:     []qbt.Torrent{torrent},
+				Torrents:     []*qbt.Torrent{torrent},
 				MatchType:    manualMatchType,
 			}},
 		}, nil
@@ -175,7 +180,7 @@ func (s *Service) ManualMatchProposals(ctx context.Context, instanceID int, torr
 	// ponytail: title+size heuristic can miss exotic containment shapes; the
 	// manual picker behind the proposals covers those.
 	type coarseEntry struct {
-		torrent qbt.Torrent
+		torrent *qbt.Torrent
 		ratio   float64
 		keep    bool
 	}
@@ -185,15 +190,15 @@ func (s *Service) ManualMatchProposals(ctx context.Context, instanceID int, torr
 		if view.Torrent == nil {
 			continue
 		}
-		torrent := *view.Torrent
+		torrent := view.Torrent
 		if wantHash != "" && normalizeHash(torrent.Hash) == wantHash {
 			// The requested hash claims its shortlist slot outright: the
 			// "always included" guarantee must survive a coarse pass crowded
 			// with keeps that outrank it.
-			requestedTorrent = &torrent
+			requestedTorrent = torrent
 			continue
 		}
-		if !s.canGiveFiles(&torrent) {
+		if s.sourceGate().check(torrent, sourceFilter{}) != sourcePass {
 			continue
 		}
 		entry := coarseEntry{torrent: torrent}
@@ -212,9 +217,9 @@ func (s *Service) ManualMatchProposals(ctx context.Context, instanceID int, torr
 		return cmp.Compare(b.ratio, a.ratio)
 	})
 
-	shortlist := make([]qbt.Torrent, 0, manualMatchCoarseLimit)
+	shortlist := make([]*qbt.Torrent, 0, manualMatchCoarseLimit)
 	if requestedTorrent != nil {
-		shortlist = append(shortlist, *requestedTorrent)
+		shortlist = append(shortlist, requestedTorrent)
 	}
 	for _, entry := range coarse {
 		if entry.keep && len(shortlist) < manualMatchCoarseLimit {
@@ -245,7 +250,7 @@ func (s *Service) ManualMatchProposals(ctx context.Context, instanceID int, torr
 	// Effective destination varies only through the target save path (link-mode
 	// base-dir selection); cache per save path.
 	effectiveBySavePath := make(map[string]string)
-	effectiveFor := func(torrent qbt.Torrent) string {
+	effectiveFor := func(torrent *qbt.Torrent) string {
 		if path, ok := effectiveBySavePath[torrent.SavePath]; ok {
 			return path
 		}
@@ -265,7 +270,7 @@ func (s *Service) ManualMatchProposals(ctx context.Context, instanceID int, torr
 		}
 		// A rootless target sends the add to its content dir, not its save path.
 		// A pinned target is never an episode in a pack.
-		effectiveSavePath := cmp.Or(rootlessDestDir(&torrent, candidateFiles, false), torrent.SavePath)
+		effectiveSavePath := cmp.Or(rootlessDestDir(torrent, candidateFiles, false), torrent.SavePath)
 		// The apply skips link modes for a pick whose files do not validate,
 		// landing it at the target's save path; only a validated pick reaches
 		// the link-mode destination. Mirror the apply's validation call so the
@@ -382,11 +387,11 @@ func (s *Service) manualMatchEffectiveSavePath(
 }
 
 // previewLinkBaseDir picks the configured link base directory on the same
-// filesystem as samplePath, in LinkIntoMatchingBaseDir order but without its
-// MkdirAll side effect. Falls back to the best-ranked directory. The dialect
+// filesystem as samplePath, in the order of the link tree module but without
+// a write. Falls back to the best-ranked directory. The dialect
 // is the backend's, or the host's when the backend cannot be read.
 func (s *Service) previewLinkBaseDir(ctx context.Context, instance *models.Instance, samplePath string) (string, fsops.PathDialect) {
-	dirs := splitBaseDirs(instance.HardlinkBaseDir)
+	dirs := linktree.ParseBaseDirs(instance.HardlinkBaseDir)
 	if len(dirs) == 0 {
 		return "", fsops.HostPaths
 	}

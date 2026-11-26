@@ -26,8 +26,9 @@ func (e *RuleError) Error() string { return e.Message }
 func ruleError(msg string) error { return &RuleError{Message: msg} }
 
 const (
-	errMsgWindowsPathSourceNotSupported = "Path-based free space source is not supported on Windows. Use the default qBittorrent free space instead."
-	errMsgPathSourceAccessRequired      = "Free space path source requires Local Filesystem Access. Enable it in instance settings first."
+	errMsgWindowsPathSourceNotSupported = "Path-based free space source is not supported on Windows with local filesystem access. Use the default qBittorrent free space instead."
+	errMsgPathSourceAccessRequired      = "Free space path source requires local or SSH filesystem access. Set it up in instance settings first."
+	errMsgAllowanceSourceAccessRequired = "Free space allowance source requires local filesystem access, or SSH access with a shell. Set it up in instance settings first."
 )
 
 // windowsLocalPathSource reports whether a path source would read a Windows
@@ -61,6 +62,15 @@ func ValidateRule(rule *models.Automation, instance *models.Instance) error {
 		}
 		if export.TargetInstanceID == rule.InstanceID {
 			return ruleError("Export target cannot be the same as the source instance")
+		}
+	}
+
+	if transfer := conditions.TransferToInstance; transfer != nil {
+		if transfer.Enabled && transfer.TargetInstanceID <= 0 {
+			return ruleError("Transfer to instance requires a target instance")
+		}
+		if transfer.Enabled && transfer.TargetInstanceID == rule.InstanceID {
+			return ruleError("Transfer target cannot be the same as the source instance")
 		}
 	}
 
@@ -113,13 +123,26 @@ func ValidateRule(rule *models.Automation, instance *models.Instance) error {
 	// A remote instance cannot turn on local access without becoming a local
 	// one, so it gets the answer the UI gives, not that advice.
 	isRemote := instance != nil && models.FilesystemAccessMode(instance) == models.FilesystemModeRemote
-	for field, data := range conditionFieldData {
-		if (data.trustedIdentity && !capabilities.TrustedIdentity || data.read && !capabilities.Read) && actionConditionsUseField(conditions, field) {
-			if isRemote {
-				return ruleError("This file condition is not available on remote instances.")
+	// Two passes over the map, so the answer does not depend on its order: a
+	// field that needs trusted identity decides first, since only local access
+	// grants that and advising SSH for a Read field beside it would mislead.
+	missing := func(want func(fieldData) bool) bool {
+		for field, data := range conditionFieldData {
+			if want(data) && actionConditionsUseField(conditions, field) {
+				return true
 			}
-			return ruleError("File conditions require local filesystem access. Enable 'Local Filesystem Access' in instance settings first.")
 		}
+		return false
+	}
+	needsTrusted := !capabilities.TrustedIdentity && missing(func(d fieldData) bool { return d.trustedIdentity })
+	needsRead := !capabilities.Read && missing(func(d fieldData) bool { return d.read })
+	switch {
+	case (needsTrusted || needsRead) && isRemote:
+		return ruleError("This file condition is not available on remote instances.")
+	case needsTrusted:
+		return ruleError("This file condition requires Local Filesystem Access. Enable it in instance settings first.")
+	case needsRead:
+		return ruleError("File conditions need access to the instance's files. Enable Local Filesystem Access, or set up SSH access, in instance settings first.")
 	}
 
 	// Keep-files mode doesn't free disk space, so a FREE_SPACE < X condition
@@ -156,10 +179,10 @@ func ValidateRule(rule *models.Automation, instance *models.Instance) error {
 
 	if source := rule.FreeSpaceSource; source != nil {
 		// Enforce regardless of whether FREE_SPACE is used.
-		if source.Type == models.FreeSpaceSourcePath && windowsLocalPathSource(instance) {
+		if (source.Type == models.FreeSpaceSourcePath || source.Type == models.FreeSpaceSourceAllowance) && windowsLocalPathSource(instance) {
 			return ruleError(errMsgWindowsPathSourceNotSupported)
 		}
-		if msg, err := validateFreeSpaceSource(source, instance, conditionsUseFreeSpace(conditions)); err != nil {
+		if msg, err := validateFreeSpaceSource(source, instance, ruleUsesCondition(rule, FieldFreeSpace)); err != nil {
 			return ruleError(msg)
 		}
 	}
@@ -193,11 +216,6 @@ func validateMovePath(move *models.MoveAction) error {
 		msg += fmt.Sprintf(". For a sample torrent it renders %q", rendered)
 	}
 	return ruleError(msg)
-}
-
-// conditionsUseFreeSpace checks if any enabled action condition uses FREE_SPACE field.
-func conditionsUseFreeSpace(conditions *models.ActionConditions) bool {
-	return actionConditionsUseField(conditions, FieldFreeSpace)
 }
 
 // deleteUsesKeepFilesWithFreeSpace checks if the delete action uses keep-files mode
@@ -418,35 +436,55 @@ func validateFreeSpaceSource(source *models.FreeSpaceSource, instance *models.In
 	switch source.Type {
 	case models.FreeSpaceSourcePath:
 		return validateFreeSpacePathSource(source, instance)
+	case models.FreeSpaceSourceAllowance:
+		return validateFreeSpaceAllowanceSource(source, instance)
+	case models.FreeSpaceSourceQbitPath:
+		// qBittorrent resolves this path on its own host, so qui neither needs
+		// filesystem access nor knows the server's path syntax. Unsupported servers
+		// surface at read time as a failed source read, never as zero free space.
+		if strings.TrimSpace(source.Path) == "" {
+			return "Free space path source requires a path", errors.New("path required")
+		}
+		return "", nil
 	default:
-		return "Invalid free space source type. Use 'qbittorrent' or 'path'.", errors.New("invalid source type")
+		return "Invalid free space source type. Use 'qbittorrent', 'path', 'qbitPath' or 'allowance'.", errors.New("invalid source type")
 	}
 }
 
 // validateFreeSpacePathSource validates path-based free space source configuration.
 func validateFreeSpacePathSource(source *models.FreeSpaceSource, instance *models.Instance) (msg string, err error) {
-	// Also enforced in ValidateRule, but kept here since
-	// validateFreeSpaceSource is unit-tested directly.
-	if windowsLocalPathSource(instance) {
-		return errMsgWindowsPathSourceNotSupported, errors.New("path source not supported on Windows with local access")
-	}
-
 	if instance == nil || !models.FilesystemCapabilitiesOf(instance).Read {
 		return errMsgPathSourceAccessRequired, errors.New("filesystem access required for path source")
 	}
 
-	// Path must be non-empty
-	if source.Path == "" {
+	return validateFreeSpaceSourcePath(source.Path)
+}
+
+// validateFreeSpaceAllowanceSource validates an allowance source. The source
+// needs file identity, so that a hardlinked file counts one time.
+func validateFreeSpaceAllowanceSource(source *models.FreeSpaceSource, instance *models.Instance) (msg string, err error) {
+	if windowsLocalPathSource(instance) {
+		return errMsgWindowsPathSourceNotSupported, errors.New("allowance source not supported on Windows with local access")
+	}
+	if instance == nil || !models.FilesystemCapabilitiesOf(instance).Identity {
+		return errMsgAllowanceSourceAccessRequired, errors.New("file identity required for allowance source")
+	}
+	if source.AllowanceBytes <= 0 {
+		return "Free space allowance must be above 0", errors.New("allowance required")
+	}
+	return validateFreeSpaceSourcePath(source.Path)
+}
+
+func validateFreeSpaceSourcePath(sourcePath string) (msg string, err error) {
+	if sourcePath == "" {
 		return "Free space path source requires a path", errors.New("path required")
 	}
 
-	// Path must be absolute
-	if !strings.HasPrefix(source.Path, "/") {
+	if !strings.HasPrefix(sourcePath, "/") {
 		return "Free space path must be an absolute path (start with /)", errors.New("path must be absolute")
 	}
 
-	// Reject paths with .. for safety
-	if strings.Contains(source.Path, "..") {
+	if strings.Contains(sourcePath, "..") {
 		return "Free space path cannot contain '..'", errors.New("path contains parent directory reference")
 	}
 

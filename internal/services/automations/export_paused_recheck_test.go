@@ -4,9 +4,11 @@
 package automations
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,10 +18,12 @@ import (
 	qbt "github.com/autobrr/go-qbittorrent"
 	"github.com/stretchr/testify/require"
 
+	"github.com/autobrr/qui/internal/dbinterface"
 	"github.com/autobrr/qui/internal/fsops"
 	localbackend "github.com/autobrr/qui/internal/fsops/local"
 	"github.com/autobrr/qui/internal/models"
 	"github.com/autobrr/qui/internal/qbittorrent"
+	"github.com/autobrr/qui/internal/services/transfer"
 	"github.com/autobrr/qui/internal/testutil/testdb"
 )
 
@@ -51,6 +55,10 @@ func TestExecuteExportToInstance_PausedRecheckFailure(t *testing.T) {
 	require.Equal(t, models.ActivityOutcomeFailed, result.activities[0].Outcome)
 	require.True(t, strings.HasPrefix(result.activities[0].Reason, "Recheck on target failed:"), result.activities[0].Reason)
 	require.Equal(t, []string{"false"}, result.deleteFiles)
+	require.Equal(t, []recordedDelete{{
+		hashes: []string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		actor:  qbittorrent.DeleteActor{Kind: qbittorrent.DeleteActorAutomation, RuleName: "export paused recheck"},
+	}}, result.deletes)
 	require.Zero(t, result.starts.Load())
 }
 
@@ -98,7 +106,8 @@ func TestExecuteExportToInstance_RecheckOnlyWhenPausedAndChecking(t *testing.T) 
 		{"started, checking", false, false, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			result := runExport(t, exportCase{paused: tc.paused, skipChecking: tc.skipChecking, recheckStatus: http.StatusOK, afterRecheck: recheckFindsPayload})
+			result := runExport(t, exportCase{paused: tc.paused, skipChecking: tc.skipChecking, recheckStatus: http.StatusOK,
+				afterRecheck: recheckFindsPayload})
 
 			require.Len(t, result.activities, 1)
 			require.Equal(t, models.ActivityOutcomeSuccess, result.activities[0].Outcome, result.activities[0].Reason)
@@ -106,6 +115,36 @@ func TestExecuteExportToInstance_RecheckOnlyWhenPausedAndChecking(t *testing.T) 
 			require.Empty(t, result.deleteFiles)
 		})
 	}
+}
+
+// exportOnTransfers wires the Transfer module into svc, as start-up does. The
+// Export runs poll the target 6 times, 30 ms apart.
+func exportOnTransfers(t *testing.T, svc *Service, db dbinterface.Querier) {
+	t.Helper()
+	store, err := transfer.NewStore(t.Context(), db)
+	require.NoError(t, err)
+	transfers := transfer.NewService(t.Context(), transfer.Deps{Store: store, Instances: svc.instanceStore, Sync: svc.syncManager,
+		Config: transfer.Config{ExportPolls: 6, ExportPollInterval: 30 * time.Millisecond}})
+	t.Cleanup(func() { require.NoError(t, transfers.Close(context.Background())) })
+	svc.SetExportRunner(transfers)
+}
+
+// deleteNotes records each delete that the sync manager sends.
+type deleteNotes struct {
+	mu      sync.Mutex
+	deletes []recordedDelete
+}
+
+func (n *deleteNotes) NoteDelete(_ int, hashes []string, actor qbittorrent.DeleteActor) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.deletes = append(n.deletes, recordedDelete{hashes: slices.Clone(hashes), actor: actor})
+}
+
+func (n *deleteNotes) recorded() []recordedDelete {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return slices.Clone(n.deletes)
 }
 
 // recheckOutcome is what the stub target reports once it accepts a recheck.
@@ -134,6 +173,7 @@ type exportResult struct {
 	ignoredRechecks    atomic.Int32
 	starts             atomic.Int32
 	deleteFiles        []string
+	deletes            []recordedDelete
 	statesAfterRecheck []string
 }
 
@@ -143,18 +183,9 @@ type exportResult struct {
 // reports the torrent complete once listed, except for a paused add with skip
 // checking off, which stays stopped at progress 0 until a recheck is accepted
 // and then follows tc.afterRecheck. Start, resume and force start requests are
-// counted.
+// counted. The Transfer module runs the export.
 func runExport(t *testing.T, tc exportCase) *exportResult {
 	t.Helper()
-	prevAttempts := exportVerifyMaxAttempts
-	prevInterval := exportVerifyPollInterval
-	exportVerifyMaxAttempts = 6
-	exportVerifyPollInterval = 30 * time.Millisecond
-	t.Cleanup(func() {
-		exportVerifyMaxAttempts = prevAttempts
-		exportVerifyPollInterval = prevInterval
-	})
-
 	const hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	var mu sync.Mutex
 	var added, listed, rechecked bool
@@ -270,7 +301,11 @@ func runExport(t *testing.T, tc exportCase) *exportResult {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = clientPool.Close() })
 
-	svc := NewService(Config{}, instanceStore, nil, models.NewAutomationActivityStore(db), nil, qbittorrent.NewSyncManager(clientPool, nil), nil, nil, nil, fsops.NewPool(instanceStore, localbackend.NewBackend()))
+	syncManager := qbittorrent.NewSyncManager(clientPool, nil)
+	deletes := &deleteNotes{}
+	syncManager.SetDeleteNoter(deletes)
+	svc := NewService(Config{}, instanceStore, nil, models.NewAutomationActivityStore(db), nil, syncManager, nil, nil, nil, fsops.NewPool(instanceStore, localbackend.NewBackend()))
+	exportOnTransfers(t, svc, db)
 	ch := svc.executeExportToInstance(t.Context(), sourceInstance.ID, []pendingExportToInstance{{
 		hash: hash,
 		torrent: qbt.Torrent{
@@ -291,5 +326,6 @@ func runExport(t *testing.T, tc exportCase) *exportResult {
 		result.activities = append(result.activities, activity)
 	}
 	target.Close() // waits for in-flight handlers, so the counters are final
+	result.deletes = deletes.recorded()
 	return result
 }

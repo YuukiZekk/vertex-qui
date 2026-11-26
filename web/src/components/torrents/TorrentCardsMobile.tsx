@@ -3,17 +3,10 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+import { DisplayProfileMenuItem, DisplayProfileSheet } from "@/components/display-profiles/DisplayProfileSheet"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,16 +15,14 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { ScrollToTopButton } from "@/components/ui/scroll-to-top-button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useMobileScroll, useRegisterMobileScrollContainer } from "@/contexts/MobileScrollContext"
 import { useActiveTaskCount } from "@/hooks/useActiveTaskCount"
-import { useDebounce } from "@/hooks/useDebounce"
-import { TORRENT_ACTIONS, useTorrentActions, type TorrentAction } from "@/hooks/useTorrentActions"
-import { useTorrentExporter } from "@/hooks/useTorrentExporter"
-import { useTorrentListActions, useTorrentListController } from "@/hooks/useTorrentListController"
+import { useSwipeActions } from "@/hooks/useSwipeActions"
+import { useCopyGroupRows, type CopyGroupRow } from "@/hooks/useCopyGroupRows"
+import { useTorrentListController } from "@/hooks/useTorrentListController"
 import { useTrackerCustomizations } from "@/hooks/useTrackerCustomizations"
 import { useTrackerIcons } from "@/hooks/useTrackerIcons"
 import { useClientSetting } from "@/lib/client-settings"
@@ -39,13 +30,14 @@ import { EMPTY_SIDEBAR_FILTERS, hasSidebarFilters } from "@/lib/filter-views"
 import { buildTrackerCustomizationLookup, extractTrackerHost, getTrackerCustomizationsCacheKey, resolveTrackerDisplay, type TrackerCustomizationLookup } from "@/lib/tracker-customizations"
 import { resolveTrackerHealthSupport } from "@/lib/tracker-health-support"
 import { resolveTrackerIconSrc } from "@/lib/tracker-icons"
-import { actionTargetRequest, buildActionTarget, getSelectionIdentity as selectionIdentity, hasSelection, rememberTickedTorrents, selectAllButtonEvent, type ActionTargetScope } from "@/lib/torrent-selection"
-import { getCommonCategory, getCommonSavePath, getToggleSelectionState, getTotalSize } from "@/lib/torrent-utils"
+import { actionTargetInstanceIds, buildActionTarget, EMPTY_ACTION_TARGET, getSelectionIdentity as selectionIdentity, hasSelection, rememberTickedTorrents, selectAllButtonEvent, selectionReducer, type ActionTargetScope } from "@/lib/torrent-selection"
+import { getToggleSelectionState, getTotalSize } from "@/lib/torrent-utils"
 import { isAllInstancesScope } from "@/lib/instances"
 import { useNavigate, useSearch } from "@tanstack/react-router"
 import { navigateWithSearch } from "@/lib/router-search"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import {
+  ArrowRightLeft,
   ArrowUpDown,
   Blocks,
   CheckCircle2,
@@ -63,7 +55,6 @@ import {
   FolderOpen,
   Gauge,
   GitBranch,
-  Info,
   ListTodo,
   Loader2,
   MoreVertical,
@@ -73,40 +64,39 @@ import {
   Radio,
   Search,
   Settings2,
+  Share2,
   Sprout,
   Tag,
   Trash2,
   X
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { AddTorrentDialog } from "./AddTorrentDialog"
-import { DeleteTorrentDialog } from "./DeleteTorrentDialog"
+import type { BulkActionPick } from "./bulk-actions/bulk-action-state"
+import { useBulkActions } from "./bulk-actions/bulk-actions-context"
 import { TorrentListEmptyState } from "./TorrentListEmptyState"
-import {
-  LocationWarningDialog,
-  SetCategoryDialog,
-  SetLocationDialog,
-  ShareLimitDialog,
-  SpeedLimitsDialog,
-  TagEditorDialog,
-  TmmConfirmDialog
-} from "./TorrentDialogs"
 // import { createPortal } from 'react-dom'
 // Columns dropdown removed on mobile
-import { useTorrentSelectionContext } from "@/contexts/TorrentSelectionContext"
+import { useTorrentSelectionContext, type ListFacts } from "@/contexts/TorrentSelectionContext"
 import { useCrossSeedFilter } from "@/hooks/useCrossSeedFilter"
-import { useInstanceCapabilities } from "@/hooks/useInstanceCapabilities"
-import { useInstanceMetadata } from "@/hooks/useInstanceMetadata.ts"
+import { useInstanceCapabilities, useInstancesSupport } from "@/hooks/useInstanceCapabilities"
+import { usePersistedGroupCopies } from "@/hooks/usePersistedGroupCopies"
 import { usePersistedCompactViewState, type ViewMode } from "@/hooks/usePersistedCompactViewState"
 import { useSubcategoriesEnabled } from "@/hooks/usePreferenceValues"
+import { withSortedField } from "@/lib/copy-groups"
+import { formatRelativeTime } from "@/lib/dateTimeUtils"
 import { getLinuxCategory, getLinuxIsoName, getLinuxRatio, getLinuxTags, getLinuxTracker, useIncognitoMode } from "@/lib/incognito"
 import { formatSpeedWithUnit, useSpeedUnits, type SpeedUnit } from "@/lib/speedUnits"
 import { unitLabel } from "@/lib/unit-format"
-import { getStatusBadgeProps } from "@/lib/torrent-table/row-display"
+import { getCopyGroupAccentClass, getStatusBadgeProps } from "@/lib/torrent-table/row-display"
+import { themeArea } from "@/lib/theme-areas"
 import { cn, formatBytes, getRatioColor } from "@/lib/utils"
 import type { Category, Torrent, TorrentCounts, TorrentFilters } from "@/types"
+import { CopyGroupMenuItems } from "./table/CopyGroupMenuItems"
+import { CopyGroupPill } from "./table/CopyGroupPill"
 import { getDefaultSortOrder, TORRENT_SORT_OPTIONS, type TorrentSortOptionValue } from "./torrentSortOptions"
+import { transferShareOffer } from "./transfer-share-offer"
 
 interface TorrentCardsMobileProps {
   instanceId: number
@@ -219,7 +209,7 @@ const TrackerIcon = ({ title, fallback, src, size = "md", className }: TrackerIc
   }, [src])
 
   return (
-    <div className={cn("flex items-center justify-center", className)} title={title}>
+    <div className={cn("flex items-center justify-center", className)} role={title ? "img" : undefined} aria-label={title || undefined}>
       <div
         className={cn(
           "flex items-center justify-center rounded-sm border border-border/40 bg-muted font-medium uppercase leading-none select-none",
@@ -264,11 +254,17 @@ const getTrackerDisplayMeta = (tracker?: string) => {
 
 // Swipeable card component with gesture support
 function SwipeableCard({
-  torrent,
+  torrent: cardTorrent,
+  copyGroup,
+  sortedField,
+  onToggleCopyGroup,
   isSelected,
   onSelect,
   onClick,
   onLongPress,
+  swipeOpen,
+  onSwipeOpenChange,
+  onSwipeAction,
   incognitoMode,
   selectionMode,
   speedUnit,
@@ -277,11 +273,19 @@ function SwipeableCard({
   trackerIcons,
   trackerCustomizationLookup,
 }: {
+  /** The torrent that a tap, a long press, and a tick reach. */
   torrent: Torrent
+  copyGroup: CopyGroupRow<Torrent>
+  sortedField: string
+  onToggleCopyGroup: (id: string) => void
   isSelected: boolean
   onSelect: (selected: boolean) => void
   onClick: () => void
   onLongPress: (torrent: Torrent) => void
+  /** The card shows its swipe actions. They act on the torrent of the card. */
+  swipeOpen: boolean
+  onSwipeOpenChange: (open: boolean) => void
+  onSwipeAction: (pick: BulkActionPick) => void
   incognitoMode: boolean
   selectionMode: boolean
   speedUnit: SpeedUnit
@@ -291,11 +295,17 @@ function SwipeableCard({
   trackerCustomizationLookup?: TrackerCustomizationLookup
 }) {
   const { t } = useTranslation("torrents")
+  // The card of a closed group shows the sorted field of the first-sorted member.
+  const torrent = useMemo(
+    () => withSortedField(cardTorrent, copyGroup.sortedTorrent, sortedField),
+    [cardTorrent, copyGroup.sortedTorrent, sortedField]
+  )
 
   // Use number for timeoutId in browser
   const [longPressTimer, setLongPressTimer] = useState<number | null>(null)
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null)
   const [hasMoved, setHasMoved] = useState(false)
+  const { trackRef, actionsRef, actionsMounted, trackProps } = useSwipeActions({ open: swipeOpen, onOpenChange: onSwipeOpenChange, disabled: selectionMode })
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (selectionMode) return // Don't trigger long press in selection mode
@@ -310,7 +320,7 @@ function SwipeableCard({
         if ("vibrate" in navigator) {
           navigator.vibrate(50)
         }
-        onLongPress(torrent)
+        onLongPress(cardTorrent)
       }
     }, 600) // Increased to 600ms to be less sensitive
     setLongPressTimer(timer)
@@ -364,14 +374,37 @@ function SwipeableCard({
   const trackerIconSrc = resolveTrackerIconSrc(trackerIcons, iconDomain, trackerMeta.host)
   // Display name is either custom name or hostname
   const trackerDisplayName = trackerDisplayInfo.displayName || trackerMeta.title
+  const groupPill = copyGroup.groupId !== undefined && (
+    <CopyGroupPill
+      id={copyGroup.groupId}
+      open={copyGroup.open}
+      copies={copyGroup.copies}
+      hiddenProblem={copyGroup.hiddenProblem}
+      hiddenTicks={copyGroup.hiddenTicks}
+      name={displayName}
+      size={viewMode === "normal" ? "normal" : "dense"}
+      onToggle={onToggleCopyGroup}
+    />
+  )
+  const helperBadge = torrent.qui_helper && (
+    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 flex-shrink-0 ml-1" title={t("tableColumns.helperHint")}>
+      {torrent.qui_helper === "share" ? t("tableColumns.helperShare") : t("tableColumns.helperTransfer")}
+    </Badge>
+  )
+  const isComplete = torrent.progress === 1
+  const hasSpeeds = torrent.dlspeed > 0 || torrent.upspeed > 0
+  const trackerTitle = trackerDisplayInfo.isCustomized ? `${trackerDisplayName} (${trackerMeta.host})` : trackerDisplayName
 
-  return (
+  const card = (
     <div
+      {...themeArea("torrent-card")}
       className={cn(
         "bg-card rounded-lg border cursor-pointer transition-all relative overflow-hidden select-none",
         viewMode === "ultra-compact" ? "px-3 py-1" : viewMode === "compact" ? "p-2" : "p-4",
+        (copyGroup.open || copyGroup.nestedCopy) && getCopyGroupAccentClass(copyGroup.open),
         isSelected && "bg-accent/50",
-        !selectionMode && "active:scale-[0.98]",
+        // A press on the pill does not press the card.
+        !selectionMode && "[&:not(:has(button:active))]:active:scale-[0.98]",
         selectionMode && viewMode !== "normal" && "pr-10"
       )}
       onTouchStart={!selectionMode ? handleTouchStart : undefined}
@@ -411,7 +444,7 @@ function SwipeableCard({
         /* Ultra Compact Layout - Single Line */
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0 overflow-hidden">
-            <div className="w-full overflow-x-auto scrollbar-thin">
+            <div className="w-full overflow-x-auto scrollbar-thin touch-pan-y">
               <div className="flex items-center gap-1 whitespace-nowrap">
                 <TrackerIcon
                   title={trackerMeta.title}
@@ -423,7 +456,7 @@ function SwipeableCard({
                 <h3 className={cn(
                   "font-medium text-xs inline-block",
                   selectionMode && "pr-8"
-                )} title={displayName}>
+                )}>
                   {displayName}
                 </h3>
               </div>
@@ -446,6 +479,10 @@ function SwipeableCard({
             </div>
           )}
 
+          {groupPill}
+
+          {helperBadge}
+
           {/* State badge - smaller */}
           <Badge variant={statusBadgeVariant} className={cn("text-[10px] px-1 py-0 h-4 flex-shrink-0", statusBadgeClass)}>
             {statusBadgeLabel}
@@ -465,50 +502,65 @@ function SwipeableCard({
       ) : viewMode === "compact" ? (
         /* Compact Layout */
         <>
-          {/* Name with progress inline */}
-          <div className="flex items-center gap-2 mb-1">
+          {/* Name and Copy group pill */}
+          <div className="flex h-5 items-center mb-1.5">
             <div className="flex-1 min-w-0 overflow-hidden">
-              <div className="w-full overflow-x-auto scrollbar-thin">
+              <div className="w-full overflow-x-auto scrollbar-thin touch-pan-y">
                 <h3 className={cn(
                   "font-medium text-sm inline-block whitespace-nowrap",
                   selectionMode && "pr-8"
-                )} title={displayName}>
+                )}>
                   {displayName}
                 </h3>
               </div>
             </div>
-            <Badge variant={statusBadgeVariant} className={cn("text-xs flex-shrink-0", statusBadgeClass)}>
-              {statusBadgeLabel}
-            </Badge>
+            {groupPill}
+            {helperBadge}
           </div>
 
-          {/* Downloaded/Size and Ratio */}
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">
-              {formatBytes(torrent.downloaded)} / {formatBytes(torrent.size)}
-            </span>
-            <div className="flex items-center gap-1">
-              <span className="text-muted-foreground">{t("mobileCards.ratio")}</span>
-              <span
-                className="font-medium"
-                style={{ color: getRatioColor(displayRatio) }}
-              >
-                {displayRatio === -1 ? "∞" : displayRatio.toFixed(2)}
+          {/* Tracker, Size and Ratio on the left, state badge on the right. On a full line, the tracker name gets shorter first, then the size. */}
+          <div className="flex h-[22px] items-center gap-2 text-xs">
+            <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+              {trackerDisplayName && (
+                <span className="flex items-center gap-1 min-w-0 shrink-[9999]">
+                  <TrackerIcon
+                    title={trackerTitle}
+                    fallback={trackerMeta.fallback}
+                    src={trackerIconSrc}
+                    size="xs"
+                    className="flex-shrink-0"
+                  />
+                  <span className="truncate">{trackerDisplayName}</span>
+                </span>
+              )}
+              <span className="min-w-0 truncate">
+                {isComplete ? formatBytes(torrent.size) : `${formatBytes(torrent.downloaded)} / ${formatBytes(torrent.size)}`}
+              </span>
+              <span className="flex items-center gap-1 flex-shrink-0">
+                <span>{t("mobileCards.ratio")}</span>
+                <span
+                  className="font-medium"
+                  style={{ color: getRatioColor(displayRatio) }}
+                >
+                  {displayRatio === -1 ? "∞" : displayRatio.toFixed(2)}
+                </span>
               </span>
             </div>
+            <Badge variant={statusBadgeVariant} className={cn("text-xs flex-shrink-0 ml-auto", statusBadgeClass)}>
+              {statusBadgeLabel}
+            </Badge>
           </div>
         </>
       ) : (
         /* Full Layout */
         <>
           {/* Torrent name */}
-          <div className="mb-3">
-            <h3 className={cn(
-              "font-medium text-sm line-clamp-2 break-all h-10",
-              selectionMode && "pr-8"
-            )}>
+          <div className={cn("mb-3 flex items-start", selectionMode && "pr-8")}>
+            <h3 className="flex-1 min-w-0 font-medium text-sm line-clamp-2 break-all h-10">
               {displayName}
             </h3>
+            {groupPill}
+            {helperBadge}
           </div>
 
           {/* Progress bar */}
@@ -578,21 +630,10 @@ function SwipeableCard({
 
       {/* Bottom row: Tracker/Category/Tags and Status/Speeds - only for compact and full views */}
       {viewMode === "compact" ? (
-        /* Compact version: Tracker/Category/tags on left, percentage/speeds on right */
-        <div className="flex items-center justify-between gap-2 text-xs mt-1">
-          {/* Left side: Tracker, Category and Tags */}
+        /* Compact version: Category/tags on left, percentage/speeds or added time on right */
+        <div className="flex h-4 items-center justify-between gap-2 text-xs mt-1">
+          {/* Left side: Category and Tags */}
           <div className="flex items-center gap-2 text-muted-foreground min-w-0 overflow-hidden">
-            {trackerDisplayName && (
-              <span className="flex items-center gap-1 flex-shrink-0" title={trackerDisplayInfo.isCustomized ? `${trackerDisplayName} (${trackerMeta.host})` : trackerDisplayName}>
-                <TrackerIcon
-                  title={trackerDisplayInfo.isCustomized ? `${trackerDisplayName} (${trackerMeta.host})` : trackerDisplayName}
-                  fallback={trackerMeta.fallback}
-                  src={trackerIconSrc}
-                  size="xs"
-                />
-                {trackerDisplayName}
-              </span>
-            )}
             {displayCategory && (
               <span className="flex items-center gap-1 flex-shrink-0">
                 <Folder className="h-3 w-3" />
@@ -609,31 +650,39 @@ function SwipeableCard({
             )}
           </div>
 
-          {/* Right side: Percentage and Speeds */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-muted-foreground">
-              {torrent.progress >= 0.99 && torrent.progress < 1 ? (
-                (Math.floor(torrent.progress * 1000) / 10).toFixed(1)
-              ) : (
-                Math.round(torrent.progress * 100)
-              )}%
+          {/* Right side: Percentage and Speeds, or the added time of an idle complete torrent */}
+          {isComplete && !hasSpeeds ? (
+            <span className="text-muted-foreground flex-shrink-0">
+              {t("mobileCards.added", { time: formatRelativeTime(torrent.added_on) })}
             </span>
-            {/* Speeds */}
-            {(torrent.dlspeed > 0 || torrent.upspeed > 0) && (
-              <div className="flex items-center gap-1">
-                {torrent.dlspeed > 0 && (
-                  <span className="text-chart-2 font-medium">
-                    ↓{formatSpeedWithUnit(torrent.dlspeed, speedUnit)}
-                  </span>
-                )}
-                {torrent.upspeed > 0 && (
-                  <span className="text-chart-3 font-medium">
-                    ↑{formatSpeedWithUnit(torrent.upspeed, speedUnit)}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {!isComplete && (
+                <span className="text-muted-foreground">
+                  {torrent.progress >= 0.99 && torrent.progress < 1 ? (
+                    (Math.floor(torrent.progress * 1000) / 10).toFixed(1)
+                  ) : (
+                    Math.round(torrent.progress * 100)
+                  )}%
+                </span>
+              )}
+              {/* Speeds */}
+              {hasSpeeds && (
+                <div className="flex items-center gap-1">
+                  {torrent.dlspeed > 0 && (
+                    <span className="text-chart-2 font-medium">
+                      ↓{formatSpeedWithUnit(torrent.dlspeed, speedUnit)}
+                    </span>
+                  )}
+                  {torrent.upspeed > 0 && (
+                    <span className="text-chart-3 font-medium">
+                      ↑{formatSpeedWithUnit(torrent.upspeed, speedUnit)}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : viewMode === "normal" ? (
         /* Full version: Original layout with tracker, category, tags */
@@ -641,7 +690,7 @@ function SwipeableCard({
           {/* Left side: Tracker and Category */}
           <div className="flex items-center gap-3 flex-shrink-0">
             {trackerDisplayName && (
-              <div className="flex items-center gap-1" title={trackerDisplayInfo.isCustomized ? `${trackerDisplayName} (${trackerMeta.host})` : trackerDisplayName}>
+              <div className="flex items-center gap-1">
                 <TrackerIcon
                   title={trackerDisplayInfo.isCustomized ? `${trackerDisplayName} (${trackerMeta.host})` : trackerDisplayName}
                   fallback={trackerMeta.fallback}
@@ -674,6 +723,60 @@ function SwipeableCard({
       ) : null /* Ultra-compact has no bottom row */}
     </div>
   )
+
+  return (
+    <div ref={trackRef} className="relative touch-pan-y" data-swipe-open={swipeOpen || undefined} {...trackProps}>
+      {card}
+      {actionsMounted && !selectionMode && (
+        <div ref={actionsRef} inert={!swipeOpen} className="absolute inset-y-0 left-full flex gap-1.5 pl-1.5">
+          <SwipeActions
+            stopped={/^(paused|stopped)(DL|UP)$/.test(cardTorrent.state)}
+            dense={viewMode === "ultra-compact"}
+            onAction={onSwipeAction}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The actions that a swipe to the left shows after a card. */
+function SwipeActions({ stopped, dense, onAction }: {
+  stopped: boolean
+  dense: boolean
+  onAction: (pick: BulkActionPick) => void
+}) {
+  const { t } = useTranslation("torrents")
+  const toggleLabel = stopped ? t("managementBar.resume") : t("managementBar.pause")
+  const ToggleIcon = stopped ? Play : Pause
+  const actionClass = cn(
+    "flex flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-medium active:opacity-80",
+    dense ? "w-12" : "w-16"
+  )
+  const iconClass = dense ? "h-4 w-4" : "h-5 w-5"
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={toggleLabel}
+        onClick={() => onAction({ action: stopped ? "resume" : "pause" })}
+        className={cn(actionClass, "bg-secondary text-secondary-foreground")}
+      >
+        <ToggleIcon className={iconClass} />
+        {!dense && <span className="max-w-full truncate px-1">{toggleLabel}</span>}
+      </button>
+      <button
+        type="button"
+        aria-label={t("managementBar.delete")}
+        onClick={() => onAction({ action: "delete" })}
+        className={cn(actionClass, "bg-destructive text-destructive-foreground")}
+      >
+        <Trash2 className={iconClass} />
+        {!dense && <span className="max-w-full truncate px-1">{t("managementBar.delete")}</span>}
+      </button>
+    </>
+  )
 }
 
 export function TorrentCardsMobile({
@@ -697,10 +800,8 @@ export function TorrentCardsMobile({
     `${MOBILE_SORT_STORAGE_KEY}:${instanceId}`,
     { defaultValue: DEFAULT_MOBILE_SORT_STATE, parse: parseMobileSortState }
   )
-  const [globalFilter, setGlobalFilter] = useState("")
-  const [immediateSearch] = useState("")
   // Selection keys: hash for single-instance, `${instanceId}:${hash}` for unified scope.
-  const { selection, dispatch: dispatchSelection } = useTorrentSelectionContext()
+  const { selection, dispatch: dispatchSelection, publishSummary } = useTorrentSelectionContext()
   const { isAllSelected, selected: selectedHashes, excluded: excludedFromSelectAll } = selection
   // Selection mode means that something is selected, Select all mode included.
   const selectionMode = hasSelection(selection)
@@ -710,7 +811,14 @@ export function TorrentCardsMobile({
   useRegisterMobileScrollContainer(parentRef)
 
   const [showActionsSheet, setShowActionsSheet] = useState(false)
-  const [showSearchModal, setShowSearchModal] = useState(false)
+  const [showProfileSheet, setShowProfileSheet] = useState(false)
+  // The key of the card that shows its swipe actions.
+  const [swipedKey, setSwipedKey] = useState<string | null>(null)
+  const setCardSwiped = useCallback((key: string, open: boolean) => {
+    setSwipedKey(current => open ? key : current === key ? null : current)
+  }, [])
+  const swallowListClick = useRef(false)
+  const sortButtonRef = useRef<HTMLButtonElement>(null)
   const sortField = sortState.field
   const sortOrder = sortState.order
 
@@ -784,79 +892,16 @@ export function TorrentCardsMobile({
     return newLookup
   }, [trackerCustomizationsQuery.data])
 
-  // Use the shared torrent actions hook
-  const torrentActions = useTorrentActions({
-    instanceId,
-    instanceIds,
-    onActionComplete: (action) => {
-      if (action === TORRENT_ACTIONS.DELETE) {
-        dispatchSelection({ type: "clear" })
-      }
-    },
-  })
-  const {
-    showDeleteDialog,
-    closeDeleteDialog,
-    deleteFiles,
-    setDeleteFiles,
-    isDeleteFilesLocked,
-    toggleDeleteFilesLock,
-    blockCrossSeeds,
-    setBlockCrossSeeds,
-    deleteCrossSeeds,
-    setDeleteCrossSeeds,
-    showTagsDialog,
-    setShowTagsDialog,
-    showCategoryDialog,
-    setShowCategoryDialog,
-    showLocationDialog,
-    setShowLocationDialog,
-    showShareLimitDialog,
-    setShowShareLimitDialog,
-    showSpeedLimitDialog,
-    setShowSpeedLimitDialog,
-    showTmmDialog,
-    setShowTmmDialog,
-    pendingTmmEnable,
-    showLocationWarningDialog,
-    setShowLocationWarningDialog,
-    isPending,
-    prepareDeleteAction,
-    prepareLocationAction,
-    prepareTmmAction,
-    proceedToLocationDialog,
-  } = torrentActions
+  const { pick, isExporting } = useBulkActions()
 
-  const { data: metadata } = useInstanceMetadata(instanceId, { fallbackDelayMs: 1500 })
-  const availableTags = metadata?.tags || []
-  const availableCategories = metadata?.categories || {}
-
-  const debouncedSearch = useDebounce(globalFilter, 1000)
   const routeSearch = useSearch({ strict: false }) as { q?: string; modal?: string }
-  const searchFromRoute = routeSearch?.q || ""
-
-  const effectiveSearch = searchFromRoute || immediateSearch || debouncedSearch
+  const effectiveSearch = routeSearch?.q || ""
   const navigate = useNavigate()
   const activeTaskCount = useActiveTaskCount(instanceId, !isAllInstancesView)
 
   // Columns controls removed on mobile
 
-  useEffect(() => {
-    if (searchFromRoute !== globalFilter) {
-      setGlobalFilter(searchFromRoute)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchFromRoute])
-
-  // The search modal filters without the route `q`, so the page scope does not
-  // see it. A search change clears the selection here instead.
-  const selectionSearchRef = useRef(effectiveSearch)
-  useEffect(() => {
-    if (selectionSearchRef.current !== effectiveSearch) {
-      selectionSearchRef.current = effectiveSearch
-      dispatchSelection({ type: "clear" })
-    }
-  }, [effectiveSearch, dispatchSelection])
+  const [groupCopiesSetting, toggleGroupCopies] = usePersistedGroupCopies()
 
   // Fetch data
   const {
@@ -877,6 +922,10 @@ export function TorrentCardsMobile({
     reportNearEnd,
     listKey,
     isCrossInstanceEndpoint,
+    visibleRows,
+    groupExpansion,
+    toggleGroup,
+    copyGroupsReady,
   } = useTorrentListController({
     instanceId,
     instanceIds,
@@ -884,10 +933,10 @@ export function TorrentCardsMobile({
     filters,
     sort: backendSortField,
     order: sortOrder,
+    groupCopies: groupCopiesSetting,
   })
 
   const { data: capabilities } = useInstanceCapabilities(instanceId, { enabled: instanceId > 0 })
-  const { exportTorrents, isExporting } = useTorrentExporter({ instanceId, incognitoMode })
   const supportsTrackerHealth = resolveTrackerHealthSupport({
     isUnifiedView: isAllInstancesView,
     capabilitySupport: capabilities?.supportsTrackerHealth,
@@ -913,76 +962,70 @@ export function TorrentCardsMobile({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalCount, isLoading, torrents.length, counts, categories, tags, allowSubcategories, onFilteredDataUpdate, supportsTrackerHealth]) // Update when data changes
 
+  const { describeRow: describeCopyGroupRow } = useCopyGroupRows({ rows: torrents, expansion: groupExpansion, selection, getSelectionIdentity })
+
+  // While nothing is ticked, the card that shows its swipe actions is the selection that an action reaches.
+  const actionSelection = useMemo(
+    () => selectionMode || swipedKey === null ? selection : selectionReducer(selection, { type: "selectOnly", key: swipedKey }),
+    [selectionMode, swipedKey, selection]
+  )
   const tickedTorrentsRef = useRef(new Map<string, Torrent>())
   // Every bulk action on the cards reads this target (ADR 0034). The cards have no Column filters.
   const actionTarget = useMemo(() => {
-    const ticked = rememberTickedTorrents(tickedTorrentsRef.current, selectedHashes, torrents, getSelectionIdentity)
+    if (!hasSelection(actionSelection)) {
+      // A stable result while nothing is selected: torrents is a new array on each stream tick.
+      tickedTorrentsRef.current.clear()
+      return EMPTY_ACTION_TARGET
+    }
+    const ticked = rememberTickedTorrents(tickedTorrentsRef.current, actionSelection.selected, torrents, getSelectionIdentity)
     const scope: ActionTargetScope = { instanceId, instanceIds, filters, columnFilters: null, search: effectiveSearch, isCrossInstance: isCrossInstanceEndpoint }
-    return buildActionTarget(selection, scope, { loaded: torrents, ticked, totalCount })
-  }, [selection, selectedHashes, torrents, getSelectionIdentity, instanceId, instanceIds, filters, effectiveSearch, isCrossInstanceEndpoint, totalCount])
+    return buildActionTarget(actionSelection, scope, { loaded: torrents, ticked, totalCount })
+  }, [actionSelection, torrents, getSelectionIdentity, instanceId, instanceIds, filters, effectiveSearch, isCrossInstanceEndpoint, totalCount])
   const { count: effectiveSelectionCount, previewTorrents: selectedTorrents } = actionTarget
+  const actionInstanceIds = useMemo(() => actionTargetInstanceIds(actionTarget, instanceId), [actionTarget, instanceId])
+  const supportsTorrentExport = useInstancesSupport(actionInstanceIds, "supportsTorrentExport")
+  const offer = transferShareOffer(selectedTorrents, effectiveSelectionCount, actionInstanceIds)
 
   const selectionBarVisible = selectionMode && effectiveSelectionCount > 0
 
-  const selectedTotalSize = useMemo(() => {
-    if (isAllSelected) {
-      const aggregateTotalSize = stats?.totalSize ?? 0
-
-      if (aggregateTotalSize <= 0) {
-        return 0
-      }
-
-      if (excludedFromSelectAll.size === 0) {
-        return aggregateTotalSize
-      }
-
-      const excludedSize = torrents.reduce((total, torrent) => {
-        if (excludedFromSelectAll.has(getSelectionIdentity(torrent))) {
-          return total + (torrent.size || 0)
-        }
-        return total
-      }, 0)
-
-      return Math.max(aggregateTotalSize - excludedSize, 0)
+  const totalSize = isAllSelected ? stats?.totalSize ?? 0 : 0
+  const excludedSize = useMemo(() => {
+    if (!isAllSelected || excludedFromSelectAll.size === 0) {
+      return 0
     }
-
-    return getTotalSize(selectedTorrents)
-  }, [isAllSelected, stats?.totalSize, excludedFromSelectAll, torrents, selectedTorrents, getSelectionIdentity])
-
+    return torrents.reduce((total, torrent) => excludedFromSelectAll.has(getSelectionIdentity(torrent)) ? total + (torrent.size || 0) : total, 0)
+  }, [isAllSelected, excludedFromSelectAll, torrents, getSelectionIdentity])
+  const selectedTotalSize = isAllSelected ? Math.max(totalSize - excludedSize, 0) : getTotalSize(selectedTorrents)
   const selectedFormattedSize = useMemo(() => formatBytes(selectedTotalSize), [selectedTotalSize])
 
-  const {
-    crossSeedWarning,
-    hasCrossSeedTag,
-    runAction,
-    handleExportWrapper,
-    handleDeleteWrapper,
-    handleTagsWrapper,
-    handleSetCategoryWrapper,
-    handleSetLocationWrapper,
-    handleTmmConfirmWrapper,
-    handleSetShareLimitWrapper,
-    handleSetSpeedLimitsWrapper,
-  } = useTorrentListActions({
-    instanceId,
-    actionTarget,
-    actions: torrentActions,
-    exportTorrents,
-    sort: backendSortField,
-    order: sortOrder,
-  })
+  const listFacts = useMemo<ListFacts>(() => ({
+    isCrossInstance: Boolean(isCrossInstanceEndpoint),
+    categories,
+    tags,
+    allowSubcategories,
+    capabilities,
+    sortField: backendSortField,
+    sortOrder,
+  }), [isCrossInstanceEndpoint, categories, tags, allowSubcategories, capabilities, backendSortField, sortOrder])
+
+  // The bulk action module reads this value for its dialogs and requests.
+  useEffect(() => {
+    publishSummary({ actionTarget, totalSize, excludedSize, instanceId, instanceIds, listFacts })
+  }, [publishSummary, actionTarget, totalSize, excludedSize, instanceId, instanceIds, listFacts])
+  useEffect(() => () => publishSummary(null), [publishSummary])
 
   // Virtual scrolling with consistent spacing
   const virtualizer = useVirtualizer({
     count: loadedRows,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => viewMode === "ultra-compact" ? 32 : viewMode === "compact" ? 86 : 180,
+    estimateSize: () => viewMode === "ultra-compact" ? 32 : viewMode === "compact" ? 90 : 180,
     overscan: 5,
-    // Provide a key to help with item tracking - use hash with index for uniqueness
+    // The list hook keeps one row per identity. A key without the index lets a card
+    // keep its place in the DOM when a group above it opens or closes.
     getItemKey: useCallback((index: number) => {
-      const torrent = torrents[index]
-      return torrent?.hash ? `${torrent.hash}-${index}` : `loading-${index}`
-    }, [torrents]),
+      const torrent = visibleRows[index]
+      return torrent ? getSelectionIdentity(torrent) : `loading-${index}`
+    }, [visibleRows, getSelectionIdentity]),
     // Optimized onChange handler following TanStack Virtual best practices
     onChange: (instance, sync) => {
       const vRows = instance.getVirtualItems();
@@ -1043,8 +1086,25 @@ export function TorrentCardsMobile({
 
   // Handlers
   const handleLongPress = useCallback((torrent: Torrent) => {
+    setSwipedKey(null)
     dispatchSelection({ type: "selectOnly", key: getSelectionIdentity(torrent) })
   }, [dispatchSelection, getSelectionIdentity])
+
+  const pickSwipeAction = useCallback((bulkPick: BulkActionPick) => {
+    pick(bulkPick)
+    // The delete dialog reads the card as its Action target until it closes.
+    if (bulkPick.action !== "delete") {
+      setSwipedKey(null)
+    }
+  }, [pick])
+
+  // A touch outside the card that shows its swipe actions closes it. In the list, that touch is no tap.
+  const closeSwipedCard = (e: PointerEvent<HTMLElement>) => {
+    swallowListClick.current = false
+    if (swipedKey === null || (e.target as Element).closest("[data-swipe-open]")) return
+    swallowListClick.current = parentRef.current?.contains(e.target as Node) ?? false
+    setSwipedKey(null)
+  }
 
   const handleSelect = useCallback((key: string, selected: boolean) => {
     dispatchSelection({ type: "tick", keys: [key], checked: selected })
@@ -1054,15 +1114,10 @@ export function TorrentCardsMobile({
     dispatchSelection(selectAllButtonEvent(selection, totalCount))
   }, [dispatchSelection, selection, totalCount])
 
-  const handleBulkAction = useCallback((action: TorrentAction, options?: { enable?: boolean }) => {
-    runAction(action, options)
+  const pickBulkAction = useCallback((bulkPick: BulkActionPick) => {
+    pick(bulkPick)
     setShowActionsSheet(false)
-  }, [runAction])
-
-  const handleExport = () => {
-    handleExportWrapper()
-    setShowActionsSheet(false)
-  }
+  }, [pick])
 
   const { isFilteringCrossSeeds, filterCrossSeeds } = useCrossSeedFilter({
     instanceId,
@@ -1075,8 +1130,6 @@ export function TorrentCardsMobile({
   const stateUnknownForSelection = isAllSelected && selectedTorrents.length < effectiveSelectionCount
 
   const handleClearSearch = useCallback(() => {
-    setGlobalFilter("")
-
     if (routeSearch && Object.prototype.hasOwnProperty.call(routeSearch, "q")) {
       const next = { ...(routeSearch || {}) }
       delete next.q
@@ -1084,13 +1137,8 @@ export function TorrentCardsMobile({
     }
   }, [navigate, routeSearch])
 
-  const handleClearSearchAndClose = useCallback(() => {
-    handleClearSearch()
-    setShowSearchModal(false)
-  }, [handleClearSearch])
-
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden" onPointerDownCapture={closeSwipedCard}>
       {/* Header with stats */}
       <div className="sticky top-0 z-40 bg-background">
         {/* Stats bar - swapped for the selection header in selection mode so the list doesn't shift */}
@@ -1126,6 +1174,11 @@ export function TorrentCardsMobile({
                 t("statusBar.loadingTorrents")
               ) : totalCount === 0 ? (
                 t("mobileCards.noTorrentsFound")
+              ) : copyGroupsReady === false ? (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {t("copyGroups.grouping")}
+                </span>
               ) : (
                 <>
                   {hasLoadedAll ? (
@@ -1133,7 +1186,7 @@ export function TorrentCardsMobile({
                   ) : isLoadingMore ? (
                     t("statusBar.loadingMore")
                   ) : (
-                    t("statusBar.torrentsLoaded", { loaded: loadedRows, total: totalCount })
+                    t("statusBar.torrentsLoaded", { loaded: torrents.length, total: totalCount })
                   )}
                 </>
               )}
@@ -1142,6 +1195,7 @@ export function TorrentCardsMobile({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
+                    ref={sortButtonRef}
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2 text-xs font-medium text-muted-foreground hover:text-foreground md:hidden"
@@ -1149,7 +1203,9 @@ export function TorrentCardsMobile({
                     {t("mobileCards.sort")}: {t(currentSortOption.labelKey)}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 max-h-100 overflow-y-auto">
+                <DropdownMenuContent align="end" className="w-56 max-h-100 overflow-y-auto">
+                  <DisplayProfileMenuItem onSelect={() => setShowProfileSheet(true)} />
+                  <CopyGroupMenuItems groupCopies={groupCopiesSetting} onToggleGroupCopies={toggleGroupCopies} />
                   <DropdownMenuLabel>{t("mobileCards.sortBy")}</DropdownMenuLabel>
                   <DropdownMenuRadioGroup
                     value={sortField}
@@ -1216,6 +1272,12 @@ export function TorrentCardsMobile({
       <div
         ref={parentRef}
         className="flex-1 overflow-y-auto overscroll-contain"
+        onClickCapture={(e) => {
+          if (swallowListClick.current) {
+            swallowListClick.current = false
+            e.stopPropagation()
+          }
+        }}
         style={{
           paddingBottom: selectionBarVisible? "calc(4rem + env(safe-area-inset-bottom))": isFooterVisible? "calc(8rem + env(safe-area-inset-bottom))": "env(safe-area-inset-bottom)",
         }}
@@ -1237,7 +1299,7 @@ export function TorrentCardsMobile({
           }}
         >
           {virtualItems.map(virtualItem => {
-            const torrent = torrents[virtualItem.index]
+            const torrent = visibleRows[virtualItem.index]
             const selectionIdentity = getSelectionIdentity(torrent)
             const isSelected = isAllSelected ? !excludedFromSelectAll.has(selectionIdentity) : selectedHashes.has(selectionIdentity)
 
@@ -1253,14 +1315,22 @@ export function TorrentCardsMobile({
                   height: `${virtualItem.size}px`,
                   transform: `translateY(${virtualItem.start}px)`,
                   paddingBottom: viewMode === "ultra-compact" ? "4px" : "8px",
+                  // A swipe moves the card and its actions past the sides of the row.
+                  overflow: "clip",
                 }}
               >
                 <SwipeableCard
                   torrent={torrent}
+                  copyGroup={describeCopyGroupRow(torrent)}
+                  sortedField={backendSortField}
+                  onToggleCopyGroup={toggleGroup}
                   isSelected={isSelected}
                   onSelect={(selected) => handleSelect(selectionIdentity, selected)}
                   onClick={() => onTorrentSelect?.(torrent)}
                   onLongPress={handleLongPress}
+                  swipeOpen={!selectionMode && swipedKey === selectionIdentity}
+                  onSwipeOpenChange={(open) => setCardSwiped(selectionIdentity, open)}
+                  onSwipeAction={pickSwipeAction}
                   incognitoMode={incognitoMode}
                   selectionMode={selectionMode}
                   speedUnit={speedUnit}
@@ -1302,7 +1372,7 @@ export function TorrentCardsMobile({
         >
           <div className="flex items-center justify-around h-16">
             <button
-              onClick={() => handleBulkAction(TORRENT_ACTIONS.RESUME)}
+              onClick={() => pickBulkAction({ action: "resume" })}
               className="flex flex-col items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-colors min-w-0 flex-1 text-muted-foreground hover:text-foreground"
             >
               <Play className="h-5 w-5" />
@@ -1310,7 +1380,7 @@ export function TorrentCardsMobile({
             </button>
 
             <button
-              onClick={() => handleBulkAction(TORRENT_ACTIONS.PAUSE)}
+              onClick={() => pickBulkAction({ action: "pause" })}
               className="flex flex-col items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-colors min-w-0 flex-1 text-muted-foreground hover:text-foreground"
             >
               <Pause className="h-5 w-5" />
@@ -1318,9 +1388,7 @@ export function TorrentCardsMobile({
             </button>
 
             <button
-              onClick={() => {
-                setShowCategoryDialog(true)
-              }}
+              onClick={() => pickBulkAction({ action: "setCategory" })}
               className="flex flex-col items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-colors min-w-0 flex-1 text-muted-foreground hover:text-foreground"
             >
               <Folder className="h-5 w-5" />
@@ -1328,9 +1396,7 @@ export function TorrentCardsMobile({
             </button>
 
             <button
-              onClick={() => {
-                setShowTagsDialog(true)
-              }}
+              onClick={() => pickBulkAction({ action: "setTags" })}
               className="flex flex-col items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-colors min-w-0 flex-1 text-muted-foreground hover:text-foreground"
             >
               <Tag className="h-5 w-5" />
@@ -1365,7 +1431,7 @@ export function TorrentCardsMobile({
                   <>
                     <Button
                       variant="outline"
-                      onClick={() => handleBulkAction(TORRENT_ACTIONS.FORCE_START, { enable: true })}
+                      onClick={() => pickBulkAction({ action: "forceStart", enable: true })}
                       className="justify-start"
                     >
                       <FastForward className="mr-2 h-4 w-4" />
@@ -1373,7 +1439,7 @@ export function TorrentCardsMobile({
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => handleBulkAction(TORRENT_ACTIONS.FORCE_START, { enable: false })}
+                      onClick={() => pickBulkAction({ action: "forceStart", enable: false })}
                       className="justify-start"
                     >
                       <FastForward className="mr-2 h-4 w-4" />
@@ -1386,7 +1452,7 @@ export function TorrentCardsMobile({
               return (
                 <Button
                   variant="outline"
-                  onClick={() => handleBulkAction(TORRENT_ACTIONS.FORCE_START, { enable: !allForceStarted })}
+                  onClick={() => pickBulkAction({ action: "forceStart", enable: !allForceStarted })}
                   className="justify-start"
                 >
                   <FastForward className="mr-2 h-4 w-4" />
@@ -1396,7 +1462,7 @@ export function TorrentCardsMobile({
             })()}
             <Button
               variant="outline"
-              onClick={() => handleBulkAction(TORRENT_ACTIONS.RECHECK)}
+              onClick={() => pickBulkAction({ action: "recheck" })}
               className="justify-start"
             >
               <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -1404,12 +1470,33 @@ export function TorrentCardsMobile({
             </Button>
             <Button
               variant="outline"
-              onClick={() => handleBulkAction(TORRENT_ACTIONS.REANNOUNCE)}
+              onClick={() => pickBulkAction({ action: "reannounce" })}
               className="justify-start"
             >
               <Radio className="mr-2 h-4 w-4" />
               {t("managementBar.reannounce")}
             </Button>
+            {/* Transfer and Share sit near the top, so the sheet shows them without a scroll. */}
+            {offer.transfer && (
+              <Button
+                variant="outline"
+                onClick={() => pickBulkAction({ action: "transfer" })}
+                className="justify-start"
+              >
+                <ArrowRightLeft className="mr-2 h-4 w-4" />
+                {t("contextMenu.transferToInstance")}
+              </Button>
+            )}
+            {offer.share && (
+              <Button
+                variant="outline"
+                onClick={() => pickBulkAction({ action: "share" })}
+                className="justify-start"
+              >
+                <Share2 className="mr-2 h-4 w-4" />
+                {t("contextMenu.shareWithSomeone")}
+              </Button>
+            )}
             {(() => {
               const { allEnabled: allSeqDlEnabled, mixed: seqDlMixed } = getToggleSelectionState(selectedTorrents.map(t => t.seq_dl), stateUnknownForSelection)
 
@@ -1418,7 +1505,7 @@ export function TorrentCardsMobile({
                   <>
                     <Button
                       variant="outline"
-                      onClick={() => handleBulkAction(TORRENT_ACTIONS.TOGGLE_SEQUENTIAL_DOWNLOAD, { enable: true })}
+                      onClick={() => pickBulkAction({ action: "toggleSequentialDownload", enable: true })}
                       className="justify-start"
                     >
                       <Blocks className="mr-2 h-4 w-4" />
@@ -1426,7 +1513,7 @@ export function TorrentCardsMobile({
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => handleBulkAction(TORRENT_ACTIONS.TOGGLE_SEQUENTIAL_DOWNLOAD, { enable: false })}
+                      onClick={() => pickBulkAction({ action: "toggleSequentialDownload", enable: false })}
                       className="justify-start"
                     >
                       <Blocks className="mr-2 h-4 w-4" />
@@ -1439,7 +1526,7 @@ export function TorrentCardsMobile({
               return (
                 <Button
                   variant="outline"
-                  onClick={() => handleBulkAction(TORRENT_ACTIONS.TOGGLE_SEQUENTIAL_DOWNLOAD, { enable: !allSeqDlEnabled })}
+                  onClick={() => pickBulkAction({ action: "toggleSequentialDownload", enable: !allSeqDlEnabled })}
                   className="justify-start"
                 >
                   <Blocks className="mr-2 h-4 w-4" />
@@ -1497,7 +1584,7 @@ export function TorrentCardsMobile({
             )}
             <Button
               variant="outline"
-              onClick={() => handleBulkAction(TORRENT_ACTIONS.INCREASE_PRIORITY)}
+              onClick={() => pickBulkAction({ action: "increasePriority" })}
               className="justify-start"
             >
               <ChevronUp className="mr-2 h-4 w-4" />
@@ -1505,7 +1592,7 @@ export function TorrentCardsMobile({
             </Button>
             <Button
               variant="outline"
-              onClick={() => handleBulkAction(TORRENT_ACTIONS.DECREASE_PRIORITY)}
+              onClick={() => pickBulkAction({ action: "decreasePriority" })}
               className="justify-start"
             >
               <ChevronDown className="mr-2 h-4 w-4" />
@@ -1513,7 +1600,7 @@ export function TorrentCardsMobile({
             </Button>
             <Button
               variant="outline"
-              onClick={() => handleBulkAction(TORRENT_ACTIONS.TOP_PRIORITY)}
+              onClick={() => pickBulkAction({ action: "topPriority" })}
               className="justify-start"
             >
               <ChevronUp className="mr-2 h-4 w-4" />
@@ -1521,7 +1608,7 @@ export function TorrentCardsMobile({
             </Button>
             <Button
               variant="outline"
-              onClick={() => handleBulkAction(TORRENT_ACTIONS.BOTTOM_PRIORITY)}
+              onClick={() => pickBulkAction({ action: "bottomPriority" })}
               className="justify-start"
             >
               <ChevronDown className="mr-2 h-4 w-4" />
@@ -1535,10 +1622,7 @@ export function TorrentCardsMobile({
                   <>
                     <Button
                       variant="outline"
-                      onClick={() => {
-                        prepareTmmAction(true)
-                        setShowActionsSheet(false)
-                      }}
+                      onClick={() => pickBulkAction({ action: "toggleAutoTMM", enable: true })}
                       className="justify-start"
                     >
                       <Settings2 className="mr-2 h-4 w-4" />
@@ -1546,10 +1630,7 @@ export function TorrentCardsMobile({
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => {
-                        prepareTmmAction(false)
-                        setShowActionsSheet(false)
-                      }}
+                      onClick={() => pickBulkAction({ action: "toggleAutoTMM", enable: false })}
                       className="justify-start"
                     >
                       <Settings2 className="mr-2 h-4 w-4" />
@@ -1562,10 +1643,7 @@ export function TorrentCardsMobile({
               return (
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    prepareTmmAction(!allEnabled)
-                    setShowActionsSheet(false)
-                  }}
+                  onClick={() => pickBulkAction({ action: "toggleAutoTMM", enable: !allEnabled })}
                   className="justify-start"
                 >
                   {allEnabled ? (
@@ -1584,10 +1662,7 @@ export function TorrentCardsMobile({
             })()}
             <Button
               variant="outline"
-              onClick={() => {
-                setShowShareLimitDialog(true)
-                setShowActionsSheet(false)
-              }}
+              onClick={() => pickBulkAction({ action: "setShareLimit" })}
               className="justify-start"
             >
               <Sprout className="mr-2 h-4 w-4" />
@@ -1595,10 +1670,7 @@ export function TorrentCardsMobile({
             </Button>
             <Button
               variant="outline"
-              onClick={() => {
-                setShowSpeedLimitDialog(true)
-                setShowActionsSheet(false)
-              }}
+              onClick={() => pickBulkAction({ action: "setSpeedLimits" })}
               className="justify-start"
             >
               <Gauge className="mr-2 h-4 w-4" />
@@ -1606,19 +1678,16 @@ export function TorrentCardsMobile({
             </Button>
             <Button
               variant="outline"
-              onClick={() => {
-                prepareLocationAction()
-                setShowActionsSheet(false)
-              }}
+              onClick={() => pickBulkAction({ action: "setLocation" })}
               className="justify-start"
             >
               <FolderOpen className="mr-2 h-4 w-4" />
               {t("managementBar.setLocation")}
             </Button>
-            {(capabilities?.supportsTorrentExport ?? true) && (
+            {supportsTorrentExport && (
               <Button
                 variant="outline"
-                onClick={handleExport}
+                onClick={() => pickBulkAction({ action: "export" })}
                 disabled={isExporting}
                 className="justify-start"
               >
@@ -1628,10 +1697,7 @@ export function TorrentCardsMobile({
             )}
             <Button
               variant="destructive"
-              onClick={() => {
-                prepareDeleteAction()
-                setShowActionsSheet(false)
-              }}
+              onClick={() => pickBulkAction({ action: "delete" })}
               className="justify-start !bg-destructive !text-destructive-foreground"
             >
               <Trash2 className="mr-2 h-4 w-4" />
@@ -1641,175 +1707,7 @@ export function TorrentCardsMobile({
         </SheetContent>
       </Sheet>
 
-      {/* Delete confirmation dialog */}
-      <DeleteTorrentDialog
-        open={showDeleteDialog}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeDeleteDialog()
-            crossSeedWarning.reset()
-          }
-        }}
-        count={effectiveSelectionCount}
-        totalSize={selectedTotalSize}
-        formattedSize={selectedFormattedSize}
-        deleteFiles={deleteFiles}
-        onDeleteFilesChange={setDeleteFiles}
-        isDeleteFilesLocked={isDeleteFilesLocked}
-        onToggleDeleteFilesLock={toggleDeleteFilesLock}
-        deleteCrossSeeds={deleteCrossSeeds}
-        onDeleteCrossSeedsChange={setDeleteCrossSeeds}
-        showBlockCrossSeeds={hasCrossSeedTag}
-        blockCrossSeeds={blockCrossSeeds}
-        onBlockCrossSeedsChange={setBlockCrossSeeds}
-        crossSeedWarning={crossSeedWarning}
-        onConfirm={handleDeleteWrapper}
-        isAllSelected={isAllSelected}
-        previewTorrents={selectedTorrents}
-      />
-
-      {/* Tags dialog */}
-      <TagEditorDialog
-        open={showTagsDialog}
-        onOpenChange={setShowTagsDialog}
-        availableTags={availableTags || []}
-        selectedTorrents={selectedTorrents}
-        hashCount={effectiveSelectionCount}
-        selectionRequest={{ instanceId, ...actionTargetRequest(actionTarget) }}
-        onConfirm={handleTagsWrapper}
-        isPending={isPending}
-      />
-
-      {/* Category dialog */}
-      <SetCategoryDialog
-        open={showCategoryDialog}
-        onOpenChange={setShowCategoryDialog}
-        availableCategories={availableCategories}
-        hashCount={effectiveSelectionCount}
-        onConfirm={handleSetCategoryWrapper}
-        isPending={isPending}
-        initialCategory={getCommonCategory(selectedTorrents)}
-        useSubcategories={allowSubcategories}
-      />
-
-      {/* Share Limits Dialog */}
-      <ShareLimitDialog
-        open={showShareLimitDialog}
-        onOpenChange={setShowShareLimitDialog}
-        hashCount={effectiveSelectionCount}
-        torrents={selectedTorrents}
-        supportsShareLimitsAction={capabilities?.supportsShareLimitsAction}
-        supportsShareLimitsMode={capabilities?.supportsShareLimitsMode}
-        onConfirm={handleSetShareLimitWrapper}
-        isPending={isPending}
-      />
-
-      {/* Speed Limits Dialog */}
-      <SpeedLimitsDialog
-        open={showSpeedLimitDialog}
-        onOpenChange={setShowSpeedLimitDialog}
-        hashCount={effectiveSelectionCount}
-        torrents={selectedTorrents}
-        onConfirm={handleSetSpeedLimitsWrapper}
-        isPending={isPending}
-      />
-
-      {/* Set Location Dialog */}
-      <SetLocationDialog
-        open={showLocationDialog}
-        onOpenChange={setShowLocationDialog}
-        hashCount={effectiveSelectionCount}
-        initialLocation={getCommonSavePath(selectedTorrents)}
-        onConfirm={handleSetLocationWrapper}
-        isPending={isPending}
-        instanceId={instanceId}
-        capabilities={capabilities}
-      />
-
-      {/* TMM Confirmation Dialog */}
-      <TmmConfirmDialog
-        open={showTmmDialog}
-        onOpenChange={setShowTmmDialog}
-        count={effectiveSelectionCount}
-        enable={pendingTmmEnable}
-        onConfirm={handleTmmConfirmWrapper}
-        isPending={isPending}
-      />
-
-      {/* Location Warning Dialog */}
-      <LocationWarningDialog
-        open={showLocationWarningDialog}
-        onOpenChange={setShowLocationWarningDialog}
-        count={effectiveSelectionCount}
-        onConfirm={proceedToLocationDialog}
-        isPending={isPending}
-      />
-
-      {/* Search Modal */}
-      <Dialog open={showSearchModal} onOpenChange={setShowSearchModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("mobileCards.searchModal.title")}</DialogTitle>
-            <DialogDescription>
-              {t("mobileCards.searchModal.description")}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder={t("mobileCards.searchModal.placeholder")}
-                value={globalFilter}
-                onChange={(e) => setGlobalFilter(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    setShowSearchModal(false)
-                  } else if (e.key === "Escape") {
-                    handleClearSearch()
-                    setShowSearchModal(false)
-                  }
-                }}
-                className={`w-full pl-9 ${globalFilter ? "ring-1 ring-primary/50" : ""
-                } ${globalFilter && /[*?[\]]/.test(globalFilter) ? "ring-1 ring-primary" : ""}`}
-                autoFocus
-              />
-              {globalFilter && (
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-sm transition-colors"
-                  onClick={handleClearSearch}
-                  aria-label={t("common:header.clearSearch")}
-                >
-                  <X className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-              )}
-            </div>
-
-            <div className="space-y-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-semibold">{t("common:header.smartSearchTitle")}</p>
-                  <ul className="space-y-1 ml-2">
-                    <li>• <strong>{t("common:header.smartSearchGlob")}</strong> {t("mobileCards.searchModal.globExamples")}</li>
-                    <li>• <strong>{t("common:header.smartSearchFuzzy")}</strong> {t("common:header.smartSearchFuzzyExample")}</li>
-                    <li>• {t("common:header.smartSearchFields")}</li>
-                    <li>• {t("mobileCards.searchModal.autoSearches")}</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="sm:justify-between">
-            <Button variant="outline" onClick={handleClearSearchAndClose}>
-              {t("mobileCards.clear")}
-            </Button>
-            <Button onClick={() => setShowSearchModal(false)}>
-              {t("mobileCards.done")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DisplayProfileSheet open={showProfileSheet} onOpenChange={setShowProfileSheet} returnFocusRef={sortButtonRef} />
 
       {/* Add torrent dialog */}
       {instanceId > 0 && (
@@ -1831,14 +1729,6 @@ export function TorrentCardsMobile({
           style={{ bottom: "calc(4rem + env(safe-area-inset-bottom))" }}
         >
           <div className="flex items-center justify-around h-14 px-2">
-            <button
-              onClick={() => setShowSearchModal(true)}
-              className="flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 text-xs font-medium transition-colors min-w-0 flex-1 text-muted-foreground hover:text-foreground active:scale-95"
-            >
-              <Search className="h-5 w-5" />
-              <span className="truncate text-[10px]">{t("common:actions.search")}</span>
-            </button>
-
             <button
               onClick={() => setIncognitoMode(!incognitoMode)}
               className="flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 text-xs font-medium transition-colors min-w-0 flex-1 text-muted-foreground hover:text-foreground active:scale-95"
@@ -1899,16 +1789,10 @@ export function TorrentCardsMobile({
         </div>
       )}
 
-      {/* Scroll to top button - only on mobile */}
-      <div className="sm:hidden">
-        <ScrollToTopButton
-          scrollContainerRef={parentRef}
-          className={cn(
-            "right-8 z-[60]",
-            selectionBarVisible? "bottom-[calc(5rem+env(safe-area-inset-bottom))]": isFooterVisible? "bottom-[calc(8.5rem+env(safe-area-inset-bottom))]": "bottom-[calc(1.5rem+env(safe-area-inset-bottom))]"
-          )}
-        />
-      </div>
+      <ScrollToTopButton
+        scrollContainerRef={parentRef}
+        extraBottomBarsRem={selectionBarVisible ? 4 : !selectionMode && isFooterVisible ? 3.5 : 0}
+      />
     </div>
   )
 }

@@ -6,13 +6,17 @@ package releases
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/autobrr/go-cache/ttlcache"
 	"github.com/autobrr/rls"
+	"github.com/autobrr/rls/taginfo"
 
 	"github.com/autobrr/qui/pkg/stringutils"
 )
@@ -32,6 +36,9 @@ var hdrTagMatchers = []struct {
 
 var trailingTokenRegexCache sync.Map
 
+// releaseBuilder builds a release from its tags as rls.ParseString does.
+var releaseBuilder = rls.NewTagBuilder().Init(taginfo.All())
+
 // Parser caches rls parsing results so we do not repeatedly parse the same release names.
 //
 // github.com/autobrr/rls is the autobrr fork: fix a parse bug there and bump go.mod.
@@ -42,7 +49,6 @@ type Parser struct {
 	keyNormalizer *stringutils.Normalizer[string, string]
 }
 
-// NewParser returns a parser with the provided TTL for cached entries.
 func NewParser(ttl time.Duration) *Parser {
 	cache := ttlcache.New[string, *rls.Release](
 		ttlcache.SetDefaultTTL(ttl))
@@ -52,7 +58,6 @@ func NewParser(ttl time.Duration) *Parser {
 	}
 }
 
-// NewDefaultParser returns a parser using the default TTL.
 func NewDefaultParser() *Parser {
 	return NewParser(defaultParserTTL)
 }
@@ -61,7 +66,8 @@ func NewDefaultParser() *Parser {
 // leaks a ttlcache goroutine.
 var DefaultParser = NewDefaultParser()
 
-// Parse returns the parsed release metadata for name.
+// Parse returns the parsed release metadata for name. A KG listing reads as
+// the release in its bracketed download name.
 func (p *Parser) Parse(name string) *rls.Release {
 	if p == nil {
 		return &rls.Release{}
@@ -82,12 +88,42 @@ func (p *Parser) Parse(name string) *rls.Release {
 	if cached, ok := p.cache.Get(key); ok {
 		return cached
 	}
+	if release := p.listingRelease(key); release != nil {
+		p.cache.Set(key, release, ttlcache.DefaultTTL)
+		return release
+	}
 
-	release := rls.ParseString(key)
+	// The cache keeps each release, so its tag list gets the exact size.
+	tags, end := rls.ParseTagsString(key)
+	release := releaseBuilder.Build(slices.Clone(tags), end)
 	enrichReleaseHDR(key, &release)
+	enrichUHDWebSource(&release)
 	enrichEpisodeRange(&release)
 	p.cache.Set(key, &release, ttlcache.DefaultTTL)
 	return &release
+}
+
+// enrichUHDWebSource reads the web source of a name such as
+// "UHD.AMZN.WEB-DL". rls gives "UHD.BluRay" for a UHD tag that another tag
+// separates from its web source.
+func enrichUHDWebSource(release *rls.Release) {
+	if release.Source != "UHD.BluRay" {
+		return
+	}
+	bareUHD := false
+	for _, tag := range release.Tags() {
+		if !tag.Is(rls.TagTypeSource) {
+			continue
+		}
+		if strings.EqualFold(fmt.Sprintf("%o", tag), "UHD") {
+			bareUHD = true
+			continue
+		}
+		if source := tag.Normalize(); bareUHD && strings.HasPrefix(strings.ToUpper(source), "WEB") {
+			release.Source = "UHD." + source
+		}
+		return
+	}
 }
 
 // enrichEpisodeRange turns a multi-episode release such as "S00E02-E05" into a
@@ -203,8 +239,6 @@ func shouldScanRawHDR(release *rls.Release) bool {
 	return false
 }
 
-// NormalizeHDRTags deduplicates and canonicalizes a slice of HDR tag strings.
-// HDR10 is subsumed by HDR10+ when both are present. Returns nil for empty input.
 func NormalizeHDRTags(tags []string) []string {
 	seen := make(map[string]struct{}, len(tags))
 	hasHDR10Plus := false
@@ -332,15 +366,15 @@ func trailingTokenRegexes(token string) []*regexp.Regexp {
 	return actual.([]*regexp.Regexp)
 }
 
-// CanonicalHDRTag maps an HDR tag string to its canonical form.
-// For example, "HDR10P", "HDR10PLUS", and "HDR10+" all map to "HDR10+".
+var hdrTagSeparators = strings.NewReplacer(" ", "", ".", "", "_", "", "-", "")
+
 func CanonicalHDRTag(tag string) string {
 	upper := strings.ToUpper(strings.TrimSpace(tag))
 	if upper == "" {
 		return ""
 	}
 
-	key := strings.NewReplacer(" ", "", ".", "", "_", "", "-", "").Replace(upper)
+	key := hdrTagSeparators.Replace(upper)
 
 	switch key {
 	case "DOVI", "DOLBYVISION", "DV":
@@ -358,7 +392,6 @@ func CanonicalHDRTag(tag string) string {
 	}
 }
 
-// Clear removes a cached entry.
 func (p *Parser) Clear(name string) {
 	if p == nil {
 		return
@@ -371,4 +404,48 @@ func (p *Parser) Clear(name string) {
 		return
 	}
 	p.cache.Delete(key)
+}
+
+// listingYear matches what a KG listing puts before its bracket: the site
+// title, the year, and the country, which can be empty.
+var listingYear = regexp.MustCompile(`\S (\d{4}) [^\d\[\]]*$`)
+
+// listingRelease reads a Prowlarr or Jackett KG listing,
+// "<site title> <year> <country> [<download name>]", as the release in the
+// dotted download name, because rls keeps the year and the country in the
+// title. Each word of the download name's title must be in the site title. A
+// download name without a year takes the year of the listing. It returns nil
+// for other names, such as a "[Multi-Subs]", "[ABCD1234]", or "2019 [H.264]"
+// tag.
+func (p *Parser) listingRelease(name string) *rls.Release {
+	rest, ok := strings.CutSuffix(name, "]")
+	if !ok {
+		return nil
+	}
+	title, inner, ok := strings.CutLast(rest, "[")
+	if !ok || !strings.Contains(inner, ".") || strings.ContainsFunc(inner, unicode.IsSpace) {
+		return nil
+	}
+	match := listingYear.FindStringSubmatchIndex(title)
+	if match == nil {
+		return nil
+	}
+	release := p.Parse(inner)
+	listing := titleWords(title[:match[2]])
+	words := titleWords(release.Title)
+	if len(words) == 0 || slices.ContainsFunc(words, func(word string) bool { return !slices.Contains(listing, word) }) {
+		return nil
+	}
+	if release.Year == 0 && release.Series == 0 {
+		withYear := *release
+		withYear.Year, _ = strconv.Atoi(title[match[2]:match[3]])
+		return &withYear
+	}
+	return release
+}
+
+func titleWords(name string) []string {
+	return strings.FieldsFunc(stringutils.NormalizeForMatching(name), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
 }

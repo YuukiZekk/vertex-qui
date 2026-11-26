@@ -120,18 +120,6 @@
     "skipIndividualEpisodesAutomationOff": "季度包自動組裝已關閉。本次執行不會搜尋季度包。",
     "maxAddedAgeLabel": "種子最長新增時間（天）",
     "maxAddedAgeDescription": "跳過新增時間超過該天數的種子。0 表示不限制。從未搜尋過某個種子的索引器始終包含在內。",
-    "categories": "分類",
-    "tags": "標籤",
-    "allCategoriesAll": "所有分類（留空表示全部）",
-    "allTagsAll": "所有標籤（留空表示全部）",
-    "selectInstanceToLoadCategories": "選擇一個實例以載入分類",
-    "selectInstanceToLoadTags": "選擇一個實例以載入標籤",
-    "categoriesLoadAfterInstance": "選擇實例後載入分類；您仍可手動輸入分類名稱。",
-    "allCategoriesIncluded": "所有分類都將包含在掃描中。",
-    "selectedCategoriesScanned": "僅掃描已選擇的 {{count}} 個分類。",
-    "tagsLoadAfterInstance": "選擇實例後載入標籤；您仍可手動輸入標籤。",
-    "allTagsIncluded": "所有標籤都將包含在掃描中。",
-    "selectedTagsScanned": "僅掃描已選擇的 {{count}} 個標籤。",
     "sourceInstance": "源實例",
     "selectAnInstance": "選擇一個實例",
     "addInstanceToSearch": "新增一個實例以搜尋您已做種的種子。",
@@ -193,6 +181,49 @@
     "cancelDialog": {
       "title": "取消做種庫掃描？",
       "description": "這會停止目前的做種庫掃描。已加入的交叉做種會保留，但不會再搜尋更多種子。"
+    },
+    "gazelleSummary": {
+      "line": "RED/OPS：{{sites}}",
+      "site": "{{name}}：已查詢 {{asked}}，相符 {{matched}}，失敗 {{failed}}",
+      "siteWithNotAsked": "{{counts}}，未查詢 {{notAsked}}（{{reasons}}）",
+      "reasonCount": "{{count}} {{reason}}",
+      "reasons": {
+        "disabled": "已關閉",
+        "noApiKey": "無 API 金鑰",
+        "cooldown": "最近已搜尋",
+        "sourceSite": "來自該網站",
+        "alreadySeeded": "已在做種",
+        "notMusic": "不是音樂",
+        "other": "其他"
+      }
+    },
+    "schedule": {
+      "enableLabel": "依排程執行",
+      "enableHelp": "qui 每隔幾小時使用此卡片中已儲存的設定啟動一次排程執行。排程執行只搜尋最近新增的種子，從最新的開始，並在達到搜尋上限時停止。失敗的索引器仍保持待搜尋狀態，下一次排程執行會再次查詢它。「立即執行排程」會馬上啟動一次排程執行，並重新開始計時。",
+      "intervalLabel": "執行間隔（小時）",
+      "intervalHelp": "從一次排程執行開始到下一次排程執行開始的時間。qui 重新啟動後仍保留這段時間。",
+      "maxSearchesLabel": "每次執行的最大搜尋數",
+      "maxSearchesHelp": "當這麼多種子傳送過搜尋後，排程執行停止。被冷卻時間或篩選條件略過的種子不計入。剩餘的種子等待下一次執行。",
+      "maxAgeLabel": "只搜尋最近新增的種子（天）",
+      "maxAgeHelp": "排程執行會略過新增時間早於這麼多天的每個種子，對從未搜尋過它的索引器也是如此。「開始執行」不使用此限制。",
+      "runNow": "立即執行排程",
+      "runStarted": "排程執行已啟動",
+      "runAlreadyActive": "做種庫掃描已在執行。",
+      "nextRun": "下次排程執行：{{time}}",
+      "dueNow": "排程執行現在到期",
+      "dueAfterCurrentRun": "排程執行將在目前執行結束後開始",
+      "scheduledRunActive": "排程執行正在進行。"
+    },
+    "runKind": {
+      "scheduled": "排程",
+      "manual": "手動"
+    },
+    "stoppedAtLimit_other": "已在 {{limit}} 次搜尋的上限處停止。{{count}} 個種子等待下一次執行。",
+    "runFilters": {
+      "include": "包含：{{filters}}",
+      "exclude": "排除：{{filters}}",
+      "categories": "分類 {{list}}",
+      "tags": "標籤 {{list}}"
     }
   },
   "rules": {
@@ -201,7 +232,7 @@
     "hardlinkDescription": "為輔種建立硬連結或引用連結（寫時複製）檔案樹。每個實例可獨立配置。基礎目錄必須與實例的下載路徑位於同一檔案系統。",
     "reflinkNote": " 引用連結模式允許安全輔種包含額外/缺失檔案的種子。當存在額外檔案時，qui 會觸發重新檢查；如果低於閾值，種子將保持暫停狀態以供手動審查。",
     "crossSeedMode": "輔種模式",
-    "enableLocalFilesystem": "在實例設定中啟用「本機檔案系統存取」以使用硬連結或引用連結模式。",
+    "enableLocalFilesystem": "硬連結模式需要檔案系統寫入權限：請在實例設定中啟用「本機檔案系統存取」或設定 SSH 存取。引用連結模式需要「本機檔案系統存取」。",
     "regular": "一般",
     "regularDescription": "直接使用現有檔案。速度快，無額外磁碟空間佔用。",
     "hardlink": "硬連結",
@@ -218,7 +249,7 @@
     "fallbackToRegular": "出錯時回退到一般模式",
     "fallbackDescription": "如果 {{mode}} 失敗（例如不同檔案系統），則回退到使用現有檔案的一般模式。",
     "saveChanges": "儲存更改",
-    "noLocalAccess": "無本機存取權限",
+    "noLocalAccess": "無檔案系統寫入權限",
     "seasonPack": {
       "title": "季度包",
       "description": "當 autobrr 抓取季度包時，qui 會檢查您是否已有足夠的本機資料來注入它，然後讓 qBittorrent 下載仍然缺失的內容。",
@@ -416,7 +447,7 @@
     "settingsSaved": "設定已儲存",
     "failedToSaveSettings": "儲存設定失敗",
     "cannotEnableMode": "無法啟用 {{mode}} 模式",
-    "noLocalFilesystemAccess": "實例「{{name}}」未啟用本機檔案系統存取。",
+    "noLocalFilesystemAccess": "實例「{{name}}」無法使用此模式。硬連結模式需要本機或透過 SSH 的檔案系統寫入權限；引用連結模式需要「本機檔案系統存取」。",
     "baseDirRequired": "必須先設定基礎目錄。",
     "unknownError": "未知錯誤",
     "noIndexersConfigured": "未配置 Torznab 索引器",
@@ -463,6 +494,7 @@
       "applyFailed": "{{completedPrefix}}{{failed}} 個失敗 - 請檢視結果瞭解詳情",
       "applyCompletedUnavailable": "輔種請求已完成（詳情不可用）",
       "applyNoChanges": "未新增任何輔種",
+      "applyAlreadyInClient": "已在用戶端中",
       "applyCompletedPart": "，{{count}} 個已完成",
       "applyCompletedPrefix": "{{count}} 個已完成，"
     }
@@ -470,7 +502,8 @@
   "validation": {
     "minInterval": "最少 {{min}} 分鐘",
     "minIntervalSeconds": "最少 {{min}} 秒",
-    "minCooldown": "最少 {{min}} 分鐘"
+    "minCooldown": "最少 {{min}} 分鐘",
+    "atLeast": "最少為 {{min}}"
   },
   "blocklist": {
     "title": "輔種封鎖清單",
@@ -517,7 +550,7 @@
     "settings": "設定",
     "enabled": "已啟用",
     "disabled": "已停用",
-    "noLocalAccessWarning": "沒有 qBittorrent 實例啟用了本機檔案系統存取。請在實例設定中啟用以使用目錄掃描器。",
+    "noLocalAccessWarning": "沒有 qBittorrent 實例具有檔案系統存取權限。要使用目錄掃描器，請在實例設定中啟用「本機檔案系統存取」或設定 SSH 存取。",
     "scanDirectories": "掃描目錄",
     "scanDirectoriesDescription": "配置要掃描輔種內容的目錄。",
     "addDirectory": "新增目錄",
@@ -629,7 +662,7 @@
       "defaultCategory": "預設分類",
       "defaultCategoryHelp": "掃描目錄未覆蓋時，注入種子使用的分類。",
       "tags": "標籤",
-      "noLocalInstances": "沒有具有本機存取權限的 qBittorrent 實例",
+      "noLocalInstances": "沒有具有檔案系統存取權限的 qBittorrent 實例",
       "typeToAddCategory": "輸入以新增分類",
       "noCategory": "無分類",
       "typeToAddTags": "輸入以新增標籤",
@@ -650,6 +683,7 @@
       "enabledLabel": "已啟用",
       "instanceLabel": "目標 qBittorrent 實例",
       "selectInstance": "選擇實例",
+      "remoteNoIdentityNote": "qui 無法判斷此遠端實例上哪些檔案已在做種，因此會對每個檔案搜尋一次。",
       "intervalLabel": "掃描間隔（分鐘）",
       "intervalHelp": "最小：60 分鐘（1 小時）。預設：1440 分鐘（24 小時）。",
       "skipIndividualEpisodesLabel": "跳過單集",
@@ -664,7 +698,7 @@
       "typeToAddTags": "輸入以新增標籤",
       "tagsLoadError": "無法從 qBittorrent 載入標籤。您仍可輸入自訂值。",
       "regularModeTitle": "此實例已啟用一般模式",
-      "regularModeHelp": "要避免此風險，請在 Cross-Seed > 注入後 > 硬連結 / 引用連結模式中選擇<hardlink>硬連結</hardlink>或<reflink>引用連結</reflink>。請先在實例設定中啟用「本機檔案系統存取」。",
+      "regularModeHelp": "要避免此風險，請在輔種 > 注入後 > 硬連結 / 引用連結模式中選擇<hardlink>硬連結</hardlink>或<reflink>引用連結</reflink>。硬連結模式需要檔案系統寫入權限：請在實例設定中啟用「本機檔案系統存取」或設定 SSH 存取。引用連結模式需要「本機檔案系統存取」。",
       "regularModeAcknowledge": "我瞭解在媒體目錄中使用一般模式的風險",
       "cancel": "取消",
       "addButton": "新增目錄",

@@ -4,7 +4,10 @@
  */
 
 import i18n from "@/i18n"
-import { describe, expect, it } from "vitest"
+import type { Torrent } from "@/types"
+import { cleanup, render } from "@testing-library/react"
+import type { ReactElement } from "react"
+import { afterEach, describe, expect, it } from "vitest"
 
 import { createColumns, type TableViewMode } from "./TorrentTableColumns"
 
@@ -25,5 +28,83 @@ describe("icon columns", () => {
       { size: width, minSize: width, maxSize: width },
       { size: width, minSize: width, maxSize: width },
     ])
+  })
+})
+
+describe("reannounce column", () => {
+  afterEach(cleanup)
+
+  function reannounceCell(state: string, reannounce: number | undefined): string {
+    const column = createColumns({ incognitoMode: false }, i18n.getFixedT(null, "torrents"))
+      .find(col => "accessorKey" in col && col.accessorKey === "reannounce")!
+    const cell = column.cell as (ctx: { row: { original: Torrent } }) => ReactElement
+    return render(cell({ row: { original: { state, reannounce } as Torrent } })).container.textContent ?? ""
+  }
+
+  it("shows a dash when the row does not carry reannounce", () => {
+    expect(reannounceCell("uploading", undefined)).toBe("—")
+  })
+
+  it("shows a dash for a stopped torrent", () => {
+    expect(reannounceCell("stoppedUP", 0)).toBe("—")
+  })
+
+  it("shows now for 0 on an active torrent", () => {
+    expect(reannounceCell("uploading", 0)).toBe("now")
+  })
+
+  it("shows minutes for an active torrent", () => {
+    expect(reannounceCell("stalledUP", 840)).toBe("14m")
+  })
+})
+
+// regression: #3761
+describe("popularity and private columns", () => {
+  afterEach(cleanup)
+
+  function cellText(accessorKey: "popularity" | "private", original: Partial<Torrent>): string {
+    const column = createColumns({ incognitoMode: false }, i18n.getFixedT(null, "torrents"))
+      .find(col => "accessorKey" in col && col.accessorKey === accessorKey)!
+    const cell = column.cell as (ctx: { row: { original: Torrent } }) => ReactElement
+    return render(cell({ row: { original: original as Torrent } })).container.textContent ?? ""
+  }
+
+  it("shows a dash when the row does not carry popularity", () => {
+    expect(cellText("popularity", {})).toBe("—")
+  })
+
+  it("shows a popularity of 0 as a value", () => {
+    expect(cellText("popularity", { popularity: 0 })).toBe("0.00")
+  })
+
+  it("shows a dash when the row does not carry private", () => {
+    expect(cellText("private", {})).toBe("—")
+  })
+
+  it("shows the private value", () => {
+    expect(cellText("private", { private: true })).toBe("Yes")
+    cleanup()
+    expect(cellText("private", { private: false })).toBe("No")
+  })
+})
+
+describe("name column", () => {
+  afterEach(cleanup)
+
+  function nameCell(original: Partial<Torrent>): string {
+    const column = createColumns({ incognitoMode: false }, i18n.getFixedT(null, "torrents"))
+      .find(col => "accessorKey" in col && col.accessorKey === "name")!
+    const cell = column.cell as (ctx: { row: { original: Torrent } }) => ReactElement
+    return render(cell({ row: { original: { name: "Example.Show.S01E01-GRP", ...original } as Torrent } })).container.textContent ?? ""
+  }
+
+  it("shows the badge of a helper torrent", () => {
+    expect(nameCell({ qui_helper: "transfer" })).toBe("Transfer helperExample.Show.S01E01-GRP")
+    expect(nameCell({ qui_helper: "share" })).toBe("Share helperExample.Show.S01E01-GRP")
+  })
+
+  // The server sets qui_helper only from the helper registry, never from a tag.
+  it("shows no badge on a torrent that is no helper", () => {
+    expect(nameCell({ tags: "qui-transfer" })).toBe("Example.Show.S01E01-GRP")
   })
 })

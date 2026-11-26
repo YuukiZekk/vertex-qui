@@ -48,7 +48,16 @@ func (a *Adapter) Instances(ctx context.Context) ([]Instance, error) {
 // Torrents reads qui's cached torrent list; the cache syncs with qBittorrent when it is
 // more than 2 seconds old, so polling here does not add qBittorrent requests beyond that.
 func (a *Adapter) Torrents(ctx context.Context, instanceID int) ([]qbt.Torrent, error) {
-	return a.sync.GetAllTorrents(ctx, instanceID)
+	refs, err := a.sync.GetAllTorrentRefs(ctx, instanceID)
+	if err != nil {
+		return nil, err
+	}
+	// The refs are shared with qui's other readers, so brush gets its own copies.
+	torrents := make([]qbt.Torrent, len(refs))
+	for i, torrent := range refs {
+		torrents[i] = *torrent
+	}
+	return torrents, nil
 }
 
 // Transfer is an instance's all-time counters and current speeds, in bytes and

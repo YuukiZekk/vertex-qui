@@ -4,8 +4,10 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,8 +17,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/require"
 
+	"github.com/autobrr/qui/internal/api/ctxkeys"
 	"github.com/autobrr/qui/internal/config"
+	"github.com/autobrr/qui/internal/models"
 )
 
 func TestLogsHandler_GetLogSettings(t *testing.T) {
@@ -105,6 +110,59 @@ func TestLogsHandler_UpdateLogSettings_InvalidJSON(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", rec.Code)
+	}
+}
+
+func TestLogsHandler_UpdateLogSettings_Path(t *testing.T) {
+	logsWrite := &models.APIKey{Permissions: []models.Permission{{Area: models.AreaLogs, Level: models.LevelWrite}}}
+
+	tests := []struct {
+		name       string
+		key        *models.APIKey
+		file       string
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "an API key cannot change the path",
+			key:        logsWrite,
+			file:       "other.log",
+			wantStatus: http.StatusForbidden,
+			wantBody:   "API key not allowed; use the web UI",
+		},
+		{
+			name:       "a new path must end in .log",
+			file:       "other.txt",
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "log file path must end in .log",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, logDir := createTestConfigWithLogDir(t)
+			router := logsTestRouter(handler)
+
+			body, err := jsonv2.Marshal(map[string]string{"path": filepath.Join(logDir, tt.file)})
+			require.NoError(t, err)
+
+			ctx := t.Context()
+			if tt.key != nil {
+				ctx = context.WithValue(ctx, ctxkeys.APIKey, tt.key)
+			}
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequestWithContext(ctx, http.MethodPut, "/log-settings", bytes.NewReader(body)))
+
+			require.Equal(t, tt.wantStatus, rec.Code, rec.Body.String())
+			require.Equal(t, tt.wantBody, strings.TrimSpace(rec.Body.String()))
+
+			rec = httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/log-settings", http.NoBody))
+			var settings config.LogSettingsResponse
+			require.NoError(t, jsonv2.UnmarshalRead(rec.Body, &settings))
+			require.Equal(t, filepath.Join(logDir, "qui.log"), settings.Path)
+			require.Equal(t, "INFO", settings.Level)
+		})
 	}
 }
 

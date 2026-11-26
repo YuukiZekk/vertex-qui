@@ -3,29 +3,17 @@
   "card": {
     "status": {
       "disabled": "已禁用",
-      "enabled": "已启用",
       "connected": "已连接",
       "disconnected": "已断开"
     },
     "tooltips": {
-      "disableInstance": "禁用实例",
-      "enableInstance": "启用实例",
       "moveUp": "上移",
       "moveDown": "下移"
     },
     "actions": {
-      "edit": "编辑",
       "testConnection": "测试连接",
-      "delete": "删除"
-    },
-    "labels": {
-      "username": "用户名：",
-      "basicAuth": "基本认证：",
-      "tlsVerification": "TLS 验证：",
-      "tlsSkipped": "已跳过",
-      "tlsStrict": "严格",
-      "localFileAccess": "本地文件系统访问：",
-      "testingConnection": "正在测试连接..."
+      "delete": "删除",
+      "changeIcon": "更改图标"
     },
     "deleteDialog": {
       "title": "删除实例",
@@ -35,7 +23,6 @@
     },
     "toast": {
       "instanceDisabledTitle": "实例已禁用",
-      "testDisabledDescription": "请先启用实例，再测试连接。",
       "testSuccessTitle": "连接测试成功",
       "testSuccessDescription": "已成功连接到 qBittorrent 实例",
       "testFailedTitle": "连接测试失败",
@@ -56,7 +43,13 @@
     "passwordRequired": "需要密码",
     "decryptionDescription": "无法解密已保存的密码。这通常是因为会话密钥已更改。",
     "reenterPassword": "重新输入密码",
-    "recentErrors": "近期错误（{{count}}）"
+    "recentErrors": "近期错误（{{count}}）",
+    "errorTypes": {
+      "connection": "连接",
+      "authentication": "身份验证",
+      "ban": "封禁",
+      "api": "API"
+    }
   },
   "form": {
     "labels": {
@@ -88,30 +81,32 @@
     },
     "validation": {
       "nameRequired": "实例名称为必填项",
-      "basicAuthPasswordRequired": "启用基本认证时，基本认证密码为必填项"
+      "basicAuthPasswordRequired": "启用基本认证时，基本认证密码为必填项",
+      "usernameRequired": "必须填写用户名",
+      "passwordRequired": "必须填写密码",
+      "apiKeyRequired": "必须填写 API 密钥"
     },
     "buttons": {
-      "saving": "保存中...",
       "updateInstance": "更新实例",
-      "addInstance": "添加实例",
-      "cancel": "取消"
+      "addInstance": "添加实例"
     },
     "toast": {
-      "missingCredentialsTitle": "缺少凭据",
       "instanceUpdatedTitle": "实例已更新",
       "instanceUpdatedDescription": "实例更新成功。正在后台测试连接...",
-      "updateFailedTitle": "更新失败",
       "updateFailedDescription": "无法更新实例",
       "instanceCreatedTitle": "实例已创建",
       "instanceCreatedDescription": "实例创建成功。正在后台测试连接...",
-      "createFailedTitle": "创建失败",
       "createFailedDescription": "无法创建实例"
     },
     "authType": {
       "none": "无",
       "usernamePassword": "用户名和密码",
       "apiKey": "API 密钥"
-    }
+    },
+    "sshAfterSave": "保存后，可在实例设置中配置通过 SSH 访问该实例的文件。",
+    "addTitle": "添加实例",
+    "addDescription": "配置一个新的 qBittorrent 实例",
+    "editTitle": "编辑实例"
   },
   "settingsButton": {
     "tooltip": "实例设置"
@@ -150,7 +145,8 @@
         "downloads": "下载",
         "bittorrent": "BitTorrent",
         "rss": "RSS",
-        "webui": "WebUI"
+        "webui": "WebUI",
+        "ssh": "SSH"
       },
       "sections": {
         "instanceConfig": {
@@ -162,6 +158,10 @@
         },
         "seedingLimits": {
           "title": "做种限制"
+        },
+        "ssh": {
+          "title": "SSH 访问",
+          "description": "当 qui 与 qBittorrent 运行在不同机器上时，通过 SSH 访问此实例的文件"
         }
       }
     },
@@ -554,7 +554,9 @@
         "move": "移动",
         "externalProgram": "外部程序",
         "dryRun": "模拟运行",
-        "exportToInstance": "导出到实例"
+        "exportToInstance": "导出到实例",
+        "transferToInstance": "传输到实例",
+        "ruleSkipped": "规则未运行"
       },
       "shareLimit": {
         "global": "全局",
@@ -590,7 +592,8 @@
         "deleteLabelCondition": "条件",
         "exported_other": "已导出 {{count}} 个种子",
         "exportedDryRun_other": "将导出 {{count}} 个种子",
-        "exportFailed_other": "{{count}} 个种子导出失败"
+        "exportFailed_other": "{{count}} 个种子导出失败",
+        "transferredDryRun_other": "将传输 {{count}} 个种子"
       },
       "deleteDialog": {
         "title": "删除规则",
@@ -649,7 +652,9 @@
         "deletedActivityEntries": "已删除 {{count}} 条活动记录",
         "deleteActivityFailed": "删除活动失败"
       },
-      "exported": "已导出"
+      "exported": "已导出",
+      "transferStarted": "已开始",
+      "skipped": "已跳过"
     },
     "runWorkflowNow": {
       "action": "立即运行",
@@ -666,7 +671,8 @@
         "completedWithErrors": "“{{name}}”运行完成，但有错误。请查看活动日志。",
         "dryRunCompleted": "“{{name}}”的模拟运行已完成",
         "inProgress": "已有运行正在进行。请稍后再试。",
-        "failed": "运行工作流失败"
+        "failed": "运行工作流失败",
+        "skipped": "“{{name}}”未运行。请查看活动日志。"
       }
     },
     "workflowPreview": {
@@ -709,10 +715,8 @@
     "orphanScanOverview": {
       "title": "孤立项目扫描",
       "noInstancesDescription": "未配置实例。请在设置中添加实例以使用此服务。",
-      "tooltip": "查找磁盘上与 qBittorrent 中任何种子都不关联的文件。\n需要为每个实例启用本地文件系统访问。",
+      "tooltip": "查找磁盘上与 qBittorrent 中任何种子都不关联的文件。\n需要访问每个实例的文件。请在实例设置中启用“本地文件系统访问”或设置 SSH 访问。",
       "description": "扫描下载目录并识别孤立文件以进行清理。",
-      "noLocalAccess": "无本地访问权限",
-      "noLocalAccessTooltip": "qui 和 qBittorrent 必须运行在同一台机器上。在实例设置中启用\"本地文件系统访问\"以使用孤立项目扫描。",
       "remoteLimits": "在远程实例上删除和自动清理需要文件标识，只有服务器允许 qui 运行 GNU find 和 stat 时才能读取。",
       "remoteNoIdentity": "此远程实例不允许这样做，因此 qui 无法判断两个路径是否指向同一文件，可通过第二个路径访问的文件（例如通过 bind mount）即使正被种子使用，也可能出现在列表中。此处的扫描只能预览和导出，不能删除。",
       "on": "开",
@@ -735,6 +739,8 @@
       "viewPreview": "查看预览",
       "recentScans": "近期扫描",
       "scannedPaths": "选定的扫描路径（{{total}}）",
+      "scanPathsLoading": "正在加载扫描路径…",
+      "scanPathsLoadFailed": "无法加载扫描路径",
       "zeroOrphans": "0 个孤立项目",
       "deletedStats": "已删除 {{deleted}} · {{size}}",
       "deletedFiles_other": "{{count}} 个文件",
@@ -763,7 +769,9 @@
         "cancelFailed": "取消失败"
       },
       "errorMessage": "错误信息",
-      "scanPaths": "扫描路径"
+      "scanPaths": "扫描路径",
+      "noFilesystemAccess": "无文件系统访问权限",
+      "noFilesystemAccessTooltip": "孤立项目扫描需要访问此实例的文件。请在实例设置中启用“本地文件系统访问”或设置 SSH 访问。"
     },
     "orphanScanPreview": {
       "title": "孤立项目预览",
@@ -934,7 +942,9 @@
         "external_program": "外部程序",
         "auto_managed": "自动管理",
         "dry_run_no_match": "模拟运行（无匹配）",
-        "exported_to_instance": "导出到实例"
+        "exported_to_instance": "导出到实例",
+        "transferred_to_instance": "传输到实例",
+        "rule_skipped": "规则未运行"
       }
     },
     "reannounceOverview": {
@@ -1110,6 +1120,11 @@
         "skipChecking": "跳过校验",
         "addPaused": "以暂停状态添加"
       },
+      "transfer": {
+        "title": "传输到实例",
+        "description": "将每个匹配的种子连同文件移到目标实例，并在删除任何内容之前核实副本。传输页面会显示每次传输。",
+        "remove": "移除“传输到实例”"
+      },
       "priority": {
         "title": "种子优先级",
         "description": "控制种子的处理顺序。",
@@ -1133,6 +1148,7 @@
         "notSupportedForScoreMultiplier": "不支持得分乘数"
       },
       "conditionsLabel": "条件（可选）",
+      "mixedActionConditions": "此工作流中的每个操作都有各自的条件。qui 现在每个工作流只使用一个条件。保存后，所有操作都将使用上方的条件。要保留其他条件，请先为每个条件创建一个工作流。",
       "actions": {
         "title": "操作",
         "addAction": "添加操作",
@@ -1151,7 +1167,8 @@
         "category": "分类",
         "move": "移动",
         "externalProgram": "执行外部程序",
-        "exportToInstance": "导出到实例"
+        "exportToInstance": "导出到实例",
+        "transferToInstance": "传输到实例"
       },
       "option": {
         "noChange": "不更改",
@@ -1246,19 +1263,38 @@
       "freeSpace": {
         "title": "可用空间来源",
         "aria": "关于可用空间来源",
-        "description": "选择从哪里读取可用空间。默认使用 qBittorrent 报告的可用空间。使用\"服务器路径\"以检查特定磁盘或挂载点的可用空间。",
+        "description": "选择从哪里读取可用空间。默认使用 qBittorrent 报告的可用空间。使用\"服务器路径\"以检查特定磁盘或挂载点的可用空间。\"qBittorrent 主机上的路径\"直接询问 qBittorrent，需要 qBittorrent 5.3。",
         "selectSource": "选择来源",
         "defaultSource": "默认（qBittorrent）",
         "pathSource": "服务器路径",
         "pathSourceWindowsUnsupported": "服务器路径（Windows 不支持）",
-        "pathSourceLocalAccessRequired": "服务器路径（需要本地访问权限）",
+        "qbitPathSource": "qBittorrent 主机上的路径",
+        "qbitPathSourceUnsupported": "qBittorrent 主机上的路径（需要 qBittorrent 5.3）",
         "pathPlaceholder": "/mnt/downloads",
         "pathHelp": "输入要检查可用空间的路径（例如挂载点）",
+        "qbitPathHelp": "输入 qBittorrent 主机上的路径。可用空间由 qBittorrent 测量，qui 无需访问该磁盘。",
         "errors": {
           "unsupportedWindows": "Windows 不支持基于路径的可用空间来源。",
-          "localAccessRequired": "基于路径的可用空间来源需要本地文件系统访问权限。",
-          "pathRequired": "使用\"服务器路径\"时，路径为必填项。"
-        }
+          "qbitPathUnsupported": "此实例的版本早于 qBittorrent 5.3，无法报告某个路径的可用空间。",
+          "pathRequired": "使用\"服务器路径\"时，路径为必填项。",
+          "filesystemAccessRequired": "基于路径的可用空间来源需要本地或 SSH 文件系统访问权限。",
+          "allowanceRequired": "请输入大于 0 的允许空间。",
+          "allowanceAccessRequired": "允许空间来源需要本地文件系统访问权限，或带 shell 的 SSH 访问权限。"
+        },
+        "pathSourceFilesystemAccessRequired": "服务器路径（需要本地或 SSH 访问）",
+        "allowanceSource": "路径上的允许空间",
+        "allowanceSourceWindowsUnsupported": "路径上的允许空间（Windows 不支持）",
+        "allowanceSourceAccessRequired": "路径上的允许空间（需要本地访问，或带 shell 的 SSH 访问）",
+        "allowanceLabel": "允许空间",
+        "allowancePathLabel": "要统计的文件夹",
+        "allowanceUnitAria": "允许空间单位",
+        "allowanceHelp": "按服务商使用的单位输入套餐允许使用的空间。qui 会减去该路径下文件的大小。多数服务商按 1000 进位（{{decimalUnit}}），而不是 1024（{{binaryUnit}}），两者相差约 9%。",
+        "allowanceUnits": {
+          "MB": "MB",
+          "GB": "GB",
+          "TB": "TB"
+        },
+        "allowancePathHelp": "例如你的主目录"
       },
       "grouping": {
         "title": "分组条件组",
@@ -1353,8 +1389,7 @@
       "enableDryRunPrompt": {
         "title": "启用模拟运行？",
         "description": "模拟运行会模拟所有操作而不做任何实际更改。你可以在活动日志中查看受影响的种子。",
-        "enableWithout": "不启用模拟运行",
-        "enableWith": "启用模拟运行"
+        "saveAndEnable": "保存并启用"
       },
       "customGroup": {
         "title": "添加自定义分组",
@@ -1403,7 +1438,9 @@
           "moved": "移动",
           "externalProgram": "外部程序",
           "noMatches": "无匹配",
-          "exportedToInstance": "导出到实例"
+          "exportedToInstance": "导出到实例",
+          "transferredToInstance": "传输到实例",
+          "ruleSkipped": "规则未运行"
         },
         "actionFallback": "未知操作（{{action}}）",
         "summary": {
@@ -1448,8 +1485,8 @@
         "switchedDeleteModeForFreeSpace": "已切换到\"移除并清除文件\"，因为可用空间条件需要实际释放磁盘空间",
         "switchedIntervalForFreeSpace": "已切换到 5 分钟间隔，因为可用空间删除有约 5 分钟的冷却时间",
         "pathSourceUnsupportedWindows": "Windows 不支持基于路径的可用空间来源。已切换到 qBittorrent 默认值。",
+        "qbitPathSourceUnsupported": "此实例无法报告某个路径的可用空间，已切换到默认来源。",
         "switchFreeSpaceSourceDefault": "将可用空间来源切换为默认（qBittorrent）",
-        "enableLocalAccessOrDefault": "请在实例设置中启用本地文件系统访问，或使用默认（qBittorrent）",
         "enterPathOrDefault": "请输入路径或将可用空间来源切换回默认（qBittorrent）",
         "addScoreRule": "得分排序至少需要一条得分规则",
         "fieldMultiplierInvalid": "字段乘数必须是有效数字",
@@ -1466,7 +1503,8 @@
         "groupIdInvalid": "分组 ID 只能包含字母、数字和下划线",
         "selectGroupKey": "请至少选择一个键",
         "groupExists": "已存在具有此 ID 的分组",
-        "customGroupAdded": "已添加自定义分组"
+        "customGroupAdded": "已添加自定义分组",
+        "setUpFilesystemAccessOrDefault": "请在实例设置中设置本地或 SSH 文件系统访问，或使用默认（qBittorrent）"
       },
       "trackerMatchInclude": "包含",
       "trackerMatchExclude": "排除"
@@ -1716,6 +1754,92 @@
       "testEmailQueued": "qBittorrent 已将测试邮件加入队列",
       "testEmailQueuedDescription": "qBittorrent 使用已保存的设置。请检查收件箱，并在 qBittorrent 日志中查看错误。",
       "testEmailFailed": "发送测试邮件失败"
+    },
+    "ssh": {
+      "localWins": "本地文件系统访问已开启，qui 会在本地读取此实例的文件，不使用这些 SSH 设置。",
+      "labels": {
+        "host": "SSH 主机",
+        "hostDescription": "存放此实例文件的机器的主机名或 IP 地址，不含协议和端口。更改主机或端口会丢弃已固定的主机密钥，下次测试将再次视为首次连接。",
+        "port": "端口",
+        "username": "用户名",
+        "privateKey": "私钥",
+        "privateKeyDescription": "不带密码短语的 OpenSSH 私钥。qui 会加密存储且不再显示。主机、端口或用户名更改后需要重新提供。"
+      },
+      "placeholders": {
+        "host": "seedbox.example.com",
+        "privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----",
+        "privateKeyStored": "已存储一个密钥。粘贴新密钥即可替换。"
+      },
+      "validation": {
+        "hostRequired": "SSH 主机为必填项",
+        "portRange": "端口必须在 1 到 65535 之间",
+        "usernameRequired": "用户名为必填项",
+        "keyRequired": "主机、端口或用户名更改后需要提供私钥"
+      },
+      "buttons": {
+        "save": "保存 SSH 设置",
+        "clear": "移除 SSH 访问",
+        "test": "测试连接",
+        "testing": "测试中...",
+        "confirm": "确认主机密钥",
+        "replace": "替换主机密钥"
+      },
+      "test": {
+        "title": "连接",
+        "pinnedAtRest": "主机密钥已固定。测试连接以查看主机允许的功能。",
+        "unpinnedAtRest": "尚未固定主机密钥。测试连接以确认主机的指纹。",
+        "saveFirst": "请先保存更改。测试使用已保存的凭据。"
+      },
+      "status": {
+        "unpinned": {
+          "title": "首次连接",
+          "text": "确认前请将此指纹与主机的指纹进行比对。之后的连接将拒绝任何其他密钥。"
+        },
+        "pinned": {
+          "title": "主机密钥已固定"
+        },
+        "mismatch": {
+          "title": "主机密钥已更改",
+          "text": "主机提供的密钥与已固定的不同。仅在预期发生变化时（例如服务器重装后）才替换固定的密钥。"
+        },
+        "pinUnreadable": {
+          "title": "固定的密钥无法读取",
+          "text": "无法解密已存储的固定密钥，通常是因为 qui 的加密密钥已更改。请替换后继续。",
+          "noKey": "主机未响应，因此没有可用于替换的密钥。"
+        },
+        "error": {
+          "title": "连接失败"
+        }
+      },
+      "fingerprint": {
+        "label": "指纹",
+        "pinned": "已固定",
+        "presented": "本次提供"
+      },
+      "probes": {
+        "tier": "级别：{{tier}}",
+        "tierSftp": "SFTP",
+        "tierExec": "SFTP + 命令执行",
+        "tierHint": "命令执行需要主机上有带 GNU find 和 stat 的 POSIX shell。否则 qui 仅使用 SFTP，无法读取文件标识。",
+        "sftp": "SFTP",
+        "statvfs": "可用空间（statvfs）",
+        "hardlink": "硬链接（hardlink@openssh.com）",
+        "limits": "limits 扩展",
+        "exec": "命令执行",
+        "gnuUserland": "GNU find 和 stat",
+        "yes": "可用",
+        "no": "不可用"
+      },
+      "replaceDialog": {
+        "title": "替换已固定的主机密钥？",
+        "description": "qui 今后将信任此主机本次提供的密钥，并拒绝已固定的密钥。",
+        "cancel": "取消",
+        "confirm": "替换"
+      },
+      "toast": {
+        "saved": "SSH 设置已保存",
+        "cleared": "已移除 SSH 访问"
+      }
     }
   },
   "backups": {
@@ -1963,6 +2087,126 @@
       "failedToDeleteBackup": "删除备份失败",
       "allBackupsDeleted": "所有备份已删除",
       "failedToDeleteBackups": "删除备份失败"
+    }
+  },
+  "access": {
+    "local": "本地文件",
+    "remote": "通过 SSH 访问文件",
+    "none": "无文件访问",
+    "limits": {
+      "noIdentity": "无文件标识：qui 无法判断两个路径是否指向同一文件。孤立项目扫描在此无法删除，且已存在的硬链接目标会阻止硬链接添加。",
+      "noReflinks": "远程实例不支持引用链接。",
+      "noHardlinkExtension": "无硬链接：服务器未声明支持 hardlink@openssh.com。交叉做种的硬链接添加在此会失败；若已开启“出错时回退到常规模式”，则以常规模式添加。"
+    }
+  },
+  "deleteHistory": {
+    "label": "同时删除其传输历史",
+    "description": "不勾选时，qui 会以该实例的名称保留历史。",
+    "failed": "实例已删除，但 qui 未能删除其全部历史。请在设置 > 统计中查看并删除其余部分。"
+  },
+  "list": {
+    "label": "实例",
+    "emptyTitle": "尚未配置任何实例",
+    "emptyDescription": "添加一个 qBittorrent 客户端，让 qui 管理它的种子。",
+    "tlsSkipped": "已关闭 TLS 验证",
+    "reorderFailed": "重新排序实例失败"
+  },
+  "publicPeerAddress": {
+    "label": "公网节点地址",
+    "noResolvedAddress": "qui 暂时无法确定地址",
+    "description": "其他 BitTorrent 客户端访问此 qBittorrent 所用的地址和端口，用于转移和分享。留空则每次使用时由 qui 从 qBittorrent 推断地址。当 qBittorrent 运行在 Docker 中或位于 NAT 之后时，请设置此项。"
+  },
+  "mark": {
+    "picker": {
+      "title": "{{name}} 的图标",
+      "previewCollapsed": "折叠的侧边栏",
+      "previewElsewhere": "其他位置",
+      "automatic": "自动",
+      "letters": "字母",
+      "color": "颜色",
+      "colorCurrent": "颜色 · {{color}}",
+      "reset": "恢复默认",
+      "description": "任选其一：自动、字母（仅折叠侧边栏显示）或图标。",
+      "iconHeading": "图标",
+      "arrowHint": "使用方向键在图标之间移动。"
+    },
+    "colors": {
+      "none": "无颜色",
+      "sky": "天蓝",
+      "violet": "紫罗兰",
+      "pink": "粉红",
+      "orange": "橙色",
+      "amber": "琥珀",
+      "lime": "青柠",
+      "emerald": "翠绿",
+      "teal": "青绿"
+    },
+    "iconGroups": {
+      "servers": "服务器",
+      "hardware": "硬件",
+      "places": "地点",
+      "media": "媒体",
+      "nature": "自然",
+      "symbols": "符号",
+      "objects": "物品"
+    },
+    "icons": {
+      "server": "服务器",
+      "nas": "NAS",
+      "tower": "塔式电脑",
+      "homeServer": "家庭服务器",
+      "seedbox": "Seedbox",
+      "container": "容器",
+      "cloud": "云",
+      "cloudDownload": "云下载",
+      "hardDrive": "硬盘",
+      "driveDownload": "下载硬盘",
+      "database": "数据库",
+      "cpu": "处理器",
+      "memory": "内存",
+      "router": "路由器",
+      "monitor": "显示器",
+      "laptop": "笔记本",
+      "house": "房子",
+      "building": "大楼",
+      "warehouse": "仓库",
+      "globe": "地球",
+      "mapPin": "地图标记",
+      "flag": "旗帜",
+      "mountain": "山",
+      "tent": "帐篷",
+      "film": "胶片",
+      "tv": "电视",
+      "music": "音乐",
+      "podcast": "播客",
+      "book": "书",
+      "audiobook": "有声书",
+      "gamepad": "游戏手柄",
+      "image": "图片",
+      "cat": "猫",
+      "dog": "狗",
+      "bird": "鸟",
+      "fish": "鱼",
+      "rabbit": "兔子",
+      "turtle": "乌龟",
+      "bug": "虫子",
+      "leaf": "树叶",
+      "star": "星星",
+      "heart": "爱心",
+      "flame": "火焰",
+      "zap": "闪电",
+      "rocket": "火箭",
+      "crown": "皇冠",
+      "shield": "盾牌",
+      "ghost": "幽灵",
+      "box": "盒子",
+      "archive": "归档",
+      "software": "软件",
+      "disc": "光盘",
+      "layers": "图层",
+      "anchor": "锚",
+      "magnet": "磁铁",
+      "satellite": "卫星"
     }
   }
 }

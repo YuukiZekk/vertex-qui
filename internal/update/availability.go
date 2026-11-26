@@ -7,8 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Masterminds/semver/v3"
 	"github.com/rs/zerolog"
+
+	"github.com/autobrr/qui/internal/buildinfo"
 )
 
 // Inputs are the facts that decide Availability. qui measures them once at startup.
@@ -21,7 +22,6 @@ type Inputs struct {
 	BinaryPath string
 }
 
-// Availability reports which of Self-update and Restart qui offers.
 type Availability struct {
 	SelfUpdate                  bool
 	SelfUpdateUnavailableReason string
@@ -47,7 +47,6 @@ func Decide(in Inputs) Availability {
 	}
 }
 
-// Measure reads the Availability inputs from the host and logs each one at DEBUG level.
 func Measure(log zerolog.Logger, disableSelfUpdate bool, version string) Inputs {
 	in := Inputs{
 		AppContainer: appContainer(func(path string) bool {
@@ -55,7 +54,7 @@ func Measure(log zerolog.Logger, disableSelfUpdate bool, version string) Inputs 
 			return err == nil
 		}, os.Getpid(), os.Getenv("KUBERNETES_SERVICE_HOST") != ""),
 		DisableSelfUpdate: disableSelfUpdate,
-		ReleaseVersion:    isReleaseVersion(version),
+		ReleaseVersion:    buildinfo.IsRelease(version),
 	}
 
 	binaryPath, err := resolveBinaryPath()
@@ -85,13 +84,6 @@ func Measure(log zerolog.Logger, disableSelfUpdate bool, version string) Inputs 
 // containerd where qui is not PID 1 (shareProcessNamespace, an init wrapper).
 func appContainer(exists func(path string) bool, pid int, kubernetes bool) bool {
 	return exists("/.dockerenv") || exists("/run/.containerenv") || pid == 1 || kubernetes
-}
-
-// isReleaseVersion rejects dev builds ("0.0.0-dev") and git describe builds
-// ("v1.30.0-30-gde99118d"): both parse as semver but carry a prerelease part.
-func isReleaseVersion(version string) bool {
-	v, err := semver.NewVersion(version)
-	return err == nil && v.Prerelease() == "" && v.Metadata() == ""
 }
 
 func resolveBinaryPath() (string, error) {

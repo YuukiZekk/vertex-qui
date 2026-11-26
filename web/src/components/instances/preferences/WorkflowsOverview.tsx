@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+import { getRuleSkipReason } from "@/components/query-builder/constants"
 import { CopyButton } from "@/components/ui/copy-button"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import {
@@ -58,7 +59,9 @@ import { cn, copyTextToClipboard, formatBytes, parseTrackerDomains } from "@/lib
 import {
   fromImportFormat,
   getRuleTagActions,
+  loadWorkflowNames,
   parseImportJSON,
+  toCopyInput,
   toDuplicateInput,
   toExportFormat,
   toExportJSON
@@ -172,7 +175,9 @@ function formatAction(action: AutomationActivity["action"]): string {
     moved: "move",
     external_program: "externalProgram",
     exported_to_instance: "exportToInstance",
+    transferred_to_instance: "transferToInstance",
     dry_run_no_match: "dryRun",
+    rule_skipped: "ruleSkipped",
   }
   const key = actionKeys[action]
   return key ? i18n.t(`preferences.workflowsOverview.actions.${key}`, { ns: "instances" }) : action
@@ -182,8 +187,10 @@ function getOutcomeBadgeText(event: AutomationActivity): string {
   const s = "preferences.workflowsOverview"
   const ns = "instances"
   if (event.outcome === "dry-run") return i18n.t(`${s}.dryRun`, { ns })
+  if (event.outcome === "skipped") return i18n.t(`${s}.skipped`, { ns })
   if (event.action === "external_program") return i18n.t(`${s}.${event.outcome === "success" ? "executed" : "failed"}`, { ns })
   if (event.action === "exported_to_instance") return i18n.t(`${s}.${event.outcome === "success" ? "exported" : "failed"}`, { ns })
+  if (event.action === "transferred_to_instance") return i18n.t(`${s}.${event.outcome === "success" ? "transferStarted" : "failed"}`, { ns })
   return i18n.t(`${s}.${event.outcome === "success" ? "removed" : "failed"}`, { ns })
 }
 
@@ -305,7 +312,7 @@ const runSummaryActions = new Set<AutomationActivity["action"]>([
 ])
 
 function isRunSummary(event: AutomationActivity): boolean {
-  if (event.action === "dry_run_no_match") return false
+  if (event.action === "dry_run_no_match" || event.action === "rule_skipped") return false
   if (event.hash !== "") return false
   return event.outcome === "dry-run"
     || (event.outcome === "success" && runSummaryActions.has(event.action))
@@ -470,6 +477,7 @@ export function WorkflowsOverview() {
         trackerPattern: rule.trackerPattern,
         conditions: rule.conditions,
         freeSpaceSource: rule.freeSpaceSource,
+        sortingConfig: rule.sortingConfig,
         enabled: true,
         dryRun: true,
         sortOrder: rule.sortOrder,
@@ -477,8 +485,12 @@ export function WorkflowsOverview() {
       }
       return api.dryRunAutomation(instanceId, payload)
     },
-    onSuccess: (_, { instanceId, rule }) => {
-      toast.success(t("preferences.workflowsOverview.toast.dryRunCompleted", { name: rule.name }))
+    onSuccess: (result, { instanceId, rule }) => {
+      if (result.activities?.some(activity => activity.action === "rule_skipped")) {
+        toast.warning(t("preferences.runWorkflowNow.toast.skipped", { name: rule.name }))
+      } else {
+        toast.success(t("preferences.workflowsOverview.toast.dryRunCompleted", { name: rule.name }))
+      }
       void queryClient.invalidateQueries({ queryKey: ["automation-activity", instanceId] })
     },
     onError: (error) => {
@@ -547,11 +559,14 @@ export function WorkflowsOverview() {
     },
   })
 
-  // Get existing workflow names for an instance
-  const getExistingNames = useCallback((instanceId: number): string[] => {
-    const queryData = queryClient.getQueryData<Automation[]>(["automations", instanceId])
-    return queryData?.map(r => r.name) ?? []
-  }, [queryClient])
+  const getExistingNames = useCallback(async (instanceId: number): Promise<string[] | null> => {
+    try {
+      return await loadWorkflowNames(queryClient, instanceId)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("preferences.workflowsOverview.toast.createFailed"))
+      return null
+    }
+  }, [queryClient, t])
 
   // Export workflow to clipboard
   const handleExport = useCallback(async (rule: Automation) => {
@@ -566,8 +581,9 @@ export function WorkflowsOverview() {
   }, [t])
 
   // Duplicate workflow in the same instance
-  const handleDuplicate = useCallback((instanceId: number, rule: Automation) => {
-    const existingNames = getExistingNames(instanceId)
+  const handleDuplicate = useCallback(async (instanceId: number, rule: Automation) => {
+    const existingNames = await getExistingNames(instanceId)
+    if (!existingNames) return
     const input = toDuplicateInput(rule, existingNames)
     createWorkflow.mutate(
       { instanceId, payload: input },
@@ -580,9 +596,10 @@ export function WorkflowsOverview() {
   }, [getExistingNames, createWorkflow, t])
 
   // Copy workflow to another instance
-  const handleCopyToInstance = useCallback((sourceRule: Automation, targetInstanceId: number) => {
-    const existingNames = getExistingNames(targetInstanceId)
-    const input = toDuplicateInput(sourceRule, existingNames)
+  const handleCopyToInstance = useCallback(async (sourceRule: Automation, targetInstanceId: number) => {
+    const existingNames = await getExistingNames(targetInstanceId)
+    if (!existingNames) return
+    const input = toCopyInput(sourceRule, existingNames)
     createWorkflow.mutate(
       { instanceId: targetInstanceId, payload: input },
       {
@@ -606,7 +623,7 @@ export function WorkflowsOverview() {
   }
 
   // Handle import
-  const handleImport = useCallback(() => {
+  const handleImport = useCallback(async () => {
     if (!importInstanceId) return
 
     const result = parseImportJSON(importJSON)
@@ -615,7 +632,8 @@ export function WorkflowsOverview() {
       return
     }
 
-    const existingNames = getExistingNames(importInstanceId)
+    const existingNames = await getExistingNames(importInstanceId)
+    if (!existingNames) return
     const input = fromImportFormat(result.data, existingNames)
 
     createWorkflow.mutate(
@@ -805,6 +823,7 @@ export function WorkflowsOverview() {
     success: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
     failed: "bg-destructive/10 text-destructive border-destructive/30",
     "dry-run": "bg-sky-500/10 text-sky-500 border-sky-500/20",
+    skipped: "bg-amber-500/10 text-amber-500 border-amber-500/20",
   }
 
   const actionClasses: Record<AutomationActivity["action"], string> = {
@@ -826,7 +845,9 @@ export function WorkflowsOverview() {
     external_program: "bg-teal-500/10 text-teal-500 border-teal-500/20",
     auto_managed: "bg-rose-500/10 text-rose-500 border-rose-500/20",
     exported_to_instance: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+    transferred_to_instance: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20",
     dry_run_no_match: "bg-slate-500/10 text-slate-500 border-slate-500/20",
+    rule_skipped: "bg-amber-500/10 text-amber-500 border-amber-500/20",
   }
 
   const openCreateDialog = (instanceId: number) => {
@@ -856,7 +877,7 @@ export function WorkflowsOverview() {
 
   return (
     <Card>
-      <CardHeader className="space-y-2">
+      <CardHeader>
         <div className="flex items-center gap-2">
           <CardTitle>{t("preferences.workflowsOverview.title")}</CardTitle>
           <Tooltip>
@@ -1260,9 +1281,17 @@ export function WorkflowsOverview() {
                                           <span className="font-medium text-sm block">
                                             {formatExportedToInstanceSummary(event.details, event.outcome)}
                                           </span>
+                                        ) : event.action === "transferred_to_instance" && event.hash === "" ? (
+                                          <span className="font-medium text-sm block">
+                                            {t("preferences.workflowsOverview.summary.transferredDryRun", { count: event.details?.count ?? 0 })}
+                                          </span>
                                         ) : event.action === "dry_run_no_match" ? (
                                           <span className="font-medium text-sm block">
                                             {t("preferences.workflowsOverview.noDryRunMatches")}
+                                          </span>
+                                        ) : event.action === "rule_skipped" ? (
+                                          <span className="font-medium text-sm block">
+                                            {getRuleSkipReason(event.details, t)}
                                           </span>
                                         ) : (
                                           <TruncatedText className="font-medium text-sm block cursor-default">
@@ -1808,7 +1837,8 @@ function RulePreview({
     tagActions.some((action) => action.enabled && action.condition) ||
     (rule.conditions?.category?.enabled && rule.conditions.category.condition) ||
     (rule.conditions?.move?.enabled && rule.conditions.move.condition) ||
-    (rule.conditions?.externalProgram?.enabled && rule.conditions.externalProgram.condition)
+    (rule.conditions?.externalProgram?.enabled && rule.conditions.externalProgram.condition) ||
+    (rule.conditions?.transferToInstance?.enabled && rule.conditions.transferToInstance.condition)
   )
 
   return (

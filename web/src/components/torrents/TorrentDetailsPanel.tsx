@@ -18,7 +18,6 @@ import { useInstanceCapabilities } from "@/hooks/useInstanceCapabilities"
 import { usePersistedTabState } from "@/hooks/usePersistedTabState"
 import { useTorrentDetailTab } from "@/hooks/useTorrentDetailTab"
 import { useQueueLimits } from "@/hooks/usePreferenceValues"
-import { scheduleTorrentListRefetches } from "@/hooks/useTorrentActions"
 import { api } from "@/lib/api"
 import { getMatchTypeLabel, useLocalCrossSeedMatches } from "@/lib/cross-seed-utils"
 import { DEFAULT_FILE_SORT } from "@/lib/file-tree"
@@ -28,7 +27,9 @@ import { matchPeerClient } from "@/lib/peer-client-icons"
 import { formatSpeedWithUnit, useSpeedUnits } from "@/lib/speedUnits"
 import { canBanPeer, getPeerDisplayAddress } from "@/lib/torrent-peer-address"
 import { getStatusBadgeProps } from "@/lib/torrent-table/row-display"
+import { themeArea } from "@/lib/theme-areas"
 import { resolveTorrentHashes } from "@/lib/torrent-utils"
+import { formatReannounceIn } from "@/lib/torrent-state-utils"
 import { breakableName, cn, copyTextToClipboard, formatBytes, formatDuration } from "@/lib/utils"
 import type { SortedPeer, Torrent, TorrentFile, TorrentTracker } from "@/types"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -36,6 +37,7 @@ import { Ban, ChevronRight, Copy, FolderTree, Info, Link2, Loader2, RadioTower, 
 import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { scheduleTorrentListRefetches } from "./bulk-actions/bulk-action-requests"
 import { CrossSeedTable, GeneralTabHorizontal, PeersTable, TorrentFileTable, TrackersTable, WebSeedsTable } from "./details"
 import { PeerClientIcon } from "./details/PeerClientIcon"
 import { MobileCategoryTagsRow, MobileDetailsHeader, MobileInfoBlock, MobileInfoGroup, MobileInfoRow, MobilePane, MobilePeerRow, MobileSectionTitle, MobileTrackerList, MobileWebSeedList } from "./details/MobileDetails"
@@ -195,6 +197,10 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
     if (!liveTorrent) return torrent
     return { ...torrent, ...liveTorrent }
   }, [torrent, liveTorrent])
+  // The row has no reannounce before qBittorrent 5.0, and the General tab then shows no Reannounce row.
+  const reannounceIn = displayTorrent?.reannounce !== undefined
+    ? formatReannounceIn(displayTorrent.state, displayTorrent.reannounce, t)
+    : undefined
 
   const { data: files, isLoading: loadingFiles } = useTorrentDetailTab(instanceId, isContentTabActive ? readyHash : null, "content")
 
@@ -748,7 +754,7 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
   const isInitialLoad = !isReady || (loadingProperties && !properties)
   if (isInitialLoad) {
     return (
-      <div className="h-full flex items-center justify-center">
+      <div {...themeArea("details-panel")} className="h-full flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin" />
       </div>
     )
@@ -1001,7 +1007,7 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
     const empty = (text: string) => <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">{text}</div>
 
     return (
-      <div className="h-full flex flex-col">
+      <div {...themeArea("details-panel")} className="h-full flex flex-col">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col overflow-hidden">
           <MobileDetailsHeader
             name={displayName ?? ""}
@@ -1097,6 +1103,7 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
                   <MobileInfoGroup title={t("detailsPanel.sections.timeInformation")}>
                     <MobileInfoRow label={t("generalTab.timeActive")}>{formatDuration(properties.time_elapsed || 0)}</MobileInfoRow>
                     <MobileInfoRow label={t("generalTab.seedingTime")}>{formatDuration(properties.seeding_time || 0)}</MobileInfoRow>
+                    {reannounceIn !== undefined && <MobileInfoRow label={t("tableColumns.reannounce")}>{reannounceIn}</MobileInfoRow>}
                     <MobileInfoRow label={t("detailsPanel.labels.added")}>{formatTimestamp(properties.addition_date, true)}</MobileInfoRow>
                     {properties.completion_date && properties.completion_date !== -1 && (
                       <MobileInfoRow label={t("detailsPanel.labels.completed")}>{formatTimestamp(properties.completion_date, true)}</MobileInfoRow>
@@ -1352,7 +1359,7 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div {...themeArea("details-panel")} className="h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col overflow-hidden">
         <div className="border-b flex items-center">
           <div className="flex-1 overflow-x-auto scroll-smooth">
@@ -1411,6 +1418,7 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
               displayComment={displayComment}
               displayCreatedBy={displayCreatedBy}
               queueingEnabled={queueLimits.enabled}
+              reannounceIn={reannounceIn}
             />
           </TabsContent>
 

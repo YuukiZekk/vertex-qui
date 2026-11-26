@@ -8,6 +8,7 @@ import (
 	"testing"
 )
 
+// regression: #4073
 func TestSanitizePathSegment(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -73,6 +74,61 @@ func TestSanitizePathSegment(t *testing.T) {
 			name:     "case insensitive reserved name",
 			input:    "con",
 			expected: "_con",
+		},
+		{
+			name:     "Windows console input device",
+			input:    "CONIN$",
+			expected: "_CONIN$",
+		},
+		{
+			name:     "Windows console output device case insensitive",
+			input:    "conout$",
+			expected: "_conout$",
+		},
+		{
+			name:     "Windows COM superscript device",
+			input:    "COM¹",
+			expected: "_COM¹",
+		},
+		{
+			name:     "Windows LPT superscript device",
+			input:    "LPT³",
+			expected: "_LPT³",
+		},
+		{
+			name:     "reserved name with space before extension",
+			input:    "CON .txt",
+			expected: "_CON .txt",
+		},
+		{
+			name:     "reserved name with spaces before extension case insensitive",
+			input:    "nul  .mkv",
+			expected: "_nul  .mkv",
+		},
+		{
+			name:     "non-device CON prefix",
+			input:    "CONSOLE",
+			expected: "CONSOLE",
+		},
+		{
+			name:     "non-device COM number",
+			input:    "COM10",
+			expected: "COM10",
+		},
+		{
+			name:     "non-device LPT prefix",
+			input:    "LPT",
+			expected: "LPT",
+		},
+		{
+			name:     "COM zero is not reserved",
+			input:    "COM0",
+			expected: "COM0",
+		},
+		{
+			name:     "LPT zero is not reserved",
+			input:    "LPT0",
+			expected: "LPT0",
 		},
 		{
 			name:     "reserved name not at start",
@@ -141,9 +197,63 @@ func TestHashedIsolationFolder(t *testing.T) {
 		t.Errorf("HashedIsolationFolder = %q, want %q", got, "Movie--abcdef12")
 	}
 
-	// A cut name keeps room for the hash inside the 255-byte limit.
 	got := HashedIsolationFolder("abcdef1234567890", strings.Repeat("é", 200))
 	if want := strings.Repeat("é", 122) + "--abcdef12"; got != want {
 		t.Errorf("HashedIsolationFolder = %q (%d bytes), want %q", got, len(got), want)
 	}
+}
+
+// regression: #4220
+func FuzzTorrentFilePathMatchesReference(f *testing.F) {
+	for _, seed := range [][3]string{
+		{"Album", "Disc 1", "01 - Track.flac"},
+		{"Album\u200e", "Disc\u200f 1", "01 \u2014 Track\u202e.flac"},
+		{"Album", "", "\u2019s.flac"},
+		{"Movie.\xe1\xff.2024", "sub\xff\xfe\u200e", "file.mkv"},
+		{"", "\u200e", "track.flac"},
+		{"\u202a\u202b\u202c\u202d", "\xe2\x80", "\xe2"},
+	} {
+		f.Add(seed[0], seed[1], seed[2])
+	}
+	filter := func(name string) string {
+		return strings.Map(func(r rune) rune {
+			switch r {
+			case '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e':
+				return -1
+			default:
+				return r
+			}
+		}, strings.ToValidUTF8(name, "\ufffd"))
+	}
+	f.Fuzz(func(t *testing.T, root, dir, file string) {
+		if got, want := TorrentPathName(root), filter(root); got != want {
+			t.Fatalf("TorrentPathName(%q) = %q, want %q", root, got, want)
+		}
+		parts := []string{filter(root)}
+		refused := false
+		for _, c := range []string{dir, file} {
+			switch {
+			case c == "":
+				parts = append(parts, "_")
+			case filter(c) == "":
+				refused = true
+			default:
+				parts = append(parts, filter(c))
+			}
+		}
+		want := strings.Join(parts, "/")
+		if parts[0] == "" {
+			want = strings.Join(parts[1:], "/")
+		}
+		got, err := TorrentFilePath(TorrentPathName(root), []string{dir, file})
+		if refused {
+			if err == nil {
+				t.Fatalf("TorrentFilePath(%q, %q, %q) = %q, want an error", root, dir, file, got)
+			}
+			return
+		}
+		if err != nil || got != want {
+			t.Fatalf("TorrentFilePath(%q, %q, %q) = %q, %v; want %q", root, dir, file, got, err, want)
+		}
+	})
 }

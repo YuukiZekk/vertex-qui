@@ -40,11 +40,13 @@ export function RunWorkflowNowDialog({ target, onClose }: RunWorkflowNowDialogPr
     onMutate: ({ rule }) => toast.loading(t("preferences.runWorkflowNow.toast.running", { name: rule.name })),
     onSuccess: (result, { instanceId, rule }, toastId) => {
       const name = { name: rule.name }
-      if (result.status === "dry-run-completed") {
+      if (result.activities?.some(activity => activity.action === "rule_skipped")) {
+        toast.warning(t("preferences.runWorkflowNow.toast.skipped", name), { id: toastId })
+      } else if (result.status === "dry-run-completed") {
         toast.success(t("preferences.runWorkflowNow.toast.dryRunCompleted", name), { id: toastId })
       } else if (result.activities?.some(activity => activity.outcome === "failed")) {
         toast.error(t("preferences.runWorkflowNow.toast.completedWithErrors", name), { id: toastId })
-      } else if (!result.activities?.length && !rule.conditions?.externalProgram?.enabled && !rule.conditions?.exportToInstance?.enabled) {
+      } else if (!result.activities?.length && !rule.conditions?.externalProgram?.enabled && !rule.conditions?.exportToInstance?.enabled && !rule.conditions?.transferToInstance?.enabled) {
         // External programs and exports can write their activity rows after the reply, so an empty list says nothing about them.
         toast.success(t("preferences.runWorkflowNow.toast.noChanges", name), { id: toastId })
       } else {

@@ -21,8 +21,20 @@ These rules apply to Go and TypeScript code.
 
 ## Comments
 
-A comment caches what the code cannot show: why this shape, the bug a guard prevents, a coupling to another file. Caching what the line does buys nothing and rots first. One line is the norm.
+Comments are banned in Go and TypeScript code. `make lint-ratchet` counts them in Go, and the ESLint rule `qui/no-comments` reports them in `web/`. "Ratchet" in `docs/linting.md` describes both checks.
 
-- Change a line, change its comment, in the same diff. A stale-comment finding from a review bot is right; a docstring coverage percentage is not.
-- An invariant a future change must hold is a test, not a sentence with "must not" in it.
-- Doc-comment an exported identifier when its name leaves the contract unclear.
+- Let a name, a type, or a test say what the comment would say. An invariant that a future change must hold is a test.
+- Record a decision that is hard to reverse, surprising, and the result of a real trade-off as an ADR in `docs/adr/`.
+- Open an issue for a shortcut that the code takes. A comment that excuses the shortcut keeps it in the code.
+- Put the history of an edit in the commit message.
+
+The markers that a tool or a standard in this repo reads stay, because they are not prose:
+
+- Go: the license header, `//go:` directives, `//nolint:<linter> // reason`, `//exhaustive:`, `// #nosec`, `// Deprecated:`, and `// regression: #N`.
+- TypeScript: the license header, `eslint-disable` and `eslint-enable`, `@ts-expect-error`, `@ts-nocheck`, `/// <reference`, `@deprecated`, `// i18n-namespace: <ns>`, and `// regression: #N`.
+
+Comments from before the ban stay until `/delete-comment` reaches their file. The number in a file can only go down:
+
+- When you change a line that has a comment, delete the comment, or update it if it is still true and you cannot yet move it.
+- A stale-comment finding from a review bot is right.
+- Older comments are no reason to add more.

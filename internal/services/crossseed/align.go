@@ -16,6 +16,7 @@ import (
 	"github.com/autobrr/rls"
 	"github.com/rs/zerolog/log"
 
+	"github.com/autobrr/qui/internal/qbittorrent"
 	"github.com/autobrr/qui/pkg/stringutils"
 )
 
@@ -42,6 +43,9 @@ func (s *Service) alignCrossSeed(
 	sourceTorrentName string,
 	addPlan *crossSeedAddPlan,
 ) (bool, string) {
+	if addPlan != nil && len(addPlan.filePairs) > 0 {
+		return s.alignCatalogFiles(ctx, instanceID, torrentHash, torrentHashV2, addPlan)
+	}
 	hashes := dedupeHashes(torrentHash, torrentHashV2)
 	hashLabel := ""
 	if len(hashes) > 0 {
@@ -248,7 +252,7 @@ func (s *Service) waitForTorrentAvailability(ctx context.Context, instanceID int
 			return ""
 		}
 
-		if qbtSyncManager, err := s.syncManager.GetQBittorrentSyncManager(ctx, instanceID); err == nil && qbtSyncManager != nil {
+		if qbtSyncManager, err := s.syncManager.GetSyncOwner(ctx, instanceID); err == nil && qbtSyncManager != nil {
 			if err := qbtSyncManager.Sync(ctx); err != nil {
 				log.Debug().
 					Err(err).
@@ -257,7 +261,7 @@ func (s *Service) waitForTorrentAvailability(ctx context.Context, instanceID int
 			}
 		}
 
-		torrents, err := s.syncManager.GetTorrents(ctx, instanceID, qbt.TorrentFilterOptions{Hashes: hashes})
+		torrents, err := s.syncManager.GetTorrentRefs(ctx, instanceID, qbittorrent.TorrentRefFilter{Hashes: hashes})
 		if err == nil && len(torrents) > 0 {
 			for _, torrent := range torrents {
 				active := strings.TrimSpace(torrent.Hash)

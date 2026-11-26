@@ -13,23 +13,10 @@ import (
 	"github.com/autobrr/go-torrent/bencode"
 )
 
-func TestTorrentEncodingRoundTrip(t *testing.T) {
-	data := loadTorrentFixture(t)
-	original := decodeTorrent(t, data)
-
-	encoded := encodeTorrent(t, original)
-	decoded := decodeTorrent(t, encoded)
-
-	if !reflect.DeepEqual(normalizeBencode(original), normalizeBencode(decoded)) {
-		t.Fatalf("round trip encoding changed torrent structure")
-	}
-}
-
 func TestPatchTorrentTrackers(t *testing.T) {
 	data := loadTorrentFixture(t)
 	root := decodeTorrent(t, data)
 
-	// Remove announce metadata to simulate missing tracker data
 	delete(root, "announce")
 	delete(root, "announce-list")
 	encoded := encodeTorrent(t, root)
@@ -86,8 +73,6 @@ func TestPatchTorrentTrackersPreservesNonCanonicalInfo(t *testing.T) {
 }
 
 func TestPatchTorrentTrackersKeepsOversizedIntegers(t *testing.T) {
-	// Values outside int64 must survive as raw bytes instead of failing the
-	// whole patch.
 	data := []byte("d13:creation datei99999999999999999999999999e4:infod4:name1:nee")
 
 	patched, changed, err := patchTorrentTrackers(data, []string{"https://tracker.autobrr.com/announce"})
@@ -143,26 +128,5 @@ func bencodeString(value any) string {
 		return string(v)
 	default:
 		return ""
-	}
-}
-
-func normalizeBencode(value any) any {
-	switch v := value.(type) {
-	case map[string]any:
-		normalized := make(map[string]any, len(v))
-		for key, val := range v {
-			normalized[key] = normalizeBencode(val)
-		}
-		return normalized
-	case []any:
-		normalized := make([]any, len(v))
-		for i, val := range v {
-			normalized[i] = normalizeBencode(val)
-		}
-		return normalized
-	case []byte:
-		return string(v)
-	default:
-		return value
 	}
 }

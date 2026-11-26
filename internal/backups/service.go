@@ -37,12 +37,10 @@ import (
 )
 
 var (
-	// ErrInstanceBusy is returned when a backup is already running for the instance.
 	ErrInstanceBusy = errors.New("backup already running for this instance")
 	removeFile      = os.Remove
 )
 
-// Config controls background backup scheduling.
 type Config struct {
 	DataDir         string
 	BackupDir       string // backup root; empty means <DataDir>/backups
@@ -94,10 +92,12 @@ type Service struct {
 }
 
 type backupReader interface {
-	GetAllTorrents(ctx context.Context, instanceID int) ([]qbt.Torrent, error)
+	// GetAllTorrentRefs returns the torrents of the Sync snapshot: never
+	// change one.
+	GetAllTorrentRefs(ctx context.Context, instanceID int) ([]*qbt.Torrent, error)
 	GetCategories(ctx context.Context, instanceID int) (map[string]qbt.Category, error)
 	GetTags(ctx context.Context, instanceID int) ([]string, error)
-	GetInstanceWebAPIVersion(ctx context.Context, instanceID int) (string, error)
+	OmitsTrackersOnExport(ctx context.Context, instanceID int) (bool, error)
 	ExportTorrent(ctx context.Context, instanceID int, hash string) ([]byte, string, string, error)
 }
 
@@ -117,7 +117,7 @@ type backupTorrentMutator interface {
 	SetCategory(ctx context.Context, instanceID int, hashes []string, category string) error
 	SetTags(ctx context.Context, instanceID int, hashes []string, tags string) error
 	ResumeWhenComplete(instanceID int, hashes []string, opts qbittorrent.ResumeWhenCompleteOptions)
-	BulkAction(ctx context.Context, instanceID int, hashes []string, action string) error
+	DeleteTorrents(ctx context.Context, instanceID int, hashes []string, deleteFiles bool, actor qbittorrent.DeleteActor) error
 }
 
 type job struct {
@@ -126,7 +126,6 @@ type job struct {
 	kind       models.BackupRunKind
 }
 
-// Manifest captures details about a backup run and its contents for API responses and archived metadata.
 type Manifest struct {
 	InstanceID   int                                `json:"instanceId"`
 	Kind         string                             `json:"kind"`
@@ -137,7 +136,6 @@ type Manifest struct {
 	Items        []ManifestItem                     `json:"items"`
 }
 
-// ManifestItem describes a single torrent contained in a backup archive.
 type ManifestItem struct {
 	Hash        string   `json:"hash"`
 	Name        string   `json:"name"`
@@ -210,9 +208,6 @@ func NewService(store *models.BackupStore, reader backupReader, cfg Config, noti
 	return svc
 }
 
-// SetActivityPublisher wires the qui server-event hub so backup run status
-// changes are pushed to connected clients instead of polled. Safe to call once
-// at startup.
 func (s *Service) SetActivityPublisher(publisher activity.Publisher) {
 	if s == nil || publisher == nil {
 		return
@@ -304,7 +299,6 @@ func (s *Service) Start(ctx context.Context) {
 	s.ctx = ctx
 	s.cancel = cancel
 
-	// Recover any incomplete backup runs from previous session
 	if err := s.recoverIncompleteRuns(ctx); err != nil {
 		log.Warn().Err(err).Msg("Failed to recover incomplete backup runs")
 	}
@@ -322,7 +316,6 @@ func (s *Service) Start(ctx context.Context) {
 		}
 	})
 
-	// Check for missed backups and queue exactly one if applicable
 	s.wg.Go(func() {
 		if err := s.checkMissedBackups(ctx); err != nil {
 			if ctx.Err() != nil || errors.Is(err, context.Canceled) {
@@ -337,8 +330,6 @@ func (s *Service) Start(ctx context.Context) {
 	go s.scheduler(ctx)
 }
 
-// recoverIncompleteRuns marks any pending or running backup runs as failed.
-// This handles the case where qui was restarted while backups were in progress.
 func (s *Service) recoverIncompleteRuns(ctx context.Context) error {
 	incompleteRuns, err := s.store.FindIncompleteRuns(ctx)
 	if err != nil {
@@ -354,7 +345,6 @@ func (s *Service) recoverIncompleteRuns(ctx context.Context) error {
 	now := s.now()
 	errorMsg := "Backup interrupted by application restart"
 
-	// Collect all run IDs to update
 	runIDs := make([]int64, len(incompleteRuns))
 	for i, run := range incompleteRuns {
 		runIDs[i] = run.ID
@@ -383,7 +373,6 @@ func (s *Service) recoverIncompleteRuns(ctx context.Context) error {
 
 	log.Info().Int("count", len(incompleteRuns)).Msg("Successfully recovered incomplete backup runs")
 
-	// Notify connected clients that these runs transitioned to failed.
 	for _, run := range incompleteRuns {
 		s.emitRunActivity(run.InstanceID, run.ID)
 	}
@@ -406,7 +395,6 @@ func (s *Service) isBackupMissed(ctx context.Context, instanceID int, kind model
 		return false
 	}
 
-	// Short-circuit if the latest run is still in flight or within failure cooldown.
 	for _, r := range runs {
 		if r == nil {
 			continue
@@ -425,12 +413,10 @@ func (s *Service) isBackupMissed(ctx context.Context, instanceID int, kind model
 				}
 			}
 		case models.BackupRunStatusSuccess:
-			// Success is handled below when selecting schedule reference.
 		}
 		break
 	}
 
-	// Find the most recent successful run
 	var refTime *time.Time
 	var foundSuccess bool
 	for _, r := range runs {
@@ -448,7 +434,6 @@ func (s *Service) isBackupMissed(ctx context.Context, instanceID int, kind model
 		}
 	}
 
-	// If we found no successful run, consider it missed (first-run semantics)
 	if !foundSuccess || refTime == nil {
 		return true
 	}
@@ -467,7 +452,6 @@ func (s *Service) isBackupMissed(ctx context.Context, instanceID int, kind model
 		next := ref.AddDate(0, 1, 0)
 		return !now.Before(next)
 	default:
-		// Unknown kind — don't consider it missed
 		return false
 	}
 
@@ -504,7 +488,6 @@ func (s *Service) checkMissedBackups(ctx context.Context) error {
 			missedKinds = append(missedKinds, models.BackupRunKindMonthly)
 		}
 
-		// Queue the first missed backup if any are missed
 		if len(missedKinds) > 0 {
 			kind := missedKinds[0]
 			if _, err := s.QueueRun(ctx, cfg.InstanceID, kind, "startup-recovery"); err != nil {
@@ -677,7 +660,7 @@ func (s *Service) executeBackup(ctx context.Context, j job) (*backupResult, erro
 	}
 	s.normalizeAndPersistSettings(ctx, settings)
 
-	torrents, err := s.reader.GetAllTorrents(ctx, j.instanceID)
+	torrents, err := s.reader.GetAllTorrentRefs(ctx, j.instanceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load torrents: %w", err)
 	}
@@ -723,13 +706,10 @@ func (s *Service) executeBackup(ctx context.Context, j job) (*backupResult, erro
 		sort.Strings(snapshotTags)
 	}
 
-	webAPIVersion := ""
-	patchTrackers := false
-	if version, err := s.reader.GetInstanceWebAPIVersion(ctx, j.instanceID); err != nil {
-		log.Debug().Err(err).Int("instanceID", j.instanceID).Msg("Unable to determine qBittorrent API version for tracker patching")
-	} else {
-		webAPIVersion = version
-		patchTrackers = shouldInjectTrackerMetadata(version)
+	// A 4.6 export without its trackers must not pass as a good backup.
+	patchTrackers, err := s.reader.OmitsTrackersOnExport(ctx, j.instanceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decide on tracker patching: %w", err)
 	}
 
 	timestamp := s.now().UTC().Format("20060102T150405Z")
@@ -754,7 +734,6 @@ func (s *Service) executeBackup(ctx context.Context, j job) (*backupResult, erro
 	categoryCounts := make(map[string]int)
 	var totalBytes int64
 
-	// Initialize progress tracking
 	s.progressMu.Lock()
 	s.progress[j.runID] = &BackupProgress{
 		Total:      len(torrents),
@@ -791,7 +770,7 @@ func (s *Service) executeBackup(ctx context.Context, j job) (*backupResult, erro
 			// bounded by exportWorkers regardless of how the pool schedules.
 			var lastExportElapsed time.Duration
 			for idx := range indexes {
-				res, err := s.exportBackupTorrent(gctx, j, torrents[idx], patchTrackers, webAPIVersion, &lastExportElapsed)
+				res, err := s.exportBackupTorrent(gctx, j, *torrents[idx], patchTrackers, &lastExportElapsed)
 				if err != nil {
 					return err
 				}
@@ -949,7 +928,6 @@ const exportWorkers = 4
 // would just double the cost of every stall.
 const maxAdaptiveExportDelay = 500 * time.Millisecond
 
-// exportedTorrent is the order-independent result of exporting one torrent.
 type exportedTorrent struct {
 	skipped     bool
 	dataLen     int
@@ -962,7 +940,7 @@ type exportedTorrent struct {
 // the cache. It touches no order-dependent backup state, so callers may run it
 // concurrently for distinct torrents. lastExportElapsed carries the adaptive
 // delay state between consecutive calls on the same worker.
-func (s *Service) exportBackupTorrent(ctx context.Context, j job, torrent qbt.Torrent, patchTrackers bool, webAPIVersion string, lastExportElapsed *time.Duration) (exportedTorrent, error) {
+func (s *Service) exportBackupTorrent(ctx context.Context, j job, torrent qbt.Torrent, patchTrackers bool, lastExportElapsed *time.Duration) (exportedTorrent, error) {
 	select {
 	case <-ctx.Done():
 		return exportedTorrent{}, ctx.Err()
@@ -1028,7 +1006,7 @@ func (s *Service) exportBackupTorrent(ctx context.Context, j job, torrent qbt.To
 			data = patched
 			// ensure cached entry is rebuilt with the corrected payload
 			blobRelPath = nil
-			log.Debug().Str("hash", torrent.Hash).Int("instanceID", j.instanceID).Str("webAPIVersion", webAPIVersion).Msg("Injected tracker metadata into exported torrent")
+			log.Debug().Str("hash", torrent.Hash).Int("instanceID", j.instanceID).Msg("Injected tracker metadata into exported torrent")
 		}
 	}
 
@@ -1125,7 +1103,6 @@ func cacheTorrentBlob(rootDir, relBlob string, data []byte) error {
 		}
 	}
 
-	// 0o644 matches the manifest and archive writes in this file.
 	tmpName := fmt.Sprintf("%s.tmp-%d-%d", relBlob, os.Getpid(), blobTmpSeq.Add(1))
 	tmp, err := root.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
@@ -1515,13 +1492,11 @@ func (s *Service) cleanupRunFiles(ctx context.Context, runIDs []int64) error {
 		return nil
 	}
 
-	// Get all runs in one query
 	runs, err := s.store.GetRuns(ctx, runIDs)
 	if err != nil {
 		return err
 	}
 
-	// Create a map for quick lookup
 	runMap := make(map[int64]*models.BackupRun)
 	for _, run := range runs {
 		if run != nil {
@@ -1529,31 +1504,19 @@ func (s *Service) cleanupRunFiles(ctx context.Context, runIDs []int64) error {
 		}
 	}
 
-	// Items of the deleted runs, as blob cleanup candidates.
-	items, err := s.store.ListItemsForRuns(ctx, runIDs)
+	blobPaths, err := s.store.ListTorrentBlobPathsForRuns(ctx, runIDs)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to list backup items for cleanup")
-		items = nil
+		log.Warn().Err(err).Msg("Failed to list torrent blobs for cleanup")
+		blobPaths = nil
 	}
 
 	var filesToDelete []string
-	var itemsToCleanup []*models.BackupItem
 
 	for _, runID := range runIDs {
 		run, exists := runMap[runID]
 		if !exists {
-			// Run was already deleted or not found
 			continue
 		}
-
-		// Collect items for this run
-		var runItems []*models.BackupItem
-		for _, item := range items {
-			if item.RunID == runID {
-				runItems = append(runItems, item)
-			}
-		}
-		itemsToCleanup = append(itemsToCleanup, runItems...)
 
 		if run.ManifestPath != nil {
 			if abs := s.ResolveBackupPath(*run.ManifestPath); abs != "" {
@@ -1571,15 +1534,13 @@ func (s *Service) cleanupRunFiles(ctx context.Context, runIDs []int64) error {
 		}
 	}
 
-	// Delete files in parallel
 	s.deleteFilesParallel(ctx, filesToDelete)
 
-	// Batch cleanup all runs in database
 	if err := s.store.CleanupRuns(ctx, runIDs); err != nil {
 		log.Warn().Err(err).Msg("Failed to cleanup runs from database")
 	}
 
-	s.cleanupTorrentBlobs(ctx, itemsToCleanup)
+	s.cleanupTorrentBlobs(ctx, blobPaths)
 
 	return nil
 }
@@ -1620,10 +1581,10 @@ func (s *Service) DeleteRun(ctx context.Context, runID int64) error {
 		return err
 	}
 
-	items, err := s.store.ListItems(ctx, runID)
+	blobPaths, err := s.store.ListTorrentBlobPathsForRuns(ctx, []int64{runID})
 	if err != nil {
-		log.Warn().Err(err).Int64("runID", runID).Msg("Failed to list backup items before delete")
-		items = nil
+		log.Warn().Err(err).Int64("runID", runID).Msg("Failed to list torrent blobs before delete")
+		blobPaths = nil
 	}
 
 	var filesToDelete []string
@@ -1648,7 +1609,7 @@ func (s *Service) DeleteRun(ctx context.Context, runID int64) error {
 		return err
 	}
 
-	s.cleanupTorrentBlobs(ctx, items)
+	s.cleanupTorrentBlobs(ctx, blobPaths)
 
 	return nil
 }
@@ -1731,10 +1692,8 @@ func (s *Service) LoadManifest(ctx context.Context, runID int64) (*Manifest, err
 // torrentPaths is a map of archivePath -> absolute temp file path on disk.
 // The caller is responsible for cleaning up the temp files after this returns.
 func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, manifestData []byte, requestedBy string, torrentPaths map[string]string) (*models.BackupRun, error) {
-	// Use local variable to avoid mutating shared config (thread-safety)
 	rootDir := s.root
 
-	// Normalize the backup root for Windows Git Bash paths
 	if runtime.GOOS == "windows" && strings.HasPrefix(rootDir, "/c/") {
 		rootDir = "C:" + strings.ReplaceAll(strings.TrimPrefix(rootDir, "/c"), "/", "\\")
 		log.Info().Str("normalizedBackupDir", rootDir).Msg("Normalized backup directory for Windows")
@@ -1750,7 +1709,6 @@ func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, man
 
 	log.Info().Int("manifestItemCount", len(manifest.Items)).Int("manifestTorrentCount", manifest.TorrentCount).Msg("Manifest parsed successfully")
 
-	// Create a backup run record for the import
 	run := &models.BackupRun{
 		InstanceID:   instanceID,
 		Kind:         models.BackupRunKind(manifest.Kind),
@@ -1774,7 +1732,6 @@ func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, man
 	log.Info().Int64("runID", run.ID).Msg("Backup run created successfully")
 	s.emitRunActivity(instanceID, run.ID)
 
-	// Convert manifest items to backup items
 	items := make([]models.BackupItem, 0, len(manifest.Items))
 	var totalBytes int64
 	var totalTorrentFileBytes int64
@@ -1784,12 +1741,10 @@ func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, man
 	log.Info().Int("totalItems", len(manifest.Items)).Msg("Starting to process manifest items")
 
 	for i, item := range manifest.Items {
-		// Skip items with invalid required fields
 		if strings.TrimSpace(item.Hash) == "" || strings.TrimSpace(item.Name) == "" {
 			continue
 		}
 
-		// Log progress every 100 items
 		if i > 0 && i%100 == 0 {
 			log.Info().Int("processed", i).Int("total", len(manifest.Items)).Int("validSoFar", len(items)).Msg("Processing manifest items progress")
 		}
@@ -1827,7 +1782,6 @@ func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, man
 		}
 
 		if item.TorrentBlob != "" {
-			// Validate blob path to prevent directory traversal
 			slashRel := backupRelPath(item.TorrentBlob)
 			if slashRel == "" {
 				log.Warn().Str("hash", item.Hash).Str("blob", item.TorrentBlob).Msg("Ignoring unsafe TorrentBlob path from manifest")
@@ -1841,7 +1795,6 @@ func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, man
 			rel := filepath.FromSlash(slashRel)
 			absPath := filepath.Join(rootDir, rel)
 
-			// Check if torrent file path was provided from temp directory
 			if torrentPaths != nil && item.ArchivePath != "" {
 				if tempPath, ok := torrentPaths[item.ArchivePath]; ok {
 					err := s.copyTorrentFromTemp(tempPath, rootDir, rel)
@@ -1858,7 +1811,6 @@ func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, man
 				}
 			}
 
-			// Mark for background download from qBittorrent
 			missing = append(missing, missingTorrent{hash: item.Hash, relPath: rel, absPath: absPath})
 		}
 
@@ -1868,13 +1820,11 @@ func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, man
 
 	log.Info().Int("validItems", len(items)).Int64("totalBytes", totalBytes).Msg("Finished processing manifest items")
 
-	// Validate that we have valid items if the manifest claimed to have any
 	if len(items) == 0 && len(manifest.Items) > 0 {
 		log.Error().Int("manifestItems", len(manifest.Items)).Msg("Manifest contains items but none are valid")
 		return nil, fmt.Errorf("manifest contains %d items but none are valid (missing required hash or name)", len(manifest.Items))
 	}
 
-	// Insert the items
 	if len(items) > 0 {
 		log.Info().Int("itemCount", len(items)).Int64("runID", run.ID).Msg("Inserting backup items into database")
 		if err := s.store.InsertItems(ctx, run.ID, items); err != nil {
@@ -1884,7 +1834,6 @@ func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, man
 		log.Info().Int("insertedItems", len(items)).Int64("runID", run.ID).Msg("Successfully inserted backup items")
 	}
 
-	// Start background download of missing torrents
 	if len(missing) > 0 {
 		log.Info().Int("missingCount", len(missing)).Msg("Starting background download of missing torrent blobs")
 		s.progressMu.Lock()
@@ -1898,7 +1847,6 @@ func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, man
 			s.downloadMissingTorrents(run.ID, instanceID, rootDir, missing)
 		})
 	} else {
-		// No missing torrents, mark as completed immediately
 		now := s.now()
 		run.Status = models.BackupRunStatusSuccess
 		run.CompletedAt = &now
@@ -1912,7 +1860,6 @@ func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, man
 		s.emitRunActivity(instanceID, run.ID)
 	}
 
-	// Update the run with total bytes and torrent count
 	run.TotalBytes = totalTorrentFileBytes
 	run.TorrentCount = len(items)
 	log.Info().Int64("runID", run.ID).Int("torrentCount", len(items)).Int64("totalTorrentFileBytes", totalTorrentFileBytes).Msg("Updating backup run metadata")
@@ -1930,8 +1877,6 @@ func (s *Service) ImportManifestFromDir(ctx context.Context, instanceID int, man
 	return run, nil
 }
 
-// copyTorrentFromTemp validates a torrent from the import temp dir and caches
-// it at the final blob location through the same atomic write as live exports.
 func (s *Service) copyTorrentFromTemp(srcPath, rootDir, relPath string) error {
 	data, err := os.ReadFile(srcPath)
 	if err != nil {
@@ -1964,7 +1909,6 @@ func (s *Service) downloadMissingTorrents(runID int64, instanceID int, rootDir s
 	successCount := 0
 	var totalTorrentBytes int64
 	for i, mt := range missing {
-		// Check for shutdown
 		if s.ctx != nil {
 			select {
 			case <-s.ctx.Done():
@@ -1975,7 +1919,6 @@ func (s *Service) downloadMissingTorrents(runID int64, instanceID int, rootDir s
 			}
 		}
 
-		// Check if file already exists
 		if info, err := os.Stat(mt.absPath); err == nil {
 			sz := info.Size()
 			log.Trace().Int("current", i+1).Int("total", total).Int64("runID", runID).Str("hash", mt.hash).Str("path", mt.absPath).Int64("size", sz).Msg("Torrent blob already exists, skipping download")
@@ -2010,7 +1953,6 @@ func (s *Service) downloadMissingTorrents(runID int64, instanceID int, rootDir s
 
 	log.Info().Int64("totalTorrentBytes", totalTorrentBytes).Int64("runID", runID).Msg("Calculated total torrent file bytes")
 
-	// Update run metadata with actual torrent file sizes
 	ctx := context.Background()
 	if err := s.store.UpdateRunMetadata(ctx, runID, func(r *models.BackupRun) error {
 		r.TotalBytes = totalTorrentBytes
@@ -2024,12 +1966,10 @@ func (s *Service) downloadMissingTorrents(runID int64, instanceID int, rootDir s
 	s.markImportComplete(instanceID, runID)
 }
 
-// markImportComplete marks an import run as completed and cleans up progress
 func (s *Service) markImportComplete(instanceID int, runID int64) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	// Update run status in database
 	if err := s.store.UpdateRunMetadata(ctx, runID, func(r *models.BackupRun) error {
 		r.Status = models.BackupRunStatusSuccess
 		r.CompletedAt = &now
@@ -2040,12 +1980,10 @@ func (s *Service) markImportComplete(instanceID int, runID int64) {
 		log.Info().Int64("runID", runID).Msg("Marked import run as completed")
 	}
 
-	// Clean up progress
 	s.progressMu.Lock()
 	delete(s.progress, runID)
 	s.progressMu.Unlock()
 
-	// Notify connected clients after the progress lock is released.
 	s.emitRunActivity(instanceID, runID)
 }
 
@@ -2111,8 +2049,8 @@ func (s *Service) loadCachedTorrent(ctx context.Context, instanceID int, hash st
 	return &cachedTorrent{data: data, relPath: *rel}, nil
 }
 
-func (s *Service) cleanupTorrentBlobs(ctx context.Context, items []*models.BackupItem) {
-	if len(items) == 0 {
+func (s *Service) cleanupTorrentBlobs(ctx context.Context, blobPaths []string) {
+	if len(blobPaths) == 0 {
 		return
 	}
 
@@ -2122,12 +2060,8 @@ func (s *Service) cleanupTorrentBlobs(ctx context.Context, items []*models.Backu
 	seen := make(map[string]struct{})
 	var uniqueBlobs, lookup []string
 
-	for _, item := range items {
-		if item == nil || item.TorrentBlobPath == nil {
-			continue
-		}
-
-		canon := backupRelPath(*item.TorrentBlobPath)
+	for _, blobPath := range blobPaths {
+		canon := backupRelPath(blobPath)
 		if canon == "" {
 			continue
 		}

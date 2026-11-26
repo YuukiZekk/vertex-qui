@@ -5,6 +5,7 @@ package fsops
 
 import (
 	"context"
+	"io"
 	"io/fs"
 	"testing"
 
@@ -15,7 +16,6 @@ import (
 	"github.com/autobrr/qui/pkg/hardlinktree"
 )
 
-// fakeInstanceStore implements instanceGetter for tests.
 type fakeInstanceStore struct {
 	instances map[int]*models.Instance
 	gets      int
@@ -30,7 +30,6 @@ func (s *fakeInstanceStore) Get(_ context.Context, id int) (*models.Instance, er
 	return inst, nil
 }
 
-// fakeBackend is a minimal Backend for verifying which backend the pool returns.
 type fakeBackend struct{ kind string }
 
 func (f fakeBackend) Stat(context.Context, string) (*LstatInfo, error) {
@@ -63,6 +62,12 @@ func (f fakeBackend) RemoveTree(context.Context, *TreeCreateResult) error { retu
 func (f fakeBackend) SupportsReflink(context.Context, string) (bool, string, error) {
 	return false, "", nil
 }
+func (f fakeBackend) OpenRead(context.Context, string, int64) (io.ReadCloser, error) {
+	return nil, nil
+}
+func (f fakeBackend) OpenWrite(context.Context, string, int64) (FileWriter, error) {
+	return nil, nil
+}
 
 func remoteFactory(backend Backend) func(*models.Instance) Backend {
 	return func(*models.Instance) Backend { return backend }
@@ -90,7 +95,6 @@ func TestPool_NoAccess(t *testing.T) {
 	backend, err := pool.GetBackend(context.Background(), 2)
 	require.NoError(t, err)
 
-	// All ops should return ErrNoFilesystemAccess.
 	_, err = backend.Stat(context.Background(), "/any")
 	require.ErrorIs(t, err, ErrNoFilesystemAccess)
 
@@ -151,26 +155,6 @@ func TestPool_ResolveReturnsTheModeItRoutedBy(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, tc.wantMode, mode, "instance %d", tc.id)
 		assert.Equal(t, tc.wantBackend, backend, "instance %d", tc.id)
-	}
-}
-
-func TestPool_LocalBackendRefusesEveryOtherMode(t *testing.T) {
-	local := fakeBackend{kind: "local"}
-	store := &fakeInstanceStore{instances: map[int]*models.Instance{
-		1: {ID: 1, HasLocalFilesystemAccess: true},
-		2: {ID: 2},
-		3: {ID: 3, SSHHost: "box.example.invalid", SSHKeyEncrypted: "enc-key", SSHHostKeyEncrypted: "enc-hostkey"},
-	}}
-	pool := NewPoolWithRemote(store, local, remoteFactory(fakeBackend{kind: "remote"}))
-
-	backend, err := pool.LocalBackend(context.Background(), 1)
-	require.NoError(t, err)
-	assert.Equal(t, local, backend)
-
-	for _, id := range []int{2, 3} {
-		backend, err := pool.LocalBackend(context.Background(), id)
-		require.ErrorIs(t, err, ErrNotLocal, "instance %d", id)
-		assert.Nil(t, backend, "instance %d", id)
 	}
 }
 
@@ -243,7 +227,6 @@ func TestNoopBackend_AllMethodsError(t *testing.T) {
 
 	require.ErrorIs(t, b.MkdirAll(ctx, "/x", 0o755), ErrNoFilesystemAccess)
 	require.ErrorIs(t, b.Remove(ctx, "/x", RemoveOptions{}), ErrNoFilesystemAccess)
-	// A nil handle means nothing to remove — safe on every backend.
 	require.NoError(t, b.RemoveTree(ctx, nil))
 	require.ErrorIs(t, b.RemoveTree(ctx, &TreeCreateResult{Files: []string{"/x"}}), ErrNoFilesystemAccess)
 
@@ -255,10 +238,14 @@ func TestNoopBackend_AllMethodsError(t *testing.T) {
 
 	_, _, err = b.SupportsReflink(ctx, "/x")
 	require.ErrorIs(t, err, ErrNoFilesystemAccess)
+
+	_, err = b.OpenRead(ctx, "/x", 0)
+	require.ErrorIs(t, err, ErrNoFilesystemAccess)
+
+	_, err = b.OpenWrite(ctx, "/x", 0)
+	require.ErrorIs(t, err, ErrNoFilesystemAccess)
 }
 
-// A caller that needs two capabilities is refused when either is missing, and
-// no backend is built for the refusal.
 func TestPool_RequireNeedsEveryCapability(t *testing.T) {
 	remote := fakeBackend{kind: "remote"}
 	built := 0

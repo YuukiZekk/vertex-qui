@@ -28,7 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
-import { PageHeader } from "@/components/layout/PageHeader"
+import { Page } from "@/components/layout/Page"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -133,7 +133,6 @@ export function RSSPage({
   const { instances } = useInstances()
   const [selectedInstanceId, setSelectedInstanceId] = usePersistedInstanceSelection("rss")
 
-  // Auto-select/validate instance selection
   useEffect(() => {
     const next = resolveInstanceSelection(instances, selectedInstanceId)
     if (next !== selectedInstanceId) {
@@ -158,7 +157,6 @@ export function RSSPage({
 
   const hasInstances = (instances?.length ?? 0) > 0
 
-  // Queries
   const {
     data: feedsData,
     isLoading: feedsLoading,
@@ -185,11 +183,9 @@ export function RSSPage({
   const rssPreferences = useRSSPreferences(instanceId, { enabled: instanceId > 0 })
   const { data: metadata } = useInstanceMetadata(instanceId)
 
-  // Derived state
   const isRSSProcessingEnabled = rssPreferences.processingEnabled
   const isRSSAutoDownloadingEnabled = rssPreferences.autoDownloadingEnabled
 
-  // SSE status notifications (only on permanent disconnect)
   const sseDisconnectToastShownRef = useRef(false)
   useEffect(() => {
     if (sseStatus === "live") {
@@ -202,19 +198,16 @@ export function RSSPage({
     }
   }, [sseStatus, sseReconnectAttempt, t])
 
-  // Mutations
   const reprocessRules = useReprocessRSSRules(instanceId)
   const refreshAllFeeds = useRefreshRSSFeed(instanceId)
 
-  // Dialog states
   const [addFeedOpen, setAddFeedOpen] = useState(false)
   const [addFolderOpen, setAddFolderOpen] = useState(false)
   const [addRuleOpen, setAddRuleOpen] = useState(false)
 
-  // Instance selector component (reused in different places)
   const renderInstanceSelector = () => (
     <Select value={instanceId > 0 ? instanceId.toString() : ""} onValueChange={handleInstanceSelection}>
-      <SelectTrigger className="!w-[240px] !max-w-[240px]">
+      <SelectTrigger className="min-w-0 !w-[240px] !max-w-[240px]">
         <div className="flex items-center gap-2 min-w-0 overflow-hidden">
           <HardDrive className="h-4 w-4 flex-shrink-0" />
           <span className="truncate">
@@ -238,12 +231,10 @@ export function RSSPage({
     </Select>
   )
 
-  // No instances view
   if (!hasInstances) {
     return (
-      <div className="flex flex-1 flex-col space-y-6 p-4 lg:p-6 pb-16">
-        <PageHeader title={t("pageTitle")} description={t("pageDescription")} />
-        <div className="flex flex-1 items-center justify-center">
+      <Page title={t("pageTitle")} description={t("pageDescription")}>
+        <div className="flex justify-center">
           <Card className="w-full max-w-md">
             <CardHeader className="text-center">
               <Rss className="mx-auto h-12 w-12 text-muted-foreground mb-2" />
@@ -254,16 +245,14 @@ export function RSSPage({
             </CardHeader>
           </Card>
         </div>
-      </div>
+      </Page>
     )
   }
 
-  // No instance selected view
   if (!instanceId) {
     return (
-      <div className="flex flex-1 flex-col space-y-6 p-4 lg:p-6 pb-16">
-        <PageHeader title={t("pageTitle")} description={t("pageDescription")} actions={renderInstanceSelector()} />
-        <div className="flex flex-1 items-center justify-center">
+      <Page title={t("pageTitle")} description={t("pageDescription")} controls={renderInstanceSelector()}>
+        <div className="flex justify-center">
           <Card className="w-full max-w-md">
             <CardHeader className="text-center">
               <HardDrive className="mx-auto h-12 w-12 text-muted-foreground mb-2" />
@@ -274,31 +263,28 @@ export function RSSPage({
             </CardHeader>
           </Card>
         </div>
-      </div>
+      </Page>
     )
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] p-4 lg:p-6 overflow-hidden">
-      <div className="mb-4 shrink-0">
-        <PageHeader
-          title={t("pageTitle")}
-          description={t("pageDescription")}
-          actions={
-            <>
-              {renderInstanceSelector()}
-              <InstanceSettingsButton
-                instanceId={instanceId}
-                instanceName={instances?.find(inst => inst.id === instanceId)?.name ?? ""}
-                defaultTab="rss"
-                asButton
-              />
-            </>
-          }
-        />
-      </div>
+    <Page
+      fill
+      title={t("pageTitle")}
+      description={t("pageDescription")}
+      controls={
+        <>
+          {renderInstanceSelector()}
+          <InstanceSettingsButton
+            instanceId={instanceId}
+            instanceName={instances?.find(inst => inst.id === instanceId)?.name ?? ""}
+            defaultTab="rss"
+            asButton
+          />
+        </>
+      }
+    >
 
-      {/* Warning Banners */}
       {!isRSSProcessingEnabled && (
         <Alert variant="destructive" className="mb-4 flex items-center gap-3 [&>svg]:static [&>svg]:shrink-0 [&>svg~*]:pl-0">
           <AlertCircle className="h-4 w-4" />
@@ -345,7 +331,6 @@ export function RSSPage({
         </Alert>
       )}
 
-      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as "feeds" | "rules")} className="flex-1 min-h-0 flex flex-col">
         <div className="flex items-center justify-between mb-4 shrink-0">
           <TabsList>
@@ -487,7 +472,6 @@ export function RSSPage({
         </TabsContent>
       </Tabs>
 
-      {/* Dialogs */}
       <AddFeedDialog
         instanceId={instanceId}
         open={addFeedOpen}
@@ -503,13 +487,9 @@ export function RSSPage({
         categories={metadata?.categories ?? {}}
         tags={metadata?.tags ?? []}
       />
-    </div>
+    </Page>
   )
 }
-
-// ============================================================================
-// Feeds Tab
-// ============================================================================
 
 interface FeedsTabProps {
   instanceId: number
@@ -540,11 +520,9 @@ function FeedsTab({
   const moveFeed = useMoveRSSItem(instanceId)
   const setFeedURL = useSetRSSFeedURL(instanceId)
 
-  // Capabilities for version-gated features
   const { data: capabilities } = useInstanceCapabilities(instanceId)
   const supportsSetRSSFeedURL = capabilities?.supportsSetRSSFeedURL ?? false
 
-  // Rename dialog state
   const [renameDialog, setRenameDialog] = useState<{ open: boolean; path: string; currentName: string }>({
     open: false,
     path: "",
@@ -552,7 +530,6 @@ function FeedsTab({
   })
   const [newName, setNewName] = useState("")
 
-  // Edit URL dialog state
   const [editURLDialog, setEditURLDialog] = useState<{ open: boolean; path: string; currentURL: string }>({
     open: false,
     path: "",
@@ -560,11 +537,9 @@ function FeedsTab({
   })
   const [newURL, setNewURL] = useState("")
 
-  // AddTorrentDialog state
   const [addTorrentOpen, setAddTorrentOpen] = useState(false)
   const [addTorrentPayload, setAddTorrentPayload] = useState<AddTorrentDropPayload | null>(null)
 
-  // Find selected feed
   const selectedFeed = useMemo(() => {
     if (!selectedFeedPath || !feedsData) return null
     return findFeedByPath(feedsData, selectedFeedPath)
@@ -639,7 +614,6 @@ function FeedsTab({
     try {
       await refreshFeed.mutateAsync({ itemPath: path })
       toast.success(t("toast.feedRefreshed"))
-      // Invalidate to pick up changes
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: rssKeys.feeds(instanceId) })
       }, 2000)
@@ -660,7 +634,6 @@ function FeedsTab({
   }
 
   const openRenameDialog = (path: string) => {
-    // Extract the current name from the path (last segment)
     const segments = path.split("\\")
     const currentName = segments[segments.length - 1]
     setRenameDialog({ open: true, path, currentName })
@@ -674,7 +647,6 @@ function FeedsTab({
     }
 
     try {
-      // Build the new path by replacing the last segment
       const segments = renameDialog.path.split("\\")
       segments[segments.length - 1] = newName.trim()
       const destPath = segments.join("\\")
@@ -682,7 +654,6 @@ function FeedsTab({
       await moveFeed.mutateAsync({ itemPath: renameDialog.path, destPath })
       toast.success(t("toast.feedRenamed"))
 
-      // Update selection if the renamed feed was selected
       if (selectedFeedPath === renameDialog.path) {
         onFeedSelect(destPath)
       }
@@ -727,7 +698,6 @@ function FeedsTab({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 h-full">
-      {/* Feed Tree - Narrow sidebar */}
       <Card className="flex flex-col min-h-0">
         <CardHeader className="shrink-0 flex flex-row items-center justify-between space-y-0 py-0">
           <CardTitle className="text-sm font-medium">{t("feeds.title")}</CardTitle>
@@ -750,7 +720,6 @@ function FeedsTab({
         </CardContent>
       </Card>
 
-      {/* Rename Dialog */}
       <Dialog open={renameDialog.open} onOpenChange={(open) => !open && setRenameDialog({ open: false, path: "", currentName: "" })}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -776,7 +745,6 @@ function FeedsTab({
         </DialogContent>
       </Dialog>
 
-      {/* Edit URL Dialog */}
       <Dialog open={editURLDialog.open} onOpenChange={(open) => !open && setEditURLDialog({ open: false, path: "", currentURL: "" })}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -802,7 +770,6 @@ function FeedsTab({
         </DialogContent>
       </Dialog>
 
-      {/* Add Torrent Dialog */}
       <AddTorrentDialog
         instanceId={instanceId}
         open={addTorrentOpen}
@@ -811,7 +778,6 @@ function FeedsTab({
         onDropPayloadConsumed={() => setAddTorrentPayload(null)}
       />
 
-      {/* Articles Panel - Main content */}
       <Card className="flex flex-col min-h-0">
         <CardHeader className="shrink-0 flex flex-row items-center justify-between space-y-0 py-0">
           <CardTitle className="text-sm font-medium truncate min-w-0" title={selectedFeed?.url}>
@@ -843,10 +809,6 @@ function FeedsTab({
   )
 }
 
-// ============================================================================
-// Feed Tree Component
-// ============================================================================
-
 interface FeedTreeProps {
   items: RSSItems
   path: string
@@ -863,11 +825,10 @@ function FeedTree({ items, path, selectedPath, onSelect, onRemove, onRefresh, on
   const { t } = useTranslation("rss")
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
 
-  // Auto-expand parent folders when selectedPath changes (e.g., on page load)
   useEffect(() => {
     if (!selectedPath) return
     const parts = selectedPath.split("\\")
-    if (parts.length <= 1) return // No parent folders
+    if (parts.length <= 1) return
 
     const parentPaths: string[] = []
     for (let i = 1; i < parts.length; i++) {
@@ -971,7 +932,6 @@ function FeedTree({ items, path, selectedPath, onSelect, onRemove, onRefresh, on
             </div>
           )
         } else {
-          // Folder
           const folder = item as RSSItems
           const isExpanded = expandedFolders.has(itemPath)
           const feedCount = countFeeds(folder)
@@ -1040,10 +1000,6 @@ function FeedTree({ items, path, selectedPath, onSelect, onRemove, onRefresh, on
   )
 }
 
-// ============================================================================
-// Articles Panel
-// ============================================================================
-
 interface ArticlesPanelProps {
   instanceId: number
   feed: RSSFeed
@@ -1074,11 +1030,9 @@ export function ArticlesPanel({ instanceId, feed, feedPath, onDownload }: Articl
         if (diff !== 0) return diff
       }
 
-      // Put valid dates first; push invalid/missing dates to the bottom.
       if (aValid && !bValid) return -1
       if (!aValid && bValid) return 1
 
-      // Ensure deterministic ordering when dates are equal/missing.
       return a.id.localeCompare(b.id)
     })
   }, [articles])
@@ -1184,7 +1138,6 @@ interface ArticleRowProps {
   onDownload: (torrentURL: string) => void
 }
 
-// Strip HTML tags and decode common HTML entities, preserving link URLs
 function stripHtml(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, "\n")
@@ -1273,10 +1226,6 @@ function ArticleRow({ article, formatDate, onMarkAsRead, onDownload }: ArticleRo
     </Collapsible>
   )
 }
-
-// ============================================================================
-// Rules Tab
-// ============================================================================
 
 interface RulesTabProps {
   instanceId: number
@@ -1414,7 +1363,6 @@ function RulesTab({
         ))}
       </div>
 
-      {/* Rule Preview Sheet */}
       <RulePreviewSheet
         instanceId={instanceId}
         ruleName={selectedRuleName}
@@ -1422,7 +1370,6 @@ function RulesTab({
         onOpenChange={(open) => !open && onRuleSelect(undefined)}
       />
 
-      {/* Edit Rule Dialog */}
       <EditRuleDialog
         instanceId={instanceId}
         open={editRuleOpen}
@@ -1436,10 +1383,6 @@ function RulesTab({
     </div>
   )
 }
-
-// ============================================================================
-// Rule Card
-// ============================================================================
 
 interface RuleCardProps {
   name: string
@@ -1455,7 +1398,6 @@ function RuleCard({ name, rule, isSelected, onSelect, onToggle, onEdit, onRemove
   const { t } = useTranslation("rss")
   const category = rule.torrentParams?.category || rule.assignedCategory
 
-  // Build compact filter summary
   const filterParts: string[] = []
   if (rule.mustContain) {
     const count = rule.mustContain.split("|").filter(Boolean).length
@@ -1541,10 +1483,6 @@ function RuleCard({ name, rule, isSelected, onSelect, onToggle, onEdit, onRemove
   )
 }
 
-// ============================================================================
-// Rule Preview Sheet
-// ============================================================================
-
 interface RulePreviewSheetProps {
   instanceId: number
   ruleName?: string
@@ -1565,13 +1503,13 @@ function RulePreviewSheet({ instanceId, ruleName, open, onOpenChange }: RulePrev
           <SheetTitle>{t("rulePreview.title")}</SheetTitle>
           <SheetDescription>{t("rulePreview.description", { ruleName })}</SheetDescription>
         </SheetHeader>
-        <div className="mt-4">
+        <div className="mt-4 flex min-h-0 flex-1 flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : matchingArticles && Object.keys(matchingArticles).length > 0 ? (
-            <ScrollArea className="h-[calc(100vh-200px)]">
+            <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-4">
                 {Object.entries(matchingArticles).map(([feedUrl, articles]) => (
                   <div key={feedUrl}>
@@ -1600,10 +1538,6 @@ function RulePreviewSheet({ instanceId, ruleName, open, onOpenChange }: RulePrev
     </Sheet>
   )
 }
-
-// ============================================================================
-// Add Feed Dialog
-// ============================================================================
 
 interface AddFeedDialogProps {
   instanceId: number
@@ -1695,10 +1629,6 @@ function AddFeedDialog({ instanceId, open, onOpenChange, feedsData }: AddFeedDia
   )
 }
 
-// ============================================================================
-// Add Folder Dialog
-// ============================================================================
-
 interface AddFolderDialogProps {
   instanceId: number
   open: boolean
@@ -1760,10 +1690,6 @@ function AddFolderDialog({ instanceId, open, onOpenChange }: AddFolderDialogProp
     </Dialog>
   )
 }
-
-// ============================================================================
-// Rule Form State & Fields (shared between Add and Edit dialogs)
-// ============================================================================
 
 interface RuleFormState {
   mustContain: string
@@ -2003,10 +1929,6 @@ function RuleFormFields({
   )
 }
 
-// ============================================================================
-// Add Rule Dialog
-// ============================================================================
-
 interface AddRuleDialogProps {
   instanceId: number
   open: boolean
@@ -2119,10 +2041,6 @@ function AddRuleDialog({
   )
 }
 
-// ============================================================================
-// Edit Rule Dialog
-// ============================================================================
-
 interface EditRuleDialogProps {
   instanceId: number
   open: boolean
@@ -2156,7 +2074,6 @@ function EditRuleDialog({
     return Number.isNaN(parsed.getTime()) ? null : parsed
   }, [rule?.lastMatch])
 
-  // Initialize form when rule changes
   useEffect(() => {
     if (rule) {
       setFormState({
@@ -2252,10 +2169,6 @@ function EditRuleDialog({
     </Dialog>
   )
 }
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
 
 function findFeedByPath(items: RSSItems, path: string): RSSFeed | null {
   const parts = path.split("\\")

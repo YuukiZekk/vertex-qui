@@ -181,13 +181,14 @@ function formatDateAndTime(date: Date, preferences: DateTimePreferences, include
   }
 }
 
-function formatDateOnlyAbsolute(date: Date, preferences: DateTimePreferences): string {
+function formatDateOnlyAbsolute(date: Date, preferences: { dateFormat: DateTimePreferences["dateFormat"]; timezone?: string }, weekday?: "short"): string {
   const timeZone = preferences.timezone
 
   switch (preferences.dateFormat) {
     case "iso":
       return getFormatter(getDateLocales("iso"), {
         timeZone,
+        weekday,
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
@@ -195,6 +196,7 @@ function formatDateOnlyAbsolute(date: Date, preferences: DateTimePreferences): s
     case "us":
       return getFormatter(getDateLocales("us"), {
         timeZone,
+        weekday,
         month: "2-digit",
         day: "2-digit",
         year: "numeric",
@@ -202,6 +204,7 @@ function formatDateOnlyAbsolute(date: Date, preferences: DateTimePreferences): s
     case "eu":
       return getFormatter(getDateLocales("eu"), {
         timeZone,
+        weekday,
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
@@ -209,6 +212,14 @@ function formatDateOnlyAbsolute(date: Date, preferences: DateTimePreferences): s
     default:
       return getFormatter(getDisplayLocales(), { timeZone }).format(date)
   }
+}
+
+/**
+ * Formats a calendar day of the browser in the date format of the preferences, after the name of its weekday when
+ * weekday is set. The time zone of the preferences does not move the day, and the relative format gives the ISO form.
+ */
+export function formatCalendarDay(date: Date, preferences: DateTimePreferences, weekday?: "short"): string {
+  return formatDateOnlyAbsolute(date, { dateFormat: preferences.dateFormat === "relative" ? "iso" : preferences.dateFormat }, weekday)
 }
 
 /**
@@ -292,6 +303,45 @@ export function formatTimeOnly(timestamp: number, preferences?: DateTimePreferen
     console.error("Error formatting time:", error)
     return new Date(timestamp * 1000).toLocaleTimeString(getDisplayLocales())
   }
+}
+
+/**
+ * Format an age as one narrow unit in the active language: minutes below one
+ * hour, hours below one day, and days above that ("4m", "6h", "2d" in English).
+ * An age below one minute shows as one minute.
+ */
+export function formatNarrowAge(ageMs: number): string {
+  const minutes = Math.max(1, Math.floor(ageMs / 60000))
+  const [value, unit] = minutes < 60 ? [minutes, "minute"] : minutes < 24 * 60 ? [Math.floor(minutes / 60), "hour"] : [Math.floor(minutes / (24 * 60)), "day"]
+  return new Intl.NumberFormat(getDisplayLocales(), { style: "unit", unit, unitDisplay: "narrow" }).format(value)
+}
+
+/**
+ * Format the clock time of a moment in the last days: the time alone for a
+ * moment from today, and the weekday with the time for an older one.
+ */
+export function formatClockTime(date: Date, preferences?: DateTimePreferences, now = new Date()): string {
+  const prefs = preferences || getStoredPreferences()
+  const hour12 = prefs.timeFormat === "12h"
+  try {
+    return formatClockTimeIn(date, now, prefs.timezone, hour12)
+  } catch (error) {
+    console.error("Error formatting time:", error)
+    return formatClockTimeIn(date, now, undefined, hour12)
+  }
+}
+
+function formatClockTimeIn(date: Date, now: Date, timeZone: string | undefined, hour12: boolean): string {
+  const day = getFormatter(["en-CA"], { timeZone, year: "numeric", month: "2-digit", day: "2-digit" })
+  const today = day.format(date) === day.format(now)
+
+  return getFormatter(getDisplayLocales(), {
+    timeZone,
+    ...(today ? {} : { weekday: "short" as const }),
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12,
+  }).format(date)
 }
 
 /**

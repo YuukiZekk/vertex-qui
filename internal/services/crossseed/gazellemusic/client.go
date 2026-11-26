@@ -97,29 +97,6 @@ func (s TrackerSpec) TargetHashes(torrentBytes []byte) ([]string, error) {
 	return out, nil
 }
 
-var KnownTrackers = map[string]TrackerSpec{
-	"redacted.sh": {
-		Host:        "redacted.sh",
-		RateLimit:   10,
-		RatePeriod:  10,
-		SourceFlag:  "RED",
-		LegacyFlags: []string{"PTH"},
-	},
-	"orpheus.network": {
-		Host:        "orpheus.network",
-		RateLimit:   5,
-		RatePeriod:  10,
-		SourceFlag:  "OPS",
-		LegacyFlags: []string{"APL"},
-	},
-}
-
-// TrackerToSite maps announce tracker hosts to their API site hosts.
-var TrackerToSite = map[string]string{
-	"flacsfor.me":    "redacted.sh",
-	"home.opsfet.ch": "orpheus.network",
-}
-
 type AjaxResponse struct {
 	Status   string          `json:"status"`
 	Response json.RawMessage `json:"response"`
@@ -140,7 +117,6 @@ type TorrentDetails struct {
 	ID       int64  `json:"id"`
 	InfoHash string `json:"infoHash"`
 	Size     int64  `json:"size"`
-	FileList string `json:"fileList"`
 }
 
 type SearchResponse struct {
@@ -217,22 +193,26 @@ func sharedLimiterForTracker(spec TrackerSpec) (*rate.Limiter, error) {
 	return actual.(*rate.Limiter), nil
 }
 
-// NewClient builds a client for one of the KnownTrackers. trackerHost is the
-// tracker's identity: it selects the rate limit and the source flag. baseURL is
-// the address to talk to, and is empty outside tests, where it means the
-// tracker's own site.
+// NewClient builds a client for one of the Sites. trackerHost is the API host
+// of the site: it selects the rate limit and the source flag. baseURL is the
+// address to talk to, and is empty outside tests, where it means the site
+// itself. In a test, a client with a baseURL has no rate limit.
 func NewClient(trackerHost, baseURL, apiKey string) (*Client, error) {
-	host := strings.ToLower(strings.TrimSpace(trackerHost))
-	spec, ok := KnownTrackers[host]
+	site, ok := SiteByHost(trackerHost)
 	if !ok {
 		return nil, fmt.Errorf("unsupported gazelle host: %s", trackerHost)
 	}
+	host, spec := site.Host, site.TrackerSpec
 	limiter, err := sharedLimiterForTracker(spec)
 	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(baseURL) == "" {
 		baseURL = "https://" + host
+	} else if testing.Testing() {
+		// The limit of a site is shared by the whole test binary, so each request
+		// to a test server would wait for the requests of the other tests.
+		limiter = rate.NewLimiter(rate.Inf, 1)
 	}
 
 	return &Client{
@@ -403,22 +383,6 @@ func (c *Client) SearchByFilename(ctx context.Context, filename string) ([]Torre
 		}
 	}
 	return results, nil
-}
-
-func (c *Client) GetTorrent(ctx context.Context, torrentID int64) (*TorrentResponse, error) {
-	params := url.Values{}
-	params.Set("id", strconv.FormatInt(torrentID, 10))
-
-	resp, err := c.ajax(ctx, "torrent", params)
-	if err != nil {
-		return nil, err
-	}
-
-	var torrentResp TorrentResponse
-	if err := json.Unmarshal(resp.Response, &torrentResp); err != nil {
-		return nil, err
-	}
-	return &torrentResp, nil
 }
 
 func (c *Client) DownloadTorrent(ctx context.Context, torrentID int64) ([]byte, error) {

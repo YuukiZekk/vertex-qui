@@ -68,6 +68,8 @@
     "externalPrograms": "Externí programy",
     "exportTorrent": "Exportovat torrent",
     "exportTorrents": "Exportovat torrenty ({{count}})",
+    "transferToInstance": "Přenést do instance…",
+    "shareWithSomeone": "Sdílet s někým…",
     "copy": "Kopírovat...",
     "copyName": "Kopírovat název",
     "copyHash": "Kopírovat hash",
@@ -185,14 +187,6 @@
     "renameTorrentSuccess": "Torrent přejmenován na \"{{name}}\"",
     "renameTorrentFailed": "Nepodařilo se přejmenovat torrent: {{error}}",
     "renameTorrentEmpty": "Název torrentu nemůže být prázdný",
-    "renameFileSuccess": "Soubor přejmenován na \"{{name}}\"",
-    "renameFileFailed": "Nepodařilo se přejmenovat soubor: {{error}}",
-    "renameFilePathsRequired": "Původní a nová cesta souboru jsou vyžadovány",
-    "renameFileUnchanged": "Název souboru nezměněn",
-    "renameFolderSuccess": "Adresář přejmenován na \"{{name}}\"",
-    "renameFolderFailed": "Nepodařilo se přejmenovat adresář: {{error}}",
-    "renameFolderPathsRequired": "Původní a nová cesta adresáře jsou vyžadovány",
-    "renameFolderUnchanged": "Název adresáře nezměněn",
     "partialTags": {
       "title_one": "Částečně aktualizovány tagy pro {{count}} torrent",
       "title_few": "Částečně aktualizovány tagy pro {{count}} torrenty",
@@ -672,10 +666,7 @@
     "bottomPriorityBatch": "Nejnižší priorita ({{count}})"
   },
   "renameSubmenu": {
-    "rename": "Přejmenovat",
-    "renameTorrent": "Přejmenovat torrent",
-    "renameFile": "Přejmenovat soubor",
-    "renameFolder": "Přejmenovat složku"
+    "renameTorrent": "Přejmenovat torrent"
   },
   "tagCategoryManagement": {
     "createTag": {
@@ -789,12 +780,10 @@
     "partialResults": "Částečné výsledky - některé indexery neodpověděly",
     "arrLookupFailed": "Vyhledání ID metadat selhalo - hledáno pouze podle názvu, výsledky mohou být neúplné",
     "arrNoIds": "Pro tuto release nebyla nalezena žádná ID metadat - hledáno pouze podle názvu",
-    "gazelleTimedOut": "RED/OPS neodpověděl včas",
     "torznabFailed": "Hledání přes Torznab selhalo - zobrazeny jsou pouze výsledky z RED/OPS",
     "searchScope": "Hledat rozsah",
     "noIndexers": "Nejsou dostupné žádné Torznab indexery",
     "noIndexersHelp": "Přidejte nebo povolte Torznab indexery v Nastavení pro hledání křížových sdílení.",
-    "gazelleOnlySearch": "Hledání se dotazuje jen stránek RED/OPS, které mají klíč API.",
     "capabilityNote": "Poznámka o schopnostech",
     "capabilityDescription": "Tyto indexery nemají požadované schopnosti/kategorie pro tento torrent a budou přeskočeny serverem:",
     "smartFilteringActive": "Inteligentní filtrování je aktivní",
@@ -883,7 +872,30 @@
       "useRss": "Použijte funkci RSS automatizace pro trvalé křížové sdílení",
       "checkIndexers": "Zkontrolujte help stránky indexerů a zjistěte, které jsou omezené"
     },
-    "routedTo": "Křížová sdílení jdou do instance pro křížové sdílení {{instance}}."
+    "routedTo": "Křížová sdílení jdou do instance pro křížové sdílení {{instance}}.",
+    "gazelle": {
+      "heading": "RED/OPS",
+      "willAsk": "bude dotázán",
+      "willAskRejected": "bude dotázán: web minule odmítl klíč API",
+      "match": "shoda",
+      "noMatch": "žádná shoda",
+      "openSettings": "Otevřít nastavení",
+      "notAsked": {
+        "disabled": "nedotázán: vypnuto",
+        "noApiKey": "nedotázán: chybí klíč API",
+        "cooldown": "nedotázán: nedávno prohledán",
+        "notSelected": "nedotázán: nevybrán",
+        "sourceSite": "nedotázán: torrent pochází z {{site}}",
+        "alreadySeeded": "nedotázán: už ho tam seedujete",
+        "notMusic": "nedotázán: není to hudba",
+        "other": "nedotázán"
+      },
+      "failed": {
+        "keyRejected": "selhalo: web odmítl klíč API",
+        "timedOut": "selhalo: vypršel časový limit",
+        "other": "selhalo: {{detail}}"
+      }
+    }
   },
   "columnFilter": {
     "filterColumn": "Filtrovat {{column}}",
@@ -1079,7 +1091,7 @@
     "torrentCount_other": "{{count}} torrenty",
     "torrentsLoaded": "{{loaded}} z {{total}} torrentů načteno",
     "scrollForMore": "(skrolovat pro více)",
-    "freeSpace": "Volné místo",
+    "freeSpace": "Volné místo (výchozí složka)",
     "switchToBits": "Přepnout na bitů za sekundu (bps)",
     "switchToBytes": "Přepnout na bajtů za sekundu (B/s)",
     "altSpeedOn": "Alternativní rychlostní limity: Povoleno",
@@ -1309,6 +1321,7 @@
     "status": "Stav",
     "tracker": "Tracker",
     "seeds": "Seedy",
+    "peers": "Peerové",
     "leeches": "Stahovatelé",
     "downloaded": "Stáhnuto",
     "message": "Zpráva",
@@ -1427,10 +1440,6 @@
     "description": "Přidejte torrent soubor nebo magnetovou adresu pro začátek stahování",
     "file": "Soubor",
     "url": "URL",
-    "tabs": {
-      "basic": "Základní",
-      "advanced": "Pokročilé"
-    },
     "validation": {
       "selectTorrentFile": "Vyberte alespoň jeden torrent soubor",
       "enterUrl": "Vyberte alespoň jednu URL nebo magnetovou adresu"
@@ -1443,7 +1452,11 @@
       "existingTorrents": "Existující torrenty: {{names}}",
       "highlightedBelow": "Duplicitní výběry jsou zvýrazněny níže.",
       "remove": "Odebrat duplicity",
-      "matchesExisting": "Shoduje se s existujícími: {{names}}"
+      "matchesExisting": "Shoduje se s existujícími: {{names}}",
+      "existingTorrent": "Existující torrent",
+      "more_one": "(+{{count}} další)",
+      "more_few": "(+{{count}} další)",
+      "more_other": "(+{{count}} dalších)"
     },
     "fileInput": {
       "label": "Torrent soubory",
@@ -1456,10 +1469,9 @@
       "duplicateFiles_one": "{{count}} duplicitní soubor",
       "duplicateFiles_few": "{{count}} duplicitní soubory",
       "duplicateFiles_other": "{{count}} duplicitní soubory",
-      "showFiles": "Zobrazit soubory",
-      "hideFiles": "Skrýt soubory",
-      "moreFiles": "... a {{count}} dalších",
-      "removeFile": "Odebrat soubor"
+      "removeFile": "Odebrat soubor",
+      "addMore": "Přidat další soubory",
+      "choose": "Vybrat torrent soubory"
     },
     "urlInput": {
       "label": "URLs / Magnetové adresy",
@@ -1470,31 +1482,22 @@
       "skipHashCheck": "Přeskočit hashování",
       "category": "Kategorie",
       "searchCategories": "Hledat kategorie...",
-      "availableCategories": "Dostupné kategorie (klikněte pro výběr)",
-      "availableCategoriesFiltered": "Dostupné kategorie (klikněte pro výběr) - filtr: \"{{query}}\"",
       "noCategoriesMatch": "Žádné kategorie neodpovídají \"{{query}}\"",
       "tags": "Tagy",
       "tagsPlaceholder": "Vytvořit nový tag nebo hledat dostupné tagy...",
-      "clearAll": "Všechny vymazat",
-      "availableTags": "Dostupné tagy (klikněte pro výběr/zrušení výběru)",
-      "availableTagsFiltered": "Dostupné tagy (klikněte pro výběr/zrušení výběru) - filtr: \"{{query}}\"",
       "newTag": "(nový)",
-      "noTagsMatch": "Žádné tagy neodpovídají \"{{query}}\"",
       "autoTmm": "Automatická správa torrentů (TMM)",
       "savePath": "Složka pro uložení",
+      "freeSpaceAtDestination": "Volné místo v cíli: {{value}}",
       "savePathPlaceholder": "Ponechte prázdné pro výchozí",
-      "manualSavePath": "Manuální složka pro uložení (TMM vypnuto)",
       "useTemporaryPath": "Použít dočasnou cestu",
       "useTemporaryPathDescription": "Stáhnout do dočasné složky před přesunutím do finální složky",
       "tempPath": "Dočasná cesta stahování",
       "tempPathPlaceholder": "Ponechte prázdné pro výchozí",
-      "tempPathDescription": "Torrenty budou stahovány do této složky před přesunutím do finální složky",
-      "autoTmmSavePathDescription": "Automatická správa torrentů je povolena. Složka pro uložení bude určena nastavením kategorie.",
-      "advancedOptions": "Pokročilé možnosti",
       "sequentialDownload": "Postupné stahování",
-      "sequentialDownloadDescription": "(užitečné pro media soubory)",
+      "sequentialDownloadDescription": "Užitečné pro media soubory",
       "firstLastPiecePriority": "Priorita první/poslední části",
-      "firstLastPiecePriorityDescription": "(zahájit přehrávání rychleji)",
+      "firstLastPiecePriorityDescription": "Zahájit přehrávání rychleji",
       "downloadLimit": "Limit stahování (KB/s)",
       "uploadLimit": "Limit odesílání (KB/s)",
       "unlimitedPlaceholder": "0 = neomezeno",
@@ -1510,12 +1513,38 @@
       "renamePlaceholder": "Ponechte prázdné pro použití původního názvu",
       "autoAppliedTitle": "Automaticky použito:",
       "autoAddTrackers": "• Automaticky přidat trackery",
-      "fileExclusions": "• Vyloučené soubory: {{value}}"
+      "fileExclusions": "• Vyloučené soubory: {{value}}",
+      "noCategory": "Bez kategorie",
+      "removeTag": "Odebrat tag {{tag}}",
+      "addTags": "Přidat tagy",
+      "createTag": "Vytvořit tag „{{tag}}“",
+      "noTagsYet": "Zatím žádné tagy. Zadejte název a vytvořte nový.",
+      "done": "Hotovo",
+      "moreOptions": "Další možnosti",
+      "moreOptionsHint": "Cesta, rozložení, pořadí stahování, limity",
+      "saveLocation": "Umístění",
+      "downloadBehavior": "Pořadí stahování",
+      "limits": "Limity",
+      "changedCount_one": "{{count}} změněna",
+      "changedCount_few": "{{count}} změněny",
+      "changedCount_other": "{{count}} změněno",
+      "clearAll": "Všechny vymazat",
+      "tagsWithCount": "Tagy ({{n}})",
+      "categorySavePath": "Uloží do {{path}}",
+      "autoTmmStatus": "Cestu určuje kategorie",
+      "addTypedTags": "Přidat tagy: {{tags}}",
+      "selectedState": "Vybráno",
+      "moreTags_one": "+{{count}} další",
+      "moreTags_few": "+{{count}} další",
+      "moreTags_other": "+{{count}} dalších"
     },
     "footer": {
       "adding": "Přidávání...",
       "add": "Přidat torrent",
-      "cancel": "Zrušit"
+      "cancel": "Zrušit",
+      "addCount_one": "Přidat {{count}} torrent",
+      "addCount_few": "Přidat {{count}} torrenty",
+      "addCount_other": "Přidat {{count}} torrentů"
     },
     "toast": {
       "verifyInput": "Prosím ověřte torrent soubor nebo URL a zkuste to znovu.",
@@ -1556,21 +1585,14 @@
     "incognito": "Anonymní",
     "add": "Přidat",
     "tasks": "Úlohy",
-    "done": "Dokončeno",
     "actionsForCount": "Akce pro {{count}} torrent(y)",
     "actionsForAll": "Akce pro všechny {{count}} torrent(y)",
     "selection": {
       "selectedCount": "{{count}} vybráno",
       "allSelectedCount": "Všechny {{count}} vybrány(o)"
     },
-    "searchModal": {
-      "title": "Hledat torrenty",
-      "description": "Hledat podle názvu, kategorie nebo tagů. Podporuje globální vzory jako *.mkv nebo *1080p*.",
-      "placeholder": "Hledat torrenty...",
-      "globExamples": "*.mkv, *1080p*, *S[0-9][0-9]E[0-9][0-9]*",
-      "autoSearches": "Automatické hledání po zadání"
-    },
-    "ratio": "Poměr:"
+    "ratio": "Poměr:",
+    "added": "Přidáno {{time}}"
   },
   "tableView": {
     "ascending": "vzestupně",
@@ -1649,6 +1671,9 @@
     "trackerDown": "Tracker nedostupný",
     "unregistered": "Neregistrovaný",
     "trackerError": "Chyba trackeru",
+    "helperTransfer": "Pomocník přenosu",
+    "helperShare": "Pomocník sdílení",
+    "helperHint": "qui přidal tento torrent pro přenos nebo sdílení. Jeho soubory patří jinému torrentu.",
     "now": "nyní",
     "yes": "Ano",
     "no": "Ne"
@@ -1735,13 +1760,14 @@
       "dropped": "Balíček přidán. Vynechané cíle: {{names}}",
       "rejected": "{{name}}: {{reason}}",
       "reasons": {
-        "no_filesystem_access": "Tato instance potřebuje přístup k místnímu souborovému systému pro sestavení balíčku.",
+        "no_filesystem_access": "Tato instance potřebuje přístup k souborovému systému pro zápis, aby mohla sestavit balíček. Povolte „Lokální přístup k souborům“ nebo nastavte přístup přes SSH v nastavení instance.",
         "no_link_mode": "Pro výběr více cílů povolte v této instanci pevné odkazy nebo reflinky.",
         "no_base_directory": "Nastavte základní adresář odkazů této instance.",
         "no_episode_files": "V balíčku nebyly nalezeny přehratelné soubory epizod.",
         "target_not_found": "Cíl nebyl v této instanci nalezen.",
         "incomplete": "Stahování cíle není dokončeno.",
         "not_settled": "Tento torrent se stále přesouvá nebo kontroluje. Zkuste to znovu, až to skončí.",
+        "errored": "Tento torrent má chybu nebo chybějící soubory. Opravte to a zkuste to znovu.",
         "no_episode_identity": "Číslo epizody nelze rozpoznat.",
         "file_list_unavailable": "Seznam souborů cíle není dostupný.",
         "episode_file_invalid": "Cíl musí obsahovat jeden přehratelný soubor s identitou vybrané epizody.",
@@ -1755,6 +1781,168 @@
         "link_failed": "Odkazy nelze vytvořit.",
         "add_failed": "Torrent nelze přidat."
       }
+    }
+  },
+  "copyGroups": {
+    "copies_one": "{{count}} další kopie položky {{name}}",
+    "copies_few": "{{count}} další kopie položky {{name}}",
+    "copies_other": "{{count}} dalších kopií položky {{name}}",
+    "labelWithProblem": "{{label}}. {{problem}}",
+    "hiddenProblem": {
+      "missingFiles": "Skryté kopii chybí soubory",
+      "error": "Skrytá kopie má chybu",
+      "unregistered": "Skrytá kopie není registrovaná",
+      "trackerError": "Skrytá kopie má chybu trackeru",
+      "trackerDown": "Tracker skryté kopie je nedostupný"
+    },
+    "badge": "+{{hidden}}",
+    "badgeTicked_one": "+{{hidden}} · {{count}} vybraná",
+    "badgeTicked_few": "+{{hidden}} · {{count}} vybrané",
+    "badgeTicked_other": "+{{hidden}} · {{count}} vybraných",
+    "hiddenTicked_one": "{{count}} skrytá kopie je vybraná",
+    "hiddenTicked_few": "{{count}} skryté kopie jsou vybrané",
+    "hiddenTicked_other": "{{count}} skrytých kopií je vybraných",
+    "labelWithTicks": "{{label}}. {{ticks}}",
+    "groupCopies": "Seskupit kopie",
+    "ungroupCopies": "Zrušit seskupení kopií",
+    "grouping": "Seskupování…"
+  },
+  "featureNotice": {
+    "groupCopies": {
+      "title": "Seskupte svá křížová sdílení",
+      "description": "Zobrazí kopie jednoho torrentu jako jeden řádek.",
+      "action": "Vyzkoušet"
+    },
+    "displayProfiles": {
+      "title": "Profily zobrazení",
+      "description": "Dejte každé obrazovce vlastní sloupce, hustotu řádků a postranní panely. Profil tohoto prohlížeče vyberete tady.",
+      "action": "Vytvořit profil"
+    }
+  },
+  "displayProfiles": {
+    "chipAriaLabel": "Profil zobrazení: {{name}}",
+    "menuLabel": "Profil zobrazení",
+    "defaultName": "Výchozí",
+    "manage": "Spravovat profily…",
+    "sheetDescription": "Každý prohlížeč si vybírá vlastní profil.",
+    "settings": {
+      "title": "Profily zobrazení",
+      "holds": "Obsahuje: sloupce · hustotu řádků · postranní panely · sekce filtrů · stromy kategorií · prázdné filtry",
+      "holdsHelp": "Profil určuje, jak vypadá seznam torrentů: které sloupce se zobrazují, jejich pořadí a šířku, roztažení sloupce Název, hustotu řádků, otevřené postranní panely a sekce filtrů, sbalené stromy kategorií a zda se zobrazují prázdné filtry. Určuje také, které řádky instancí na stránce Domů jsou otevřené. Každý prohlížeč používá jeden profil a volbu si pamatuje jen tento prohlížeč. Prohlížeč, který si nikdy žádný nevybral, a anonymní okno používají Default. Ostatní nastavení sdílejí všechny profily.",
+      "thisBrowser": "Tento prohlížeč",
+      "use": "Použít v tomto prohlížeči",
+      "makeProfile": "Vytvořit profil pro notebook nebo telefon",
+      "themesSync": "Motivy se synchronizují samostatně: <sync>Synchronizace motivu</sync>",
+      "renameAriaLabel": "Přejmenovat {{name}}",
+      "saveName": "Uložit název",
+      "cancelRename": "Zrušit přejmenování",
+      "editAriaLabel": "Upravit {{name}}",
+      "editTitle": "Upravit profil",
+      "delete": "Smazat…",
+      "deleteTitle": "Smazat {{name}}?",
+      "deleteDescription": "Ostatní prohlížeče, které ho používají, přejdou na {{defaultName}}.",
+      "deleteConfirm": "Smazat",
+      "look": "{{density}} · {{filterSidebar}}",
+      "densities": {
+        "table": "Řádky tabulky",
+        "dense": "Kompaktní řádky",
+        "stacked": "Skládané karty"
+      },
+      "filterSidebarOpen": "panel filtrů otevřený",
+      "filterSidebarClosed": "panel filtrů zavřený"
+    },
+    "nameErrors": {
+      "empty": "Zadejte název.",
+      "tooLong": "Použijte nejvýše {{max}} znaků.",
+      "duplicate": "Tento název už má jiný profil."
+    },
+    "ownSortAndFilters": {
+      "label": "Vlastní řazení a filtry",
+      "help": "<lead>Když je zapnuto, tento profil si drží vlastní:</lead><list><item>řazení seznamu torrentů</item><item>filtry sloupců a filtry postranního panelu</item><item>instance, které ukazuje sjednocený pohled</item><item>Seskupit kopie, zapnuto nebo vypnuto</item><item>poslední otevřená karta panelu podrobností</item><item>instance, kterou ukazují stránky záloh a RSS</item></list><note>Změna těchto hodnot v tomto profilu se nedostane do jiných profilů. Když je vypnuto, tento profil je sdílí se všemi ostatními profily, které nemají vlastní. Vypnutím se vlastní hodnoty tohoto profilu smažou.</note>",
+      "offWarning": "Vypnutím se smaže vlastní řazení a filtry profilu {{name}}.",
+      "defaultShares": "Vždy sdílí řazení a filtry",
+      "defaultSharesHelp": "Default vždy sdílí řazení, filtry a další volby zobrazení se všemi profily, které nemají vlastní. Chcete-li mít vlastní, vytvořte jiný profil a zapněte Vlastní řazení a filtry."
+    },
+    "deletedToast": "Profil {{name}} byl smazán. Tento prohlížeč teď používá {{defaultName}}.",
+    "newProfile": "Nový profil z tohoto nastavení…",
+    "newDialog": {
+      "title": "Nový profil",
+      "copies": "Zkopíruje <profile>{{name}}</profile>: sloupce, hustotu, postranní panely a filtry. Tento prohlížeč ho pak používá.",
+      "name": "Název",
+      "namePlaceholder": "Například Notebook",
+      "nameCount": "{{length}}/{{max}}",
+      "cancel": "Zrušit",
+      "create": "Vytvořit"
+    },
+    "iconPicker": {
+      "trigger": "Ikona: {{icon}}. Změnit ikonu a barvu",
+      "letter": "První písmeno názvu",
+      "color": "Barva"
+    },
+    "iconGroups": {
+      "devices": "Zařízení",
+      "places": "Místa",
+      "use": "Použití",
+      "mood": "Nálada"
+    },
+    "icons": {
+      "appWindow": "Okno aplikace",
+      "monitor": "Monitor",
+      "laptop": "Notebook",
+      "tablet": "Tablet",
+      "smartphone": "Chytrý telefon",
+      "tv": "TV",
+      "server": "Server",
+      "gamepad": "Herní ovladač",
+      "house": "Dům",
+      "briefcase": "Aktovka",
+      "building": "Budova",
+      "sofa": "Pohovka",
+      "bed": "Postel",
+      "coffee": "Káva",
+      "plane": "Letadlo",
+      "train": "Vlak",
+      "rows": "Řádky",
+      "table": "Tabulka",
+      "list": "Seznam",
+      "eye": "Oko",
+      "gauge": "Ukazatel",
+      "zap": "Blesk",
+      "download": "Stahování",
+      "upload": "Nahrávání",
+      "sprout": "Výhonek",
+      "bookmark": "Záložka",
+      "moon": "Měsíc",
+      "sun": "Slunce",
+      "star": "Hvězda",
+      "heart": "Srdce",
+      "flame": "Plamen",
+      "rocket": "Raketa"
+    },
+    "colors": {
+      "none": "Žádná (barva textu)",
+      "sky": "Nebeská",
+      "emerald": "Smaragdová",
+      "amber": "Jantarová",
+      "rose": "Růžová",
+      "violet": "Fialová",
+      "orange": "Oranžová",
+      "teal": "Modrozelená",
+      "pink": "Sytě růžová"
+    },
+    "columns": {
+      "headingEveryInstance": "Sloupce v {{profile}} · každá instance",
+      "headingOneInstance": "Sloupce v {{profile}} · jen {{instance}}",
+      "unifiedView": "Unifikované zobrazení",
+      "thisInstance": "tato instance"
+    },
+    "sameColumns": {
+      "label": "Stejné sloupce na každé instanci",
+      "menuHelp": "Řazení a filtry sloupců zůstávají pro každou instanci zvlášť.",
+      "helpOn": "Jedno nastavení sloupců pro {{instances}}.",
+      "helpOff": "Každá instance si ponechá své. Po zapnutí dostane každá instance sloupce z {{instance}}.",
+      "helpOffNoInstance": "Každá instance si ponechá své.",
+      "unifiedViewInList": "unifikované zobrazení"
     }
   }
 }

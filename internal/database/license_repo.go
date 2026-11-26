@@ -33,7 +33,6 @@ func rollbackTx(tx rollbacker) {
 	}
 }
 
-// GetLicenseByKey retrieves a license by its key
 func (r *LicenseRepo) GetLicenseByKey(ctx context.Context, licenseKey string) (*models.ProductLicense, error) {
 	query := `
 		SELECT id, license_key, product_name,  status, activated_at, expires_at,
@@ -74,7 +73,6 @@ func (r *LicenseRepo) GetLicenseByKey(ctx context.Context, licenseKey string) (*
 	return license, nil
 }
 
-// GetAllLicenses retrieves all licenses
 func (r *LicenseRepo) GetAllLicenses(ctx context.Context) ([]*models.ProductLicense, error) {
 	query := `
 		SELECT id, license_key, product_name, status, activated_at, expires_at,
@@ -127,16 +125,33 @@ func (r *LicenseRepo) GetAllLicenses(ctx context.Context) ([]*models.ProductLice
 	return licenses, nil
 }
 
-// HasPremiumAccess checks if the user has purchased premium access (one-time unlock)
 func (r *LicenseRepo) HasPremiumAccess(ctx context.Context) (bool, error) {
-	query := `
+	return r.hasActiveLicense(ctx, `
 		SELECT COUNT(*)
 		FROM licenses
-		WHERE product_name = 'premium-access'
+		WHERE product_name IN ('premium-access', 'supporter')
 		AND status = ?
 		AND (expires_at IS NULL OR expires_at > ?)
-	`
+	`)
+}
 
+func (r *LicenseRepo) IsSupporter(ctx context.Context) (bool, error) {
+	return r.hasActiveLicense(ctx, `
+		SELECT COUNT(*)
+		FROM licenses
+		WHERE product_name = 'supporter'
+		AND status = ?
+		AND (expires_at IS NULL OR expires_at > ?)
+	`)
+}
+
+func (r *LicenseRepo) ServerSetupTime(ctx context.Context) (time.Time, error) {
+	var setupAt time.Time
+	err := r.db.QueryRowContext(ctx, "SELECT applied_at FROM migrations ORDER BY applied_at LIMIT 1").Scan(&setupAt)
+	return setupAt, err
+}
+
+func (r *LicenseRepo) hasActiveLicense(ctx context.Context, query string) (bool, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx, query, models.LicenseStatusActive, time.Now().UTC()).Scan(&count)
 	if err != nil {
@@ -146,7 +161,6 @@ func (r *LicenseRepo) HasPremiumAccess(ctx context.Context) (bool, error) {
 	return count > 0, nil
 }
 
-// DeleteLicense removes a license from the database
 func (r *LicenseRepo) DeleteLicense(ctx context.Context, licenseKey string) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -269,7 +283,6 @@ func (r *LicenseRepo) UpdateLicenseValidation(ctx context.Context, license *mode
 	return nil
 }
 
-// UpdateLicenseActivation updates a license with activation details
 func (r *LicenseRepo) UpdateLicenseActivation(ctx context.Context, license *models.ProductLicense) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -279,12 +292,13 @@ func (r *LicenseRepo) UpdateLicenseActivation(ctx context.Context, license *mode
 
 	query := `
 		UPDATE licenses
-		SET provider = ?, dodo_instance_id = ?,
+		SET product_name = ?, provider = ?, dodo_instance_id = ?,
 		    activated_at = ?, expires_at = ?, last_validated = ?, updated_at = ?, status = ?
 		WHERE id = ?
 	`
 
 	_, err = tx.ExecContext(ctx, query,
+		license.ProductName,
 		stringToNullString(license.Provider),
 		stringToNullString(license.DodoInstanceID),
 		license.ActivatedAt,
@@ -350,7 +364,6 @@ func stringToNullString(value string) sql.Null[string] {
 	return sql.Null[string]{V: value, Valid: true}
 }
 
-// Helper function to mask license keys in logs
 func maskLicenseKey(key string) string {
 	if len(key) <= 8 {
 		return "***"

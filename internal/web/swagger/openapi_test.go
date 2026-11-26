@@ -8,14 +8,12 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 )
 
 func TestOpenAPISpec(t *testing.T) {
-	// Check if the embedded OpenAPI spec is valid
 	if len(openapiYAML) == 0 {
 		t.Fatal("OpenAPI spec is empty")
 	}
@@ -46,7 +44,6 @@ func TestOpenAPISpec(t *testing.T) {
 	for _, pathItem := range paths {
 		if methods, ok := pathItem.(map[string]any); ok {
 			for method := range methods {
-				// Skip non-HTTP methods like "parameters"
 				if method == "get" || method == "post" || method == "put" || method == "delete" || method == "patch" {
 					totalEndpoints++
 				}
@@ -66,7 +63,6 @@ func TestOpenAPISpec(t *testing.T) {
 		t.Fatal("Missing or invalid 'schemas' section")
 	}
 
-	// Check for required schemas
 	requiredSchemas := []string{
 		"User",
 		"ApiKey",
@@ -86,7 +82,6 @@ func TestOpenAPISpec(t *testing.T) {
 	}
 }
 
-// TestOpenAPISecuritySchemes validates that security schemes are properly defined
 func TestOpenAPISecuritySchemes(t *testing.T) {
 	var spec map[string]any
 	if err := yaml.Unmarshal(openapiYAML, &spec); err != nil {
@@ -116,16 +111,10 @@ func TestOpenAPISecuritySchemes(t *testing.T) {
 // This catches mismatches like savePath vs savepath or torrentFile vs torrent
 // that cause silent API failures.
 func TestAddTorrentFormFieldsDocumented(t *testing.T) {
-	// Locate torrents.go relative to this test file so the test works
-	// regardless of the working directory used by `go test`.
-	_, thisFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-	handlerPath := filepath.Join(filepath.Dir(thisFile), "..", "..", "api", "handlers", "torrents.go")
+	// go test runs in the package directory. runtime.Caller is not used
+	// because -trimpath turns its result into a module path.
+	handlerPath := filepath.Join("..", "..", "api", "handlers", "torrents.go")
 
-	// Parse the handler source with go/parser so we only inspect the
-	// AddTorrent method and extract FormValue string arguments from the AST.
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, handlerPath, nil, 0)
 	if err != nil {
@@ -138,7 +127,6 @@ func TestAddTorrentFormFieldsDocumented(t *testing.T) {
 		if !ok || fn.Name.Name != "AddTorrent" {
 			continue
 		}
-		// Walk the AST of AddTorrent looking for multipart form field access.
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
 			index, ok := n.(*ast.IndexExpr)
 			if ok && selectorChain(index.X, "r", "MultipartForm", "File") {
@@ -161,7 +149,6 @@ func TestAddTorrentFormFieldsDocumented(t *testing.T) {
 			if !ok || arg.Kind != token.STRING {
 				return true
 			}
-			// Strip quotes from the string literal.
 			field := arg.Value[1 : len(arg.Value)-1]
 			handlerFields[field] = true
 			return true
@@ -171,14 +158,11 @@ func TestAddTorrentFormFieldsDocumented(t *testing.T) {
 		t.Fatal("No multipart fields found in AddTorrent handler")
 	}
 
-	// Parse the OpenAPI spec and extract properties from the add-torrent endpoint.
 	var spec map[string]any
 	if err := yaml.Unmarshal(openapiYAML, &spec); err != nil {
 		t.Fatalf("Failed to parse OpenAPI spec: %v", err)
 	}
 
-	// Navigate: paths -> /api/instances/{instanceID}/torrents -> post -> requestBody
-	//   -> content -> multipart/form-data -> schema -> properties
 	asMap := func(v any, path string) map[string]any {
 		t.Helper()
 		m, ok := v.(map[string]any)
@@ -210,14 +194,12 @@ func TestAddTorrentFormFieldsDocumented(t *testing.T) {
 		specFields[name] = true
 	}
 
-	// Check: every handler field must be in the spec.
 	for field := range handlerFields {
 		if !specFields[field] {
 			t.Errorf("Handler reads multipart field %q but OpenAPI spec does not document it", field)
 		}
 	}
 
-	// Check: every spec field must be in the handler.
 	for field := range specFields {
 		if !handlerFields[field] {
 			t.Errorf("OpenAPI spec documents %q but handler does not read it", field)

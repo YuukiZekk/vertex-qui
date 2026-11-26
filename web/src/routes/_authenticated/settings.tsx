@@ -10,7 +10,7 @@ import { z } from "zod"
 
 const settingsSearchSchema = z.object({
   tab: z.enum(SETTINGS_TABS).optional().catch(undefined),
-  modal: z.enum(["add-instance", "install-update"]).optional().catch(undefined),
+  modal: z.enum(["add-instance", "install-update", "theme-menu"]).optional().catch(undefined),
   checkout: z.enum(["success"]).optional().catch(undefined),
   status: z.string().optional().catch(undefined),
   payment_id: z.string().optional().catch(undefined),
@@ -27,10 +27,10 @@ function SettingsRoute() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
 
-  const handleSearchChange = (newSearch: SettingsSearch) => {
+  const handleSearchChange = (newSearch: SettingsSearch, options?: { replace: boolean }) => {
     navigate({
       search: newSearch,
-      replace: true,
+      replace: options?.replace ?? true,
     })
   }
 

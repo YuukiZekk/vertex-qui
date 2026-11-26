@@ -3,10 +3,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-// This file is a thin re-export barrel. Type definitions live in domain
-// modules alongside this file; every symbol previously exported from
-// "@/types" remains importable from here unchanged.
-
 export * from "./common"
 export * from "./auth"
 export * from "./app"
@@ -15,6 +11,7 @@ export * from "./torrents"
 export * from "./activity"
 export * from "./automation"
 export * from "./dashboard"
+export * from "./statistics-settings"
 export * from "./backups"
 export * from "./torrent-creation"
 export * from "./external-programs"
@@ -26,3 +23,5 @@ export * from "./logs"
 export * from "./dir-scan"
 export * from "./rss"
 export * from "./arr"
+export * from "./statistics"
+export * from "./problem-reports"

@@ -21,14 +21,12 @@ import (
 	"github.com/autobrr/qui/internal/services/activity"
 )
 
-// Config controls the background scan cadence and debounce behavior.
 type Config struct {
 	ScanInterval   time.Duration
 	DebounceWindow time.Duration
 	HistorySize    int
 }
 
-// Service monitors torrents with unhealthy trackers and reannounces them conservatively.
 type Service struct {
 	cfg           Config
 	instanceStore *models.InstanceStore
@@ -52,6 +50,14 @@ type Service struct {
 	historyCap       int
 
 	activityPublisher activity.Publisher
+	helpers           helperTorrents
+}
+
+// helperTorrents is the helper registry: it names the torrents that qui added
+// for a Transfer or a Share. A tag proves nothing.
+type helperTorrents interface {
+	IsHelper(instanceID int, hash string) bool
+	qbittorrent.HelperTorrents
 }
 
 type reannounceJob struct {
@@ -65,7 +71,6 @@ type reannounceQueue struct {
 	pending []func()
 }
 
-// ActivityOutcome describes a high-level outcome for a reannounce attempt.
 type ActivityOutcome string
 
 const (
@@ -75,7 +80,6 @@ const (
 	ActivityOutcomeStarted   ActivityOutcome = "started"
 )
 
-// ActivityEvent records a single reannounce attempt outcome per instance/hash.
 type ActivityEvent struct {
 	InstanceID  int             `json:"instanceId"`
 	Hash        string          `json:"hash"`
@@ -93,7 +97,6 @@ const maxConcurrentJobsPerInstance = 4
 // Keep hash lists below common proxy URL limits, including 64-character hashes.
 const trackerFetchBatchSize = 100
 
-// MonitoredTorrentState describes the current monitoring state for a torrent.
 type MonitoredTorrentState string
 
 const (
@@ -102,8 +105,6 @@ const (
 	MonitoredTorrentStateCooldown     MonitoredTorrentState = "cooldown"
 )
 
-// MonitoredTorrent represents a torrent that currently falls within the tracker
-// reannounce monitoring scope for an instance.
 type MonitoredTorrent struct {
 	InstanceID        int                   `json:"instanceId"`
 	Hash              string                `json:"hash"`
@@ -117,7 +118,6 @@ type MonitoredTorrent struct {
 	WaitingForInitial bool                  `json:"waitingForInitial"`
 }
 
-// DefaultConfig returns sane defaults.
 func DefaultConfig() Config {
 	return Config{
 		ScanInterval:   7 * time.Second,
@@ -126,7 +126,6 @@ func DefaultConfig() Config {
 	}
 }
 
-// NewService constructs a Service.
 func NewService(cfg Config, instanceStore *models.InstanceStore, settingsStore *models.InstanceReannounceStore, cache *SettingsCache, clientPool *qbittorrent.ClientPool, syncManager *qbittorrent.SyncManager) *Service {
 	if cfg.ScanInterval <= 0 {
 		cfg.ScanInterval = DefaultConfig().ScanInterval
@@ -158,8 +157,6 @@ func NewService(cfg Config, instanceStore *models.InstanceStore, settingsStore *
 	return svc
 }
 
-// SetActivityPublisher wires the qui server-event hub so reannounce activity is
-// pushed to connected clients instead of polled. Safe to call once at startup.
 func (s *Service) SetActivityPublisher(publisher activity.Publisher) {
 	if s == nil || publisher == nil {
 		return
@@ -167,7 +164,16 @@ func (s *Service) SetActivityPublisher(publisher activity.Publisher) {
 	s.activityPublisher = publisher
 }
 
-// Start launches the background monitoring loop.
+// SetHelperTorrents leaves the helper torrents out: reannounce neither watches
+// nor reannounces one. Call it one time at start-up.
+func (s *Service) SetHelperTorrents(helpers helperTorrents) {
+	s.helpers = helpers
+}
+
+func (s *Service) isHelper(instanceID int, hash string) bool {
+	return s.helpers != nil && s.helpers.IsHelper(instanceID, hash)
+}
+
 func (s *Service) Start(ctx context.Context) {
 	if s == nil {
 		return
@@ -182,7 +188,6 @@ func (s *Service) Start(ctx context.Context) {
 	}()
 }
 
-// RequestReannounce schedules reannounce attempts for monitored torrents and returns handled hashes.
 func (s *Service) RequestReannounce(ctx context.Context, instanceID int, hashes []string) []string {
 	if s == nil || len(hashes) == 0 {
 		return nil
@@ -195,7 +200,7 @@ func (s *Service) RequestReannounce(ctx context.Context, instanceID int, hashes 
 	torrents := s.lookupTorrents(ctx, instanceID, upperHashes)
 	var handled []string
 	for hash, torrent := range torrents {
-		if !s.torrentMeetsCriteria(torrent, settings) {
+		if !s.torrentMeetsCriteria(*torrent, settings) {
 			continue
 		}
 		if s.hasHealthyTracker(torrent.Trackers) {
@@ -253,15 +258,13 @@ func (s *Service) scanInstance(ctx context.Context, instanceID int, settings *mo
 		return
 	}
 
-	torrents, err := s.syncManager.GetTorrents(ctx, instanceID, qbt.TorrentFilterOptions{
-		Filter: qbt.TorrentFilterStalled,
-	})
+	torrents, err := s.cachedTorrents(ctx, instanceID)
 	if err != nil {
 		log.Debug().Err(err).Int("instanceID", instanceID).Msg("reannounce: failed to fetch cached torrents")
 		return
 	}
 
-	if client.SupportsTrackerHealth() {
+	if client.Supports(qbittorrent.CapTrackerHealth) {
 		// Cached torrents can lack tracker lists. Keep possible tracker matches
 		// and apply tracker rules to the fresh response below.
 		prefilter := *settings
@@ -269,7 +272,7 @@ func (s *Service) scanInstance(ctx context.Context, instanceID int, settings *mo
 		prefilter.MonitorAll = settings.MonitorAll || (!settings.ExcludeTrackers && len(settings.Trackers) > 0)
 		var hashes []string
 		for _, torrent := range torrents {
-			if s.torrentMeetsCriteria(torrent, &prefilter) {
+			if s.torrentMeetsCriteria(*torrent, &prefilter) {
 				hashes = append(hashes, torrent.Hash)
 			}
 		}
@@ -287,12 +290,14 @@ func (s *Service) scanInstance(ctx context.Context, instanceID int, settings *mo
 				log.Debug().Err(err).Int("instanceID", instanceID).Msg("reannounce: failed to fetch trackers for candidates")
 				return
 			}
-			torrents = append(torrents, fresh...)
+			for i := range fresh {
+				torrents = append(torrents, &fresh[i])
+			}
 		}
 	}
 
 	for _, torrent := range torrents {
-		if !s.torrentMeetsCriteria(torrent, settings) {
+		if !s.torrentMeetsCriteria(*torrent, settings) {
 			continue
 		}
 		// Skip if we have tracker data and it shows healthy.
@@ -306,9 +311,6 @@ func (s *Service) scanInstance(ctx context.Context, instanceID int, settings *mo
 	}
 }
 
-// GetMonitoredTorrents returns a snapshot of torrents that currently fall within
-// the monitoring scope and either have tracker problems or are still waiting for
-// their initial tracker contact.
 func (s *Service) GetMonitoredTorrents(ctx context.Context, instanceID int) []MonitoredTorrent {
 	if s == nil || instanceID == 0 {
 		return nil
@@ -322,9 +324,7 @@ func (s *Service) GetMonitoredTorrents(ctx context.Context, instanceID int) []Mo
 		return nil
 	}
 
-	torrents, err := s.syncManager.GetTorrents(ctx, instanceID, qbt.TorrentFilterOptions{
-		Filter: qbt.TorrentFilterStalled,
-	})
+	torrents, err := s.cachedTorrents(ctx, instanceID)
 	if err != nil {
 		log.Debug().Err(err).Int("instanceID", instanceID).Msg("reannounce: failed to fetch torrents for snapshot")
 		return nil
@@ -341,11 +341,10 @@ func (s *Service) GetMonitoredTorrents(ctx context.Context, instanceID int) []Mo
 	for _, torrent := range torrents {
 		// Use torrentMatchesFilters (not torrentMeetsCriteria) so we can show
 		// torrents still in their initial wait period
-		if !s.torrentMatchesFilters(torrent, settings) {
+		if !s.torrentMatchesFilters(*torrent, settings) {
 			continue
 		}
 
-		// Check if torrent is still in initial wait period
 		age := now.Unix() - torrent.AddedOn
 		inInitialWait := settings.InitialWaitSeconds > 0 && age < int64(settings.InitialWaitSeconds)
 
@@ -354,7 +353,6 @@ func (s *Service) GetMonitoredTorrents(ctx context.Context, instanceID int) []Mo
 		hasProblem := !healthy && !updating
 		waitingForTrackers := updating && !healthy
 
-		// Show torrent if: has problem, waiting for trackers, OR in initial wait
 		if !hasProblem && !waitingForTrackers && !inInitialWait {
 			continue
 		}
@@ -545,7 +543,6 @@ func (s *Service) executeJob(parentCtx context.Context, instanceID int, hash str
 		s.recordActivity(instanceID, hash, torrentName, healthyTrackers, ActivityOutcomeSkipped, "tracker healthy")
 		return
 	}
-	// No healthy tracker - proceed with reannounce (trackers may be updating or have errors)
 	freshTrackers := s.getProblematicTrackers(trackerList)
 	if freshTrackers == "" {
 		freshTrackers = initialTrackers
@@ -602,23 +599,45 @@ func (s *Service) baseContext() context.Context {
 	return s.baseCtx
 }
 
-func (s *Service) lookupTorrents(ctx context.Context, instanceID int, hashes []string) map[string]qbt.Torrent {
-	result := make(map[string]qbt.Torrent)
+// lookupTorrents returns the torrents of hashes from the Sync snapshot, keyed
+// by the upper-case hash. The torrents are shared: never change one.
+func (s *Service) lookupTorrents(ctx context.Context, instanceID int, hashes []string) map[string]*qbt.Torrent {
+	result := make(map[string]*qbt.Torrent)
 	if len(hashes) == 0 {
 		return result
 	}
 	if s.syncManager == nil {
 		return result
 	}
-	sync, err := s.syncManager.GetQBittorrentSyncManager(ctx, instanceID)
+	sync, err := s.syncManager.GetSyncOwner(ctx, instanceID)
 	if err != nil || sync == nil {
 		return result
 	}
-	filter := qbt.TorrentFilterOptions{Hashes: hashes}
-	for hash, torrent := range sync.GetTorrentMap(filter) {
-		result[strings.ToUpper(hash)] = torrent
+	snapshot := sync.Snapshot()
+	if snapshot == nil {
+		return result
+	}
+	for _, hash := range hashes {
+		if torrent, ok := snapshot.Torrent(hash); ok && !s.isHelper(instanceID, torrent.Hash) {
+			result[strings.ToUpper(torrent.Hash)] = torrent
+		}
 	}
 	return result
+}
+
+// cachedTorrents returns the torrents of the Sync snapshot that are no helper
+// torrents. The callers keep the stalled ones through torrentMatchesFilters.
+// The torrents are shared: never change one.
+func (s *Service) cachedTorrents(ctx context.Context, instanceID int) ([]*qbt.Torrent, error) {
+	sync, err := s.syncManager.GetSyncOwner(ctx, instanceID)
+	if err != nil {
+		return nil, err
+	}
+	snapshot := sync.Snapshot()
+	if snapshot == nil {
+		return nil, nil
+	}
+	return qbittorrent.WithoutHelpers(snapshot, s.helpers, instanceID), nil
 }
 
 func (s *Service) getSettings(ctx context.Context, instanceID int) *models.InstanceReannounceSettings {
@@ -640,13 +659,10 @@ func (s *Service) getSettings(ctx context.Context, instanceID int) *models.Insta
 	return models.DefaultInstanceReannounceSettings(instanceID)
 }
 
-// torrentMeetsCriteria checks if a torrent is ready for reannounce consideration.
-// This includes filter matching AND the initial wait period.
 func (s *Service) torrentMeetsCriteria(torrent qbt.Torrent, settings *models.InstanceReannounceSettings) bool {
 	if !s.torrentMatchesFilters(torrent, settings) {
 		return false
 	}
-	// Check initial wait - torrent must be old enough
 	age := s.currentTime().Unix() - torrent.AddedOn
 	if settings.InitialWaitSeconds > 0 && age < int64(settings.InitialWaitSeconds) {
 		return false
@@ -654,15 +670,11 @@ func (s *Service) torrentMeetsCriteria(torrent qbt.Torrent, settings *models.Ins
 	return true
 }
 
-// torrentMatchesFilters checks if a torrent matches the monitoring scope (state, age,
-// category/tag/tracker filters) WITHOUT checking the initial wait period. Used by
-// GetMonitoredTorrents to show new torrents that are still in their initial wait.
 func (s *Service) torrentMatchesFilters(torrent qbt.Torrent, settings *models.InstanceReannounceSettings) bool {
 	if !settings.CanMatchTorrents() {
 		return false
 	}
 
-	// Global requirement: Only monitor stalled torrents
 	if torrent.State != qbt.TorrentStateStalledDl && torrent.State != qbt.TorrentStateStalledUp {
 		return false
 	}
@@ -674,7 +686,6 @@ func (s *Service) torrentMatchesFilters(torrent qbt.Torrent, settings *models.In
 		}
 	}
 
-	// 1. Check exclusions first
 	if settings.ExcludeCategories && len(settings.Categories) > 0 {
 		for _, category := range settings.Categories {
 			if strings.EqualFold(category, torrent.Category) {
@@ -705,7 +716,6 @@ func (s *Service) torrentMatchesFilters(torrent qbt.Torrent, settings *models.In
 		}
 	}
 
-	// 2. If MonitorAll is on, we're good (exclusions already passed)
 	if settings.MonitorAll {
 		return true
 	}
@@ -742,7 +752,6 @@ func (s *Service) torrentMatchesFilters(torrent qbt.Torrent, settings *models.In
 		}
 	}
 
-	// No inclusion entry matched.
 	return false
 }
 
@@ -767,9 +776,6 @@ func (s *Service) hasHealthyTracker(trackers []qbt.TorrentTracker) bool {
 	return false
 }
 
-// getProblematicTrackers returns a comma-separated list of tracker domains
-// that are not healthy (anything other than TrackerStatusOK without an
-// unregistered message).
 func (s *Service) getProblematicTrackers(trackers []qbt.TorrentTracker) string {
 	if len(trackers) == 0 {
 		return ""
@@ -780,8 +786,6 @@ func (s *Service) getProblematicTrackers(trackers []qbt.TorrentTracker) string {
 		if tracker.Status == qbt.TrackerStatusDisabled {
 			continue
 		}
-		// A tracker is problematic if it's not healthy
-		// (i.e., not TrackerStatusOK, or OK but with unregistered message)
 		isHealthy := tracker.Status == qbt.TrackerStatusOK &&
 			!qbittorrent.TrackerMessageMatchesUnregistered(tracker.Message)
 		if !isHealthy {
@@ -798,9 +802,6 @@ func (s *Service) getProblematicTrackers(trackers []qbt.TorrentTracker) string {
 	return strings.Join(problematicDomains, ", ")
 }
 
-// getHealthyTrackers returns a comma-separated list of tracker domains that are
-// healthy (TrackerStatusOK without an unregistered message). Used for logging
-// when skipping a torrent because it has working trackers.
 func (s *Service) getHealthyTrackers(trackers []qbt.TorrentTracker) string {
 	if len(trackers) == 0 {
 		return ""
@@ -884,7 +885,6 @@ func (s *Service) recordActivity(instanceID int, hash string, torrentName string
 	}
 	s.historyMu.Lock()
 
-	// Initialize maps if needed
 	if s.historySucceeded == nil {
 		s.historySucceeded = make(map[int][]ActivityEvent)
 	}
@@ -910,8 +910,6 @@ func (s *Service) recordActivity(instanceID int, hash string, torrentName string
 		Timestamp:   s.currentTime(),
 	}
 
-	// Store in the appropriate buffer based on outcome.
-	// Succeeded/failed keep 2x limit entries, skipped keeps 1x limit.
 	switch outcome {
 	case ActivityOutcomeSucceeded:
 		s.historySucceeded[instanceID] = append(s.historySucceeded[instanceID], event)
@@ -931,8 +929,6 @@ func (s *Service) recordActivity(instanceID int, hash string, torrentName string
 	}
 	s.historyMu.Unlock()
 
-	// Signal connected clients that this instance's reannounce activity changed so
-	// they refetch instead of polling. Published after releasing the lock.
 	if s.activityPublisher != nil {
 		s.activityPublisher.Publish(activity.Event{
 			Kind:       activity.KindReannounceActivity,
@@ -941,8 +937,6 @@ func (s *Service) recordActivity(instanceID int, hash string, torrentName string
 	}
 }
 
-// GetActivity returns the most recent activity events for an instance, newest last.
-// Events from all outcome types are merged and sorted by timestamp.
 func (s *Service) GetActivity(instanceID int, limit int) []ActivityEvent {
 	if s == nil || instanceID == 0 {
 		return nil
@@ -950,7 +944,6 @@ func (s *Service) GetActivity(instanceID int, limit int) []ActivityEvent {
 	s.historyMu.RLock()
 	defer s.historyMu.RUnlock()
 
-	// Merge all three buffers
 	var all []ActivityEvent
 	all = append(all, s.historySucceeded[instanceID]...)
 	all = append(all, s.historyFailed[instanceID]...)
@@ -960,17 +953,14 @@ func (s *Service) GetActivity(instanceID int, limit int) []ActivityEvent {
 		return nil
 	}
 
-	// Sort by timestamp ascending (oldest first, newest last)
 	sort.Slice(all, func(i, j int) bool {
 		return all[i].Timestamp.Before(all[j].Timestamp)
 	})
 
-	// Apply limit (take the most recent)
 	if limit > 0 && len(all) > limit {
 		all = all[len(all)-limit:]
 	}
 
-	// Return a copy
 	out := make([]ActivityEvent, len(all))
 	copy(out, all)
 	return out
@@ -983,8 +973,6 @@ func (s *Service) currentTime() time.Time {
 	return time.Now()
 }
 
-// effectiveDebounceWindow returns the debounce duration to use for cooldown checks.
-// aggressive mode uses the retry interval; otherwise the global debounce window applies.
 func (s *Service) effectiveDebounceWindow(settings *models.InstanceReannounceSettings) time.Duration {
 	if settings != nil && settings.Aggressive {
 		if interval := time.Duration(settings.ReannounceIntervalSeconds) * time.Second; interval > 0 {

@@ -13,6 +13,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/**
+ * The classes of a wrapper that changes its height between that of its one child and zero, with a transition. The
+ * child needs `min-h-0 overflow-hidden`.
+ */
+export function collapseRowClassName(collapsed: boolean) {
+  return cn(
+    "grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none",
+    collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr]"
+  )
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return formatValueWithUnit(0, "B")
   const scaled = scaleToUnit(bytes, BYTE_LADDER, 1024)
@@ -46,6 +57,7 @@ export function getRatioColor(ratio: number): string {
   }
 }
 
+/** @deprecated Prints English units (d, h, m, s). For text that the user reads, use the formatters in `@/lib/dateTimeUtils`. */
 export function formatDuration(seconds: number): string {
   if (seconds === 0) return "0s"
   const days = Math.floor(seconds / 86400)
@@ -62,6 +74,7 @@ export function formatDuration(seconds: number): string {
   return parts.join(" ")
 }
 
+/** @deprecated Prints English units (s, m, h, d). For text that the user reads, use `formatNarrowAge` in `@/lib/dateTimeUtils`, which takes milliseconds and shows an age under one minute as one minute. */
 export function formatDurationCompact(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
@@ -210,4 +223,10 @@ export function joinPath(basePath: string, relativePath: string): string {
 /** Breaks a release name after dots, dashes, and underscores, not inside a word. */
 export function breakableName(name: string): string {
   return name.replace(/([._-])/g, "$1\u200B")
+}
+
+/** Merges lists one item from each list at a time, so that one long list cannot fill the start. */
+export function takeTurns<T>(lists: T[][]): T[] {
+  const length = Math.max(0, ...lists.map(list => list.length))
+  return Array.from({ length }, (_, i) => lists.flatMap(list => (i < list.length ? [list[i]] : []))).flat()
 }

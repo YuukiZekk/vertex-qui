@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// CachedFile represents a cached torrent file
 type CachedFile struct {
 	ID              int64
 	InstanceID      int
@@ -24,16 +23,15 @@ type CachedFile struct {
 	CachedAt        time.Time
 }
 
-// SyncInfo tracks when a torrent's files were last synced
 type SyncInfo struct {
 	InstanceID      int
 	TorrentHash     string
 	LastSyncedAt    time.Time
 	TorrentProgress float64
 	FileCount       int
+	MaindataPrint   *int64
 }
 
-// CacheStats provides statistics about the file cache
 type CacheStats struct {
 	TotalTorrents   int
 	TotalFiles      int

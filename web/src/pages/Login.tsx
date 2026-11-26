@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/hooks/useAuth"
 import { navigateAfterAuth } from "@/lib/add-intent"
 import { api } from "@/lib/api"
+import { themeArea } from "@/lib/theme-areas"
 import { useQuery } from "@tanstack/react-query"
 import { useForm } from "@tanstack/react-form"
 import { useNavigate } from "@tanstack/react-router"
@@ -29,7 +30,6 @@ export function Login() {
   const navigate = useNavigate()
   const { login, isLoggingIn, loginError, setIsAuthenticated, isAuthenticated, isLoading } = useAuth()
 
-  // Query to check if setup is required
   const { data: setupRequired } = useQuery({
     queryKey: ["setup-required"],
     queryFn: () => api.checkSetupRequired(),
@@ -38,8 +38,12 @@ export function Login() {
     refetchOnWindowFocus: false,
   })
 
-  // Query to check if OIDC is enabled
-  const { data: oidcConfig } = useQuery({
+  const {
+    data: oidcConfig,
+    isError: oidcConfigFailed,
+    refetch: refetchOIDCConfig,
+    isFetching: isFetchingOIDCConfig,
+  } = useQuery({
     queryKey: ["oidc-config"],
     queryFn: () => api.getOIDCConfig(),
     staleTime: Infinity,
@@ -55,30 +59,25 @@ export function Login() {
   }, [t])
 
   useEffect(() => {
-    // Redirect to homepage if user is already authenticated
     if (isAuthenticated && !isLoading) {
       navigate({ to: "/dashboard" })
       return
     }
 
-    // Redirect to setup if required
     if (setupRequired) {
       navigate({ to: "/setup" })
       return
     }
 
-    // Check if this is an OIDC callback
     const urlParams = new URLSearchParams(window.location.search)
     const code = urlParams.get("code")
     const state = urlParams.get("state")
 
     if (code && state) {
-      // This is an OIDC callback, validate the session
       api.validate().then(() => {
         setIsAuthenticated(true)
         navigateAfterAuth(navigate, "/")
       }).catch(error => {
-        // If validation fails, show an error
         toast.error(error.message || t("login.oidcFailed"))
       })
     }
@@ -95,27 +94,33 @@ export function Login() {
     },
   })
 
-  const handleOIDCLogin = () => {
-    if (oidcConfig?.enabled && oidcConfig.authorizationUrl) {
-      window.location.href = oidcConfig.authorizationUrl
+  // A failed first load leaves no config. A failed refetch keeps the last config.
+  const oidcUnavailable = oidcConfig?.providerUnavailable === true || (oidcConfig === undefined && oidcConfigFailed)
+
+  const handleOIDCLogin = async () => {
+    let config = oidcConfig
+    // The refetch asks the server to retry provider discovery.
+    if (oidcUnavailable) {
+      config = (await refetchOIDCConfig()).data
+    }
+    if (config?.enabled && config.authorizationUrl) {
+      window.location.href = config.authorizationUrl
     }
   }
 
-  // Show loading state while checking OIDC config
   if (oidcConfig === null) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div {...themeArea("login")} className="flex h-screen items-center justify-center bg-background">
         <div className="text-center">{t("login.loading")}</div>
       </div>
     )
   }
 
-  // Don't show built-in login form if OIDC is enabled and built-in login is disabled
   const showBuiltInLogin = !oidcConfig?.enabled || !oidcConfig?.disableBuiltInLogin
-  const showOIDC = oidcConfig?.enabled
+  const showOIDC = oidcConfig?.enabled || oidcUnavailable
 
   return (
-    <div className="flex h-screen items-center justify-center bg-background px-4 sm:px-6">
+    <div {...themeArea("login")} className="flex h-screen items-center justify-center bg-background px-4 sm:px-6">
       <BlurFade duration={0.5} delay={0.1} blur="10px" className="w-full max-w-md">
         <Card className="relative overflow-hidden w-full shadow-xl">
           <ShineBorder shineColor={["var(--chart-1)", "var(--chart-2)", "var(--chart-3)"]} />
@@ -154,6 +159,7 @@ export function Login() {
                       <Input
                         id={field.name}
                         type="text"
+                        autoComplete="username"
                         value={field.state.value}
                         onBlur={field.handleBlur}
                         onChange={(e) => field.handleChange(e.target.value)}
@@ -181,6 +187,7 @@ export function Login() {
                       <Input
                         id={field.name}
                         type="password"
+                        autoComplete="current-password"
                         value={field.state.value}
                         onBlur={field.handleBlur}
                         onChange={(e) => field.handleChange(e.target.value)}
@@ -254,10 +261,17 @@ export function Login() {
                 className="w-full"
                 size="lg"
                 onClick={handleOIDCLogin}
+                disabled={isFetchingOIDCConfig}
               >
                 <Fingerprint className="mr-2 h-5 w-5" />
                 {t("login.openIdConnect")}
               </Button>
+            )}
+
+            {oidcUnavailable && !isFetchingOIDCConfig && (
+              <p className="mt-3 text-center text-sm text-muted-foreground">
+                {t("login.oidcProviderUnavailable")}
+              </p>
             )}
 
             <Footer />

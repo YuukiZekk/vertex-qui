@@ -5,7 +5,6 @@
 
 import type { FilesystemMode } from "./instances"
 
-// Orphan Scan types
 export type OrphanScanRunStatus =
   | "pending"
   | "scanning"
@@ -58,7 +57,9 @@ export interface OrphanScanRun {
   instanceId: number
   status: OrphanScanRunStatus
   triggeredBy: OrphanScanTriggerType
-  scanPaths: string[]
+  // Only the response for one run includes scanPaths; the runs list sends scanPathCount alone.
+  scanPaths?: string[]
+  scanPathCount: number
   filesFound: number
   filesDeleted: number
   foldersDeleted: number

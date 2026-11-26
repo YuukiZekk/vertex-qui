@@ -18,10 +18,9 @@ export type ActivityEventKind =
   | "search.history"
   | "tracker.icons"
   | "theme.settings"
+  | "theme.custom"
   | "client.settings"
 
-// ActivityEvent is a small qui-owned server signal. It carries identifiers only
-// (never payload data); the frontend reacts by invalidating the matching query.
 export interface ActivityEvent {
   kind: ActivityEventKind
   instanceId?: number

@@ -2,7 +2,7 @@
 sidebar_position: 3
 title: Add qBittorrent instances to qui
 sidebar_label: Instance Settings
-description: Connect one or more qBittorrent instances to qui, with connection settings, local filesystem access, incognito mode, and qBittorrent preferences.
+description: Connect one or more qBittorrent instances to qui, with connection settings, local filesystem access, SSH access, incognito mode, instance icons, and qBittorrent preferences.
 ---
 
 # Instance Settings
@@ -12,15 +12,12 @@ Add and configure the qBittorrent instances that qui connects to. Each instance 
 ## Add an instance
 
 1. Open **Settings → Instances**.
-2. Click **Add Instance**.
-3. Enter the connection details and click **Add Instance**.
+2. Click **Add instance**.
+3. Enter the connection details and click **Add instance**.
 
 ## Edit an instance
 
-Two paths open the instance settings dialog:
-
-- On the Dashboard, click the gear icon next to the instance name.
-- In **Settings → Instances**, open the three-dot menu on the instance card and select **Edit**.
+To open the instance settings dialog, go to **Settings → Instances** and click the instance.
 
 ### Connection settings
 
@@ -28,8 +25,9 @@ Two paths open the instance settings dialog:
 |-------|-------------|
 | **Instance Name** | Display name in qui's sidebar and instance selector. |
 | **URL** | Full URL to the qBittorrent WebUI (for example, `http://localhost:8080`). |
-| **Skip TLS Verification** (**Skip TLS Certificate Verification** in the Add Instance form) | Accept self-signed or otherwise untrusted certificates. |
+| **Skip TLS Verification** (**Skip TLS certificate check** in the Add instance form) | Accept self-signed or otherwise untrusted certificates. |
 | **Local Filesystem Access** | Enable for features that read files directly. See [Local Filesystem Access](#local-filesystem-access). |
+| **Public peer address** | The address and port at which other BitTorrent clients reach this qBittorrent. See [Public peer address](#public-peer-address). |
 
 ### Authentication
 
@@ -54,12 +52,13 @@ If enabled, qui reads the same filesystem as qBittorrent. This setting turns on 
 - **Content file download**: Download single files from a torrent through the browser. Right-click a file in the Content tab.
 - **Hardlink detection**: Automations detect whether torrent files have hardlinks into your media library.
 - **Orphan scan**: Find files on disk that no torrent references.
-- **Free space (path)**: Automation rules check free space on a specific mount point instead of the value that qBittorrent reports.
+- **Free space (path on the qui host)**: Automation rules check free space on a specific mount point instead of the value that qBittorrent reports. On qBittorrent 5.3 and later you can instead read a path on the qBittorrent host, which needs no local access.
 - **Has Missing Files condition**: Automation rules check whether a completed torrent has files missing on disk.
 - **MediaInfo**: Show MediaInfo for a file in the Content tab.
-- **Cross-seed hardlink and reflink mode**: Create links instead of a second copy. Hardlink mode also works on a remote instance; reflink mode needs local access.
+- **Cross-seed hardlink and reflink mode**: Create links instead of a second copy. Hardlink mode also works on a [remote instance](./ssh-access.md). Reflink mode needs local access.
 - **Cross-seed ID fallback**: Read IMDb, TMDb, and TVDb tags from MKV files when a search finds no results.
 - **Directory scan**: Use the instance as a directory scan target.
+- **Storage**: Show the real used share of the disk on the [Dashboard](./dashboard.md#storage-and-library). This also works on a [remote instance](./ssh-access.md).
 
 :::warning
 Enable this setting only if qui runs on the same machine as qBittorrent or has the same mounts. If the paths differ, these features fail without an error or return wrong results.
@@ -67,9 +66,50 @@ Enable this setting only if qui runs on the same machine as qBittorrent or has t
 
 If qui runs in Docker, mount the same data volumes in the qui container. See [Docker configuration](../getting-started/docker.md) for details.
 
+## SSH Access
+
+If qBittorrent runs on another machine and qui cannot mount its files, set up SSH access on the **SSH** tab of the instance settings dialog. qui then reaches the files of the instance over SSH. Some features still need Local Filesystem Access.
+
+The Add instance form has no SSH tab. Add the instance first, then edit it.
+
+See [SSH Access](./ssh-access.md) for the setup and for the list of features that work over SSH.
+
+## Public peer address
+
+[Transfers](./transfers.md) and [Shares](./shares.md) give the address of a qBittorrent client to another BitTorrent client. The public peer address is a host and a port, for example `203.0.113.7:51413` or `seedbox.example.org:6881`.
+
+If you leave the field empty, qui gets the address from qBittorrent each time it needs it. qui uses the external IP address and the listen port that qBittorrent reports. The field shows this address as its placeholder. qui does not save it.
+
+Set the field when the address that qBittorrent reports is not the address that other clients connect to. For example, set it when qBittorrent runs in Docker or behind NAT with another port on the router.
+
+The Add instance form does not have this field. Add the instance first, then edit it. To clear the value, empty the field and save.
+
 ## Incognito mode
 
-In **Settings → Instances**, click the eye icon next to an instance URL to toggle [incognito mode](./incognito.md).
+When [incognito mode](./incognito.md) is on, **Settings → Instances** blurs the host of each instance.
+
+## Instance icons
+
+Each instance has an icon. qui shows it in the expanded and collapsed (icon-only) sidebar, in instance menus, in the [command palette](./command-palette.md), on Dashboard rows, and in **Settings → Instances**. **Unified** (the view of all instances) has its own icon. It shows only when more than one instance is active.
+
+To change an icon:
+
+1. Open **Settings → Instances**.
+2. Under **Instance icons**, click **Unified** or an instance row to open the icon picker. You can also click **Change icon** in the three-dot menu of an instance in the instance list.
+3. Click **Automatic**, type up to 2 characters in **Letters**, or click an icon in the list. Each of the three replaces the other two.
+4. Under **Color**, select one of 8 colors or no color. The color applies to the icon or the letters, and the theme sets the exact shade.
+
+The preview at the top of the picker shows the icon in the collapsed sidebar and everywhere else. Each choice saves at once. Click **Reset to default** to return to **Automatic** with no color.
+
+| Choice | What qui shows |
+|--------|----------------|
+| **Automatic** (default) | The initials of the instance name in the collapsed sidebar, and a drive icon everywhere else. **Unified** shows the drive icon everywhere. |
+| **Letters** | Up to 2 characters in the collapsed sidebar, and the drive icon everywhere else. |
+| An icon from the list | The icon everywhere. The list has 56 icons in 7 groups (Servers, Hardware, Places, Media, Nature, Symbols, Objects). |
+
+If qui cannot connect to an instance, its icon turns red in the sidebar, in instance menus, in the command palette, on Dashboard rows, and in the instance list. The rows under **Instance icons** always show the color that you picked.
+
+qui saves your icon choices on the qui server with your user settings, so each browser that you sign in from shows the same icons. The icons do not change qBittorrent.
 
 ## Instance actions
 
@@ -241,7 +281,9 @@ qui shows a preference only where qBittorrent uses it:
 - The write-through disk I/O write mode needs libtorrent 2.0.6 or later. The I2P length variance needs libtorrent 2.0.12 or later. Multiple connections from one peer ID need libtorrent 2.0.13 or later. The STUN server for WebTorrent needs libtorrent 2.1 or later.
 - qui does not show the memory working set limit on Linux or macOS. qui shows Mark-of-the-Web only on macOS and Windows. qBittorrent before 5.0 does not report its platform, so qui shows both there.
 
-The refresh interval, the application instance name, the confirmation of a torrent recheck, the Python executable path, and the lookup of peer host names change only the qBittorrent WebUI or desktop app. qui does not show them.
+The application instance name, the confirmation of a torrent recheck, the Python executable path, and the lookup of peer host names change only the qBittorrent WebUI or desktop app. qui does not show them.
+
+qui does not show the refresh interval. A [Transfer](./transfers.md) reads the refresh interval of the target instance. For two refresh intervals after a recheck, qBittorrent can report the state from before the recheck. In that time, the Transfer accepts a result only if it saw the check run.
 
 #### Network binding
 

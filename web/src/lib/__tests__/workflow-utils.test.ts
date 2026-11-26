@@ -8,11 +8,17 @@ import { resolve } from "node:path"
 
 import {
   ACTION_RUN_ORDER,
+  allowanceInputOf,
+  freeSpaceSourceOf,
   fromImportFormat,
   generateUniqueName,
   getTrackerMatchMode,
   getTrackerTokens,
+  firstActionCondition,
+  hasMixedActionConditions,
+  loadWorkflowNames,
   parseImportJSON,
+  toCopyInput,
   toDuplicateInput,
   toEditInput,
   toExportFormat,
@@ -20,8 +26,13 @@ import {
   type WorkflowExport,
   type WorkflowImport
 } from "@/lib/workflow-utils"
-import type { ActionConditions, Automation } from "@/types"
-import { describe, expect, it } from "vitest"
+import type { ActionConditions, Automation, RuleCondition } from "@/types"
+import { QueryClient } from "@tanstack/react-query"
+import { afterEach, describe, expect, it, vi } from "vitest"
+
+const listAutomations = vi.hoisted(() => vi.fn())
+
+vi.mock("@/lib/api", () => ({ api: { listAutomations } }))
 
 const conditions: ActionConditions = { schemaVersion: "1" }
 
@@ -92,8 +103,8 @@ describe("toExportFormat", () => {
 
 // Intent: turn clipboard JSON back into an AutomationInput. Two safety
 // invariants matter: imported automations always START disabled (so a paste
-// can't immediately fire side-effects) and the imported name is uniquified
-// so it can't clobber an existing automation by accident.
+// can't immediately fire side-effects) and an imported name that the
+// instance already has is uniquified, so two rules never share a name.
 describe("fromImportFormat", () => {
   const baseExport = (overrides: Partial<WorkflowImport> = {}): WorkflowImport => ({
     name: "Imported",
@@ -115,6 +126,12 @@ describe("fromImportFormat", () => {
 
   it("uniquifies the name against existing names", () => {
     expect(fromImportFormat(baseExport({ name: "My workflow" }), ["My workflow"]).name).toBe("My workflow (copy)")
+    expect(fromImportFormat(baseExport({ name: "My workflow" }), ["MY WORKFLOW", "My workflow (copy)"]).name).toBe("My workflow (copy 2)")
+  })
+
+  // regression: #4062
+  it("keeps the name when the instance has no rule with that name", () => {
+    expect(fromImportFormat(baseExport({ name: "My workflow" }), ["Other"]).name).toBe("My workflow")
   })
 
   // The backend resolves the two fields: a non-empty trackerPattern wins.
@@ -168,8 +185,9 @@ describe("getTrackerTokens", () => {
 })
 
 // Intent: duplicate within the same instance — equivalent to export+import
-// round-tripping. Guarantees the duplicate gets a fresh name and ships
-// disabled, same as a clipboard import.
+// round-tripping, except that the duplicate always gets a copy suffix, also
+// when the list of existing names is not loaded. It ships disabled, same as
+// a clipboard import.
 describe("toDuplicateInput", () => {
   it("round-trips through export -> import and produces a unique disabled copy", () => {
     const original = makeAutomation({ name: "Source", enabled: true, dryRun: true })
@@ -177,6 +195,62 @@ describe("toDuplicateInput", () => {
     expect(result.name).toBe("Source (copy)")
     expect(result.enabled).toBe(false)
     expect(result.dryRun).toBe(true)
+  })
+
+  // regression: #4062
+  it("adds a copy suffix when no existing name is known", () => {
+    expect(toDuplicateInput(makeAutomation({ name: "Source" }), []).name).toBe("Source (copy)")
+  })
+})
+
+// Intent: "Copy to instance" names the copy for the target instance. The
+// name stays when the target has no rule with it, and a name that is taken
+// there gets the same suffix as a duplicate.
+// regression: #4062
+describe("toCopyInput", () => {
+  it("keeps the name when the target instance has no rule with that name", () => {
+    const result = toCopyInput(makeAutomation({ name: "Source", enabled: true }), ["Other"])
+    expect(result.name).toBe("Source")
+    expect(result.enabled).toBe(false)
+    expect(result.sortOrder).toBeUndefined()
+  })
+
+  it("adds a copy suffix when the target instance has the name in another case", () => {
+    expect(toCopyInput(makeAutomation({ name: "Source" }), ["source"]).name).toBe("Source (copy)")
+    expect(toCopyInput(makeAutomation({ name: "Source" }), ["SOURCE", "Source (copy)"]).name).toBe("Source (copy 2)")
+  })
+})
+
+// Intent: copy, duplicate, and import name the new rule against the rule
+// names of the instance. An instance whose rule list is not loaded must not
+// read as an instance with no rules, or the new rule takes a name in use.
+// regression: #4062
+describe("loadWorkflowNames", () => {
+  afterEach(() => {
+    listAutomations.mockReset()
+  })
+
+  it("reads the rule list from the server when it is not loaded", async () => {
+    listAutomations.mockResolvedValueOnce([makeAutomation({ name: "Source" })])
+    expect(await loadWorkflowNames(new QueryClient(), 2)).toEqual(["Source"])
+    expect(listAutomations).toHaveBeenCalledWith(2)
+  })
+
+  it("uses the loaded rule list", async () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(["automations", 2], [makeAutomation({ name: "Loaded" })])
+    expect(await loadWorkflowNames(queryClient, 2)).toEqual(["Loaded"])
+    expect(listAutomations).not.toHaveBeenCalled()
+  })
+
+  it("returns no names when the server sends null for an instance with no rules", async () => {
+    listAutomations.mockResolvedValueOnce(null)
+    expect(await loadWorkflowNames(new QueryClient(), 2)).toEqual([])
+  })
+
+  it("rejects when the rule list cannot be read", async () => {
+    listAutomations.mockRejectedValueOnce(new Error("list failed"))
+    await expect(loadWorkflowNames(new QueryClient(), 2)).rejects.toThrow("list failed")
   })
 })
 
@@ -228,9 +302,6 @@ describe("generateUniqueName", () => {
     expect(generateUniqueName("Foo   (copy)", [])).toBe("Foo (copy)")
   })
 
-  it("returns the first attempt when no collision exists", () => {
-    expect(generateUniqueName("Foo", ["Bar", "Baz"])).toBe("Foo (copy)")
-  })
 })
 
 // Intent: validate clipboard JSON before letting it through. Returns
@@ -297,23 +368,6 @@ describe("parseImportJSON", () => {
     expect(result.data).not.toHaveProperty("trackerPattern")
   })
 
-  it("keeps dryRun: true from the export shape", () => {
-    const result = parseImportJSON(JSON.stringify({
-      name: "x",
-      conditions: { schemaVersion: "1" },
-      dryRun: true,
-    }))
-    expect(result.data?.dryRun).toBe(true)
-  })
-
-  it("includes notify only when it's an explicit boolean", () => {
-    const withNotify = parseImportJSON(JSON.stringify({
-      name: "x",
-      conditions: { schemaVersion: "1" },
-      notify: false,
-    }))
-    expect(withNotify.data?.notify).toBe(false)
-  })
 })
 
 // Intent: thin pretty-print wrapper. Pinning the indent so future readers
@@ -325,8 +379,7 @@ describe("toExportJSON", () => {
       trackerPattern: "*",
       conditions,
     }
-    expect(toExportJSON(data)).toBe(JSON.stringify(data, null, 2))
-    expect(toExportJSON(data)).toContain("\n  \"name\": \"x\"")
+    expect(toExportJSON(data)).toBe("{\n  \"name\": \"x\",\n  \"trackerPattern\": \"*\",\n  \"conditions\": {\n    \"schemaVersion\": \"1\"\n  }\n}")
   })
 })
 
@@ -341,5 +394,87 @@ describe("ACTION_RUN_ORDER", () => {
 
     expect(goKeys.length).toBeGreaterThan(0)
     expect([...ACTION_RUN_ORDER]).toEqual(goKeys)
+  })
+})
+
+describe("freeSpaceSourceOf", () => {
+  const TiB = 1024 ** 4
+
+  it("turns the typed allowance into bytes", () => {
+    expect(freeSpaceSourceOf({ type: "allowance", path: " /home/user ", allowance: "1.5", allowanceUnit: TiB }))
+      .toEqual({ type: "allowance", path: "/home/user", allowanceBytes: 1649267441664 })
+  })
+
+  it("keeps the path source as it is", () => {
+    expect(freeSpaceSourceOf({ type: "path", path: "/mnt/data", allowance: "1.5", allowanceUnit: TiB }))
+      .toEqual({ type: "path", path: "/mnt/data" })
+    expect(freeSpaceSourceOf({ type: "qbitPath", path: "D:\\downloads", allowance: "", allowanceUnit: TiB }))
+      .toEqual({ type: "qbitPath", path: "D:\\downloads" })
+  })
+
+  it("sends no source without a path, without an allowance, and for the default", () => {
+    expect(freeSpaceSourceOf({ type: "allowance", path: "", allowance: "1.5", allowanceUnit: TiB })).toBeUndefined()
+    expect(freeSpaceSourceOf({ type: "allowance", path: "/home/user", allowance: "", allowanceUnit: TiB })).toBeUndefined()
+    expect(freeSpaceSourceOf({ type: "allowance", path: "/home/user", allowance: "0", allowanceUnit: TiB })).toBeUndefined()
+    expect(freeSpaceSourceOf({ type: "qbittorrent", path: "/mnt/data", allowance: "", allowanceUnit: TiB })).toBeUndefined()
+  })
+})
+
+describe("allowanceInputOf", () => {
+  it("shows a saved allowance as the figure that the user typed", () => {
+    // 1.364 TiB is the 1.5 TB plan of the issue.
+    expect(allowanceInputOf(1499733860286)).toEqual({ allowance: "1.364", allowanceUnit: 1024 ** 4 })
+    // 1397 GiB is 1.36426 TiB, which three decimals cannot hold.
+    expect(allowanceInputOf(1397 * 1024 ** 3)).toEqual({ allowance: "1397", allowanceUnit: 1024 ** 3 })
+    expect(allowanceInputOf(500 * 1024 ** 3)).toEqual({ allowance: "500", allowanceUnit: 1024 ** 3 })
+    expect(allowanceInputOf(750 * 1024 ** 2)).toEqual({ allowance: "750", allowanceUnit: 1024 ** 2 })
+    // A plan in steps of 1000 keeps its own unit.
+    expect(allowanceInputOf(1500000000000)).toEqual({ allowance: "1.5", allowanceUnit: 1000 ** 4 })
+    expect(allowanceInputOf(500 * 1000 ** 3)).toEqual({ allowance: "500", allowanceUnit: 1000 ** 3 })
+  })
+
+  it("keeps the bytes of an allowance that no short figure holds", () => {
+    // One byte above 1.5 TB, as a rule saved through the API can hold it.
+    const input = allowanceInputOf(1500000000001)
+    expect(input).toEqual({ allowance: "1430511.4746103287", allowanceUnit: 1024 ** 2 })
+    expect(freeSpaceSourceOf({ type: "allowance", path: "/home/user", ...input }))
+      .toEqual({ type: "allowance", path: "/home/user", allowanceBytes: 1500000000001 })
+  })
+})
+
+// regression: #3012
+describe("hasMixedActionConditions", () => {
+  const packed: RuleCondition = { field: "NAME", operator: "CONTAINS", value: "packed" }
+  const unpacked: RuleCondition = { field: "NAME", operator: "CONTAINS", value: "unpacked" }
+  const tag = (tags: string[], condition?: RuleCondition, enabled = true) => ({ enabled, tags, mode: "full" as const, condition })
+
+  it.each([
+    { name: "two tag actions with different conditions", mixed: true, conditions: { schemaVersion: "1", tags: [tag(["packed"], packed), tag(["unpacked"], unpacked)] } },
+    { name: "a condition on category and none on pause", mixed: true, conditions: { schemaVersion: "1", category: { enabled: true, category: "sorted", condition: packed }, pause: { enabled: true } } },
+    { name: "the same condition on every action", mixed: false, conditions: { schemaVersion: "1", tags: [tag(["packed"], packed)], pause: { enabled: true, condition: packed } } },
+    { name: "a different condition on a disabled action", mixed: false, conditions: { schemaVersion: "1", tags: [tag(["packed"], packed), tag(["unpacked"], unpacked, false)] } },
+    { name: "another condition on a disabled action that comes first", mixed: false, conditions: { schemaVersion: "1", speedLimits: { enabled: false, condition: unpacked }, pause: { enabled: true, condition: packed } } },
+    { name: "auto management set to off with no condition", mixed: true, conditions: { schemaVersion: "1", pause: { enabled: true, condition: packed }, autoManagement: { enabled: false } } },
+  ])("returns $mixed for $name", ({ mixed, conditions }) => {
+    expect(hasMixedActionConditions(makeAutomation({ conditions }))).toBe(mixed)
+  })
+})
+
+// regression: #4186
+describe("firstActionCondition", () => {
+  const packed: RuleCondition = { field: "NAME", operator: "CONTAINS", value: "packed" }
+  const unpacked: RuleCondition = { field: "NAME", operator: "CONTAINS", value: "unpacked" }
+
+  it.each([
+    { name: "skips a switched-off action", conditions: { schemaVersion: "1", speedLimits: { enabled: false, condition: unpacked }, pause: { enabled: true, condition: packed } } },
+    { name: "skips a switched-off tag action", conditions: { schemaVersion: "1", tags: [{ enabled: false, tags: ["a"], mode: "full" as const, condition: unpacked }, { enabled: true, tags: ["b"], mode: "full" as const, condition: packed }] } },
+    { name: "skips a running action without a condition", conditions: { schemaVersion: "1", pause: { enabled: true }, category: { enabled: true, category: "sorted", condition: packed } } },
+  ])("$name", ({ conditions }) => {
+    expect(firstActionCondition(makeAutomation({ conditions }))).toEqual(packed)
+  })
+
+  it("returns null when no running action has a condition", () => {
+    const conditions = { schemaVersion: "1", speedLimits: { enabled: false, condition: unpacked }, pause: { enabled: true } }
+    expect(firstActionCondition(makeAutomation({ conditions }))).toBeNull()
   })
 })

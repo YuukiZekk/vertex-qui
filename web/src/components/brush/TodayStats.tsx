@@ -5,71 +5,17 @@
 
 import { TableCell, TableHead } from "@/components/ui/table"
 import { formatBytes } from "@/lib/utils"
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronUp } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { bytesPerSecondToMBs } from "./units"
 import type { ServerSort, ServerSortKey } from "./useServerStatsSort"
 import type { TodayTransfer } from "./useTodayTransfer"
 
-// These pieces add today's transfer to qui's server statistics section, styled
-// like its own header figures and columns.
+// These pieces add today's transfer to the columns of qui's dashboard instance list.
 
 function useSpeed() {
   const { t } = useTranslation("brush")
   return (bytes: number | null) => bytes === null ? "-" : t("today.mbs", { value: bytesPerSecondToMBs(bytes) })
-}
-
-export function TodayHeaderStats({ today }: { today: TodayTransfer }) {
-  const { t } = useTranslation("brush")
-  const speed = useSpeed()
-  if (!today) return null
-  return (
-    <>
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground">{t("today.todayShort")}</span>
-        <ChevronUp className="h-4 w-4 text-muted-foreground" />
-        <span className="text-lg font-semibold">{formatBytes(today.totals.uploaded)}</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground">{t("today.uploadSpeedShort")}</span>
-        <span className="text-lg font-semibold tabular-nums">{speed(today.totals.uploadSpeed)}</span>
-      </div>
-    </>
-  )
-}
-
-export function TodayHeadCells({ today, sort, onSort }: { today: TodayTransfer, sort: ServerSort | null, onSort: (key: ServerSortKey) => void }) {
-  const { t } = useTranslation("brush")
-  if (!today) return null
-  return (
-    <>
-      <SortHead column="todayUploaded" label={t("today.todayUploaded")} sort={sort} onSort={onSort} />
-      <SortHead column="todayDownloaded" label={t("today.todayDownloaded")} sort={sort} onSort={onSort} />
-      <SortHead column="uploadSpeed" label={t("today.currentSpeed")} sort={sort} onSort={onSort} />
-      <SortHead column="averageUpload" label={t("today.averageUploadShort")} sort={sort} onSort={onSort} />
-    </>
-  )
-}
-
-export function TodayCells({ today, instanceId }: { today: TodayTransfer, instanceId: number }) {
-  const speed = useSpeed()
-  if (!today) return null
-  const row = today.rows.get(instanceId)
-  return (
-    <>
-      <TableCell className="text-center font-semibold">{row ? formatBytes(row.uploaded) : "-"}</TableCell>
-      <TableCell className="text-center font-semibold">{row ? formatBytes(row.downloaded) : "-"}</TableCell>
-      <TableCell className="text-center font-semibold whitespace-nowrap">
-        {row ? (
-          <div className="flex flex-col items-center leading-tight">
-            <span className="flex items-center gap-0.5"><ChevronUp className="h-3 w-3 text-muted-foreground" />{speed(row.uploadSpeed)}</span>
-            <span className="flex items-center gap-0.5 text-xs text-muted-foreground"><ChevronDown className="h-3 w-3" />{speed(row.downloadSpeed)}</span>
-          </div>
-        ) : "-"}
-      </TableCell>
-      <TableCell className="text-center font-semibold whitespace-nowrap">{row ? speed(row.averageUpload) : "-"}</TableCell>
-    </>
-  )
 }
 
 // SortHead is a centred, sortable column head with the up-down icons the tracker
@@ -94,5 +40,34 @@ export function SortHead({ column, label, sort, onSort, alignLeft }: {
         {!active ? <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" /> : sort.desc ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
       </button>
     </TableHead>
+  )
+}
+
+// The dashboard's instance list shows its own speeds, so it takes only the day's
+// transfer and the average upload from the brush module.
+export const DASHBOARD_TODAY_COLUMNS = 3
+
+export function DashboardTodayHeads({ today, sort, onSort }: { today: TodayTransfer, sort: ServerSort | null, onSort: (key: ServerSortKey) => void }) {
+  const { t } = useTranslation("brush")
+  if (!today) return null
+  return (
+    <>
+      <SortHead column="todayUploaded" label={t("today.todayUploaded")} sort={sort} onSort={onSort} />
+      <SortHead column="todayDownloaded" label={t("today.todayDownloaded")} sort={sort} onSort={onSort} />
+      <SortHead column="averageUpload" label={t("today.averageUploadShort")} sort={sort} onSort={onSort} />
+    </>
+  )
+}
+
+export function DashboardTodayCells({ today, instanceId }: { today: TodayTransfer, instanceId: number }) {
+  const speed = useSpeed()
+  if (!today) return null
+  const row = today.rows.get(instanceId)
+  return (
+    <>
+      <TableCell className="text-center">{row ? formatBytes(row.uploaded) : "-"}</TableCell>
+      <TableCell className="text-center text-muted-foreground">{row ? formatBytes(row.downloaded) : "-"}</TableCell>
+      <TableCell className="text-center whitespace-nowrap text-muted-foreground">{row ? speed(row.averageUpload) : "-"}</TableCell>
+    </>
   )
 }

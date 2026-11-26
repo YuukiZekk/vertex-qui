@@ -95,19 +95,16 @@ func TestTriggerDefaultsRequest(t *testing.T) {
 	}
 
 	assert.Equal(t, &CrossSeedRequest{
-		TorrentData:                   "ZGF0YQ==",
-		Tags:                          []string{"cross-seed"},
-		StartPaused:                   new(true),
-		InheritSourceTags:             true,
-		IndexerName:                   "Indexer",
-		FindIndividualEpisodes:        true,
-		SkipAutoResume:                true,
-		SkipRecheck:                   true,
-		SkipPieceBoundarySafetyCheck:  true,
-		SourceFilterCategories:        []string{"in"},
-		SourceFilterTags:              []string{"tag"},
-		SourceFilterExcludeCategories: []string{"out"},
-		SourceFilterExcludeTags:       []string{"no"},
+		TorrentData:                  "ZGF0YQ==",
+		Tags:                         []string{"cross-seed"},
+		StartPaused:                  new(true),
+		InheritSourceTags:            true,
+		IndexerName:                  "Indexer",
+		FindIndividualEpisodes:       true,
+		SkipAutoResume:               true,
+		SkipRecheck:                  true,
+		SkipPieceBoundarySafetyCheck: true,
+		sourceFilter:                 sourceFilter{[]string{"in"}, []string{"tag"}, []string{"out"}, []string{"no"}},
 	}, d.request("ZGF0YQ==", "Indexer"))
 }
 
@@ -249,5 +246,17 @@ func TestWebhookCategoryAndStartPausedDefaults(t *testing.T) {
 			assert.Equal(t, tt.wantCategory, captured.Category)
 			assert.Equal(t, tt.wantStartPaused, *captured.StartPaused)
 		})
+	}
+}
+
+// A RED/OPS match keeps the indexer name of older versions for its category
+// and link folder.
+func TestRequestKeepsGazellePlacementName(t *testing.T) {
+	settings := &models.CrossSeedAutomationSettings{UseCategoryFromIndexer: true}
+	svc := &Service{}
+	for indexer, want := range map[string]string{"Redacted (API)": "Gazelle (RED)", "Orpheus (API)": "Gazelle (OPS)", "Music Indexer": "Music Indexer"} {
+		req := defaultsFor(triggerSeededSearch, settings).request("", indexer)
+		category, _ := svc.determineCrossSeedCategory(t.Context(), req, nil, settings)
+		require.Equal(t, want, category, indexer)
 	}
 }

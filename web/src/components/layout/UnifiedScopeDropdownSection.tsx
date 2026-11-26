@@ -4,11 +4,13 @@
  */
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { InstanceMarkIcon } from "@/components/instances/marks/InstanceMarkIcon"
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { ALL_INSTANCES_ID } from "@/lib/instances"
 import { cn } from "@/lib/utils"
 import type { InstanceResponse } from "@/types"
 import { Link } from "@tanstack/react-router"
-import { ChevronRight, HardDrive } from "lucide-react"
+import { ChevronRight } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -38,7 +40,7 @@ export function UnifiedScopeDropdownSection({
   const isSidebar = variant === "sidebar"
 
   const rowContainerClassName = isSidebar ? cn(
-    "flex items-stretch rounded-md text-sm transition-all duration-200 ease-out",
+    "flex items-stretch rounded-md text-sm short:text-[13px]/5",
     isAllInstancesRoute ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium" : "text-sidebar-foreground"
   ) : cn(
     "flex items-stretch rounded-sm text-sm",
@@ -46,31 +48,33 @@ export function UnifiedScopeDropdownSection({
   )
 
   const rowLinkClassName = isSidebar ? cn(
-    "flex min-w-0 flex-1 items-center gap-3 px-3 py-2 outline-hidden transition-all duration-200 ease-out",
-    isAllInstancesRoute ? "rounded-l-md" : "rounded-l-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent focus-visible:text-sidebar-accent-foreground"
+    "flex min-w-0 flex-1 items-center gap-3 px-3 py-1.5 outline-hidden short:py-1",
+    isAllInstancesRoute ? "rounded-l-md" : "rounded-l-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent focus-visible:text-sidebar-accent-foreground hover:transition-colors hover:duration-200 hover:ease-out"
   ) : cn(
     "flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 outline-hidden transition-colors",
     isAllInstancesRoute ? "rounded-l-sm" : "rounded-l-sm hover:bg-accent/80 focus-visible:bg-accent/80"
   )
 
   const triggerClassName = isSidebar ? cn(
-    "flex items-center gap-1 rounded-r-md px-2.5 outline-hidden transition-all duration-200 ease-out",
-    isAllInstancesRoute ? "text-sidebar-primary-foreground/75 hover:bg-sidebar-primary/90 focus-visible:bg-sidebar-primary/90" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent focus-visible:text-sidebar-accent-foreground"
+    "flex items-center gap-1 rounded-r-md px-2.5 outline-hidden",
+    isAllInstancesRoute ? "text-sidebar-primary-foreground/75 hover:bg-sidebar-primary/90 focus-visible:bg-sidebar-primary/90" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent focus-visible:text-sidebar-accent-foreground hover:transition-colors hover:duration-200 hover:ease-out"
   ) : cn(
     "flex items-center gap-1 rounded-r-sm px-2 outline-hidden transition-colors",
     isAllInstancesRoute ? "text-accent-foreground/70 hover:bg-accent/90 focus-visible:bg-accent/90" : "text-muted-foreground hover:bg-accent/80 hover:text-foreground focus-visible:bg-accent/80 focus-visible:text-foreground"
   )
 
   const dropdownHeaderItemClassName = "cursor-pointer p-0"
+  // The sidebar mounts this row when it expands from icons, so its text fades in as the other labels of the sidebar do.
+  const sidebarTextEnterClassName = "animate-in fade-in-0 duration-200 motion-reduce:animate-none"
 
   const contentClassName = cn(
     "overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down",
     !isSidebar && "max-h-[min(18rem,calc(100vh-14rem))]"
   )
 
-  const contentInnerClassName = isSidebar ? "ml-6 space-y-1 border-l border-sidebar-border/70 pl-3" : "ml-4 max-h-[min(18rem,calc(100vh-14rem))] space-y-1 overflow-y-auto overscroll-contain border-l border-border/60 pl-2 pr-1"
+  const contentInnerClassName = isSidebar ? "ml-6 space-y-0.5 border-l border-sidebar-border/70 pl-3 short:space-y-px" : "ml-4 max-h-[min(18rem,calc(100vh-14rem))] space-y-1 overflow-y-auto overscroll-contain border-l border-border/60 pl-2 pr-1"
 
-  const sidebarScopeRowClassName = "flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-out outline-hidden"
+  const sidebarScopeRowClassName = "flex w-full items-center justify-between gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 ease-out outline-hidden short:py-1 short:text-[13px]/5"
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded} className="space-y-1">
@@ -81,13 +85,13 @@ export function UnifiedScopeDropdownSection({
               to="/instances"
               className={rowLinkClassName}
             >
-              <HardDrive className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">{t("unifiedScope.unified")}</span>
+              <InstanceMarkIcon instanceId={ALL_INSTANCES_ID} colored={!isAllInstancesRoute} />
+              <span className={cn("truncate", sidebarTextEnterClassName)}>{t("unifiedScope.unified")}</span>
             </Link>
             <CollapsibleTrigger asChild>
               <button
                 type="button"
-                className={triggerClassName}
+                className={cn(triggerClassName, sidebarTextEnterClassName)}
                 aria-label={isExpanded ? t("unifiedScope.collapseScope") : t("unifiedScope.expandScope")}
               >
                 <span className="text-[10px] font-semibold uppercase tracking-[0.18em]">
@@ -109,7 +113,7 @@ export function UnifiedScopeDropdownSection({
                 to="/instances"
                 className={rowLinkClassName}
               >
-                <HardDrive className="h-4 w-4 flex-shrink-0" />
+                <InstanceMarkIcon instanceId={ALL_INSTANCES_ID} colored={!isAllInstancesRoute} />
                 <span className="truncate">{t("unifiedScope.unified")}</span>
               </Link>
             </DropdownMenuItem>
@@ -169,14 +173,10 @@ export function UnifiedScopeDropdownSection({
                       checked ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent focus-visible:text-sidebar-accent-foreground"
                     )}
                   >
-                    <span className="truncate">{instance.name}</span>
-                    <span
-                      className={cn(
-                        "h-2 w-2 rounded-full flex-shrink-0",
-                        instance.connected ? "bg-green-500" : "bg-red-500"
-                      )}
-                      aria-hidden="true"
-                    />
+                    <span className="flex min-w-0 items-center gap-2">
+                      <InstanceMarkIcon instanceId={instance.id} problem={!instance.connected} />
+                      <span className="truncate">{instance.name}</span>
+                    </span>
                   </button>
                 )
               })}
@@ -205,15 +205,9 @@ export function UnifiedScopeDropdownSection({
                     }}
                     className="cursor-pointer"
                   >
-                    <span className="flex w-full items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <InstanceMarkIcon instanceId={instance.id} problem={!instance.connected} />
                       <span className="truncate">{instance.name}</span>
-                      <span
-                        className={cn(
-                          "h-2 w-2 rounded-full flex-shrink-0",
-                          instance.connected ? "bg-green-500" : "bg-red-500"
-                        )}
-                        aria-hidden="true"
-                      />
                     </span>
                   </DropdownMenuCheckboxItem>
                 )

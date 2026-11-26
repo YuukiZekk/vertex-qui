@@ -106,8 +106,10 @@ export interface Torrent {
   hash: string
   infohash_v1: string
   infohash_v2: string
-  popularity: number
-  private: boolean
+  // The server leaves out popularity and private before qBittorrent 5.0, which
+  // does not send them in the torrent list, and private for a torrent without metadata.
+  popularity?: number
+  private?: boolean
   last_activity: number
   max_ratio: number
   max_seeding_time: number
@@ -124,7 +126,8 @@ export interface Torrent {
   progress: number
   ratio: number
   ratio_limit: number
-  reannounce: number
+  // The server leaves it out before qBittorrent 5.0, which does not send it in the torrent list.
+  reannounce?: number
   save_path: string
   seeding_time: number
   seeding_time_limit: number
@@ -143,10 +146,20 @@ export interface Torrent {
   trackers_count: number
   trackers?: TorrentTracker[]
   tracker_health?: "unregistered" | "tracker_down" | "tracker_error"
+  /** Set only on a torrent that qui added for a Transfer or a Share: the owner kind from the helper registry. */
+  qui_helper?: "transfer" | "share"
   up_limit: number
   uploaded: number
   uploaded_session: number
   upspeed: number
+  /** Only on a row of a Copy group with two or more matching torrents, when the request asked for groups. */
+  copy_group?: CopyGroupRow
+}
+
+export interface CopyGroupRow {
+  id: string
+  /** Only on the Group representative: the torrent whose place the group takes in the sort. */
+  first_sorted?: { instance_id: number; hash: string }
 }
 
 export interface DuplicateTorrentMatch {
@@ -170,6 +183,10 @@ export interface TorrentStats {
   totalSize?: number
   totalRemainingSize?: number
   totalSeedingSize?: number
+  // Set when the request asks for the Unique size and a Copy groups build that
+  // read the instance has ended.
+  uniqueSize?: number
+  uniqueSeedingSize?: number
 }
 
 export interface CacheMetadata {
@@ -177,15 +194,6 @@ export interface CacheMetadata {
   age: number
   isStale: boolean
   nextRefresh?: string
-}
-
-export interface TrackerTransferStats {
-  uploaded: number
-  downloaded: number
-  uploadedSession: number
-  downloadedSession: number
-  totalSize: number
-  count: number
 }
 
 /**
@@ -201,7 +209,6 @@ export interface TorrentCounts {
   tags: Record<string, number>
   tagSizes?: Record<string, number>
   trackers: Record<string, number>
-  trackerTransfers?: Record<string, TrackerTransferStats>
   total: number
 }
 
@@ -242,10 +249,6 @@ export interface FilterViewInput {
   filters: Partial<TorrentFilters>
 }
 
-/**
- * Real-time instance auth/decryption and connection metadata emitted on torrent
- * stream snapshots.
- */
 export interface InstanceMeta {
   connected: boolean
   hasDecryptionError: boolean
@@ -254,9 +257,6 @@ export interface InstanceMeta {
   connectionStatus?: string
 }
 
-/**
- * Torrent list response shared by REST and stream snapshots.
- */
 export interface TorrentResponse {
   torrents: Torrent[]
   crossInstanceTorrents?: CrossInstanceTorrent[]
@@ -276,9 +276,13 @@ export interface TorrentResponse {
   partialResults?: boolean
   trackerHealthSupported?: boolean
   isCrossInstance?: boolean
-  instanceMeta?: InstanceMeta  // Real-time instance health from SSE
+  instanceMeta?: InstanceMeta
+  /** Web API version of each instance in the response, keyed by instance ID; "" while unknown. */
+  webAPIVersions?: Record<number, string>
   /** Frontend-assembled only: number of pages combined into this loaded-window response. */
   windowPageCount?: number
+  /** Only when the request asked for groups. False while the server has no Copy groups yet; the rows are then flat. */
+  copyGroupsReady?: boolean
 }
 
 export interface AddTorrentFailedURL {
@@ -342,7 +346,6 @@ export interface TorrentStreamPayload {
   error?: string
 }
 
-// Simplified MainData - only used for Dashboard server stats
 export interface MainData {
   rid: number
   serverState?: ServerState
@@ -382,6 +385,12 @@ export interface ServerState {
   write_cache_overload?: string
   last_external_address_v4?: string
   last_external_address_v6?: string
+}
+
+/** The disk of the default save path of an instance. Both fields are null when qui cannot read the disk. */
+export interface InstanceDisk {
+  freeBytes: number | null
+  totalBytes: number | null
 }
 
 export interface TransferInfo {

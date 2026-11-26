@@ -16,12 +16,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var trackerPatchWebAPIVersions = map[string]struct{}{
-	"2.9.1": {},
-	"2.9.2": {},
-	"2.9.3": {},
-}
-
 type backupTrackerSource interface {
 	GetTorrentTrackers(ctx context.Context, instanceID int, hash string) ([]qbt.TorrentTracker, error)
 }
@@ -78,8 +72,6 @@ func patchTorrentTrackers(data []byte, trackers []string) ([]byte, bool, error) 
 	return buf.Bytes(), true, nil
 }
 
-// decodeRawValue returns the decoded form of one raw top-level value, or nil
-// when the key is absent or its value does not decode.
 func decodeRawValue(raw bencode.Bytes) any {
 	var v any
 	if err := bencode.Unmarshal(raw, &v); err != nil {
@@ -117,16 +109,6 @@ func announceDomain(data []byte) string {
 	}
 
 	return hostFromURL(meta.Announce)
-}
-
-func shouldInjectTrackerMetadata(apiVersion string) bool {
-	apiVersion = strings.TrimSpace(apiVersion)
-	if apiVersion == "" {
-		return false
-	}
-
-	_, ok := trackerPatchWebAPIVersions[apiVersion]
-	return ok
 }
 
 func needAnnounceListUpdate(existing any, trackers []string) bool {

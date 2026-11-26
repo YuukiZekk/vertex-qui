@@ -1,23 +1,24 @@
 // Copyright (c) 2025-2026, s0up and the autobrr contributors.
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Package logstream provides a thread-safe log broadcasting system with a ring buffer
-// for log history and SSE-based streaming to subscribers.
 package logstream
 
 import (
 	"context"
+	"encoding/json/v2"
+	"regexp"
+	"slices"
+	"strings"
 	"sync"
+
+	"github.com/rs/zerolog"
 )
 
 const (
-	// DefaultBufferSize is the default number of log lines to keep in the ring buffer.
-	DefaultBufferSize = 1000
-	// DefaultSubscriberBuffer is the buffer size for each subscriber's channel.
+	DefaultBufferSize       = 1000
 	DefaultSubscriberBuffer = 100
 )
 
-// Hub manages log broadcasting to subscribers with a ring buffer for history.
 type Hub struct {
 	mu          sync.RWMutex
 	buffer      []string
@@ -27,15 +28,12 @@ type Hub struct {
 	subscribers map[*Subscriber]struct{}
 }
 
-// Subscriber represents a log stream subscriber with a buffered channel.
 type Subscriber struct {
 	ch     chan string
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
-// NewHub creates a new Hub with the specified buffer size.
-// If size <= 0, DefaultBufferSize is used.
 func NewHub(size int) *Hub {
 	if size <= 0 {
 		size = DefaultBufferSize
@@ -53,7 +51,6 @@ func (h *Hub) Write(line string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Write to ring buffer
 	h.buffer[h.writePos] = line
 	h.writePos = (h.writePos + 1) % h.bufferSize
 	if h.count < h.bufferSize {
@@ -67,13 +64,10 @@ func (h *Hub) Write(line string) {
 		select {
 		case sub.ch <- line:
 		default:
-			// Drop line for slow consumer
 		}
 	}
 }
 
-// History returns the last n lines from the ring buffer.
-// If n <= 0 or n > count, returns all available lines.
 func (h *Hub) History(n int) []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -86,7 +80,6 @@ func (h *Hub) History(n int) []string {
 	}
 
 	result := make([]string, n)
-	// Calculate start position in ring buffer
 	start := (h.writePos - n + h.bufferSize) % h.bufferSize
 	for i := range n {
 		result[i] = h.buffer[(start+i)%h.bufferSize]
@@ -94,8 +87,62 @@ func (h *Hub) History(n int) []string {
 	return result
 }
 
-// Subscribe creates a new subscriber that receives log lines.
-// The returned Subscriber should be unsubscribed when done.
+// HistoryFrom returns the last n lines at minLevel or above, oldest first.
+// It filters before it counts, so n is the number of matching lines returned
+// when the buffer holds that many. If n <= 0, it returns every matching line.
+// A line whose level it cannot read is always kept.
+func (h *Hub) HistoryFrom(minLevel zerolog.Level, n int) []string {
+	lines := h.History(0)
+	var result []string
+	for _, line := range slices.Backward(lines) {
+		if n > 0 && len(result) == n {
+			break
+		}
+		if level, ok := lineLevel(line); ok && level < minLevel {
+			continue
+		}
+		result = append(result, line)
+	}
+	slices.Reverse(result)
+	return result
+}
+
+var ansiEscapeRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+var consoleLevels = func() map[string]zerolog.Level {
+	levels := make(map[string]zerolog.Level, len(zerolog.FormattedLevels))
+	for level, word := range zerolog.FormattedLevels {
+		levels[word] = level
+	}
+	return levels
+}()
+
+// lineLevel reads the level field of a zerolog JSON line, or the level word
+// of a line in zerolog's console format (timestamp, then level word).
+func lineLevel(line string) (zerolog.Level, bool) {
+	if strings.HasPrefix(line, "{") {
+		var entry struct {
+			Level string `json:"level"`
+		}
+		if json.Unmarshal([]byte(line), &entry) != nil || entry.Level == "" {
+			return zerolog.NoLevel, false
+		}
+		level, err := zerolog.ParseLevel(entry.Level)
+		return level, err == nil
+	}
+
+	words := 0
+	for word := range strings.FieldsSeq(ansiEscapeRegex.ReplaceAllString(line, "")) {
+		if level, ok := consoleLevels[word]; ok {
+			return level, true
+		}
+		if words++; words == 2 {
+			break
+		}
+	}
+	return zerolog.NoLevel, false
+}
+
 func (h *Hub) Subscribe(ctx context.Context) *Subscriber {
 	subCtx, cancel := context.WithCancel(ctx)
 	sub := &Subscriber{
@@ -108,7 +155,6 @@ func (h *Hub) Subscribe(ctx context.Context) *Subscriber {
 	h.subscribers[sub] = struct{}{}
 	h.mu.Unlock()
 
-	// Auto-unsubscribe when context is done
 	go func() {
 		<-subCtx.Done()
 		h.Unsubscribe(sub)
@@ -117,7 +163,6 @@ func (h *Hub) Subscribe(ctx context.Context) *Subscriber {
 	return sub
 }
 
-// Unsubscribe removes a subscriber and closes its channel.
 func (h *Hub) Unsubscribe(sub *Subscriber) {
 	h.mu.Lock()
 	if _, ok := h.subscribers[sub]; ok {
@@ -128,26 +173,10 @@ func (h *Hub) Unsubscribe(sub *Subscriber) {
 	h.mu.Unlock()
 }
 
-// Channel returns the subscriber's log line channel.
 func (s *Subscriber) Channel() <-chan string {
 	return s.ch
 }
 
-// Done returns the subscriber's context done channel.
 func (s *Subscriber) Done() <-chan struct{} {
 	return s.ctx.Done()
-}
-
-// SubscriberCount returns the current number of subscribers.
-func (h *Hub) SubscriberCount() int {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return len(h.subscribers)
-}
-
-// Count returns the number of lines currently in the buffer.
-func (h *Hub) Count() int {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.count
 }

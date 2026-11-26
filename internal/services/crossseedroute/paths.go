@@ -19,9 +19,6 @@ import (
 	"github.com/autobrr/qui/pkg/pathcmp"
 )
 
-// ToCrossSeed maps p, a Source instance path under baseDir, to the path where
-// the Cross-seed instance sees it. d is the Source instance's path dialect. It
-// returns false when the route has no row for baseDir or p is not under it.
 func ToCrossSeed(d fsops.PathDialect, rows []models.CrossSeedRouteRow, baseDir, p string) (string, bool) {
 	key := fsops.CleanPath(d, strings.TrimSpace(baseDir))
 	i := slices.IndexFunc(rows, func(row models.CrossSeedRouteRow) bool { return row.BaseDir == key })
@@ -42,9 +39,6 @@ func ToCrossSeed(d fsops.PathDialect, rows []models.CrossSeedRouteRow, baseDir, 
 	return strings.TrimRight(mapped, `/\`) + "/" + d.ToSlash(rel), true
 }
 
-// FromCrossSeed maps p, a path that the Cross-seed instance reports, back to
-// a Source instance path with the Source instance's dialect d. It also returns
-// the index of the row that matched, or -1 when p is under no row.
 func FromCrossSeed(d fsops.PathDialect, rows []models.CrossSeedRouteRow, p string) (string, int) {
 	raw := pathcmp.NormalizePath(p)
 	reported := nfc(raw)
@@ -117,17 +111,16 @@ func under(dir, p string) (string, bool) {
 }
 
 // TorrentReader reads an instance's torrents and their file lists, fresh or
-// cached as the caller needs.
+// cached as the caller needs. The torrents are those of the Sync snapshot:
+// never change one.
 type TorrentReader interface {
-	GetAllTorrents(ctx context.Context, instanceID int) ([]qbt.Torrent, error)
+	GetAllTorrentRefs(ctx context.Context, instanceID int) ([]*qbt.Torrent, error)
 	GetTorrentFilesBatch(ctx context.Context, instanceID int, hashes []string) (map[string]qbt.TorrentFiles, error)
 }
 
-// RoutedTorrents are the Cross-seed instance's torrents under the rows of one
-// route, in Source instance paths.
 type RoutedTorrents struct {
-	// Torrents have SavePath and ContentPath mapped back. ContentPath is empty
-	// when it is under no row.
+	// Torrents are private copies with SavePath and ContentPath mapped back.
+	// ContentPath is empty when it is under no row.
 	Torrents []qbt.Torrent
 	// Files holds the file lists by hash. The names stay relative to the save
 	// path, as qBittorrent reports them. ListRouted leaves it nil.
@@ -152,8 +145,6 @@ func (s *Service) LoadRouted(ctx context.Context, read TorrentReader, sourceID i
 	return routed, nil
 }
 
-// ListRouted is LoadRouted without the file lists, for a caller that reads
-// them only when the torrents changed.
 func (s *Service) ListRouted(ctx context.Context, read TorrentReader, sourceID int) (*RoutedTorrents, error) {
 	route, err := s.Get(ctx, sourceID)
 	if err != nil || route == nil {
@@ -164,11 +155,12 @@ func (s *Service) ListRouted(ctx context.Context, read TorrentReader, sourceID i
 		return nil, err
 	}
 	routed := &RoutedTorrents{crossSeedInstanceID: route.CrossSeedInstanceID}
-	for _, torrent := range all {
-		savePath, row := FromCrossSeed(d, route.Rows, torrent.SavePath)
+	for _, shared := range all {
+		savePath, row := FromCrossSeed(d, route.Rows, shared.SavePath)
 		if row < 0 {
 			continue
 		}
+		torrent := *shared
 		torrent.SavePath = savePath
 		torrent.ContentPath, _ = FromCrossSeed(d, route.Rows, torrent.ContentPath)
 		routed.Torrents = append(routed.Torrents, torrent)
@@ -176,8 +168,6 @@ func (s *Service) ListRouted(ctx context.Context, read TorrentReader, sourceID i
 	return routed, nil
 }
 
-// LoadFiles reads the file lists of the torrents into Files. Errors are as
-// for LoadRouted.
 func (r *RoutedTorrents) LoadFiles(ctx context.Context, read TorrentReader) error {
 	hashes := make([]string, len(r.Torrents))
 	for i := range r.Torrents {
@@ -197,26 +187,21 @@ func (r *RoutedTorrents) LoadFiles(ctx context.Context, read TorrentReader) erro
 	return nil
 }
 
-// CountRouted returns, for each row of route, the number of the Cross-seed
-// instance's torrents whose save path is under it. Errors are as for
-// LoadRouted.
 func (s *Service) CountRouted(ctx context.Context, read TorrentReader, route *models.CrossSeedRoute) ([]int, error) {
 	d, all, err := s.readCrossSeed(ctx, read, route)
 	if err != nil {
 		return nil, err
 	}
 	counts := make([]int, len(route.Rows))
-	for i := range all {
-		if _, row := FromCrossSeed(d, route.Rows, all[i].SavePath); row >= 0 {
+	for _, torrent := range all {
+		if _, row := FromCrossSeed(d, route.Rows, torrent.SavePath); row >= 0 {
 			counts[row]++
 		}
 	}
 	return counts, nil
 }
 
-// readCrossSeed reads the torrents of route's Cross-seed instance after the
-// availability check, with the Source instance's path dialect.
-func (s *Service) readCrossSeed(ctx context.Context, read TorrentReader, route *models.CrossSeedRoute) (_ fsops.PathDialect, _ []qbt.Torrent, err error) {
+func (s *Service) readCrossSeed(ctx context.Context, read TorrentReader, route *models.CrossSeedRoute) (_ fsops.PathDialect, _ []*qbt.Torrent, err error) {
 	defer func() {
 		// A read that the deadline of ctx cut off means that the Cross-seed
 		// instance did not answer in time.
@@ -236,7 +221,7 @@ func (s *Service) readCrossSeed(ctx context.Context, read TorrentReader, route *
 	if err != nil {
 		return nil, nil, err
 	}
-	all, err := read.GetAllTorrents(ctx, route.CrossSeedInstanceID)
+	all, err := read.GetAllTorrentRefs(ctx, route.CrossSeedInstanceID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: read the torrents of the Cross-seed instance: %w", ErrUnavailable, err)
 	}

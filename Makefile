@@ -27,7 +27,7 @@ INTERNAL_WEB_DIR = internal/web
 # Go build flags
 LDFLAGS = -ldflags "-X github.com/autobrr/qui/internal/buildinfo.Version=$(VERSION) -X github.com/autobrr/qui/internal/buildinfo.Commit=$(GIT_COMMIT) -X github.com/autobrr/qui/internal/buildinfo.Date=$(BUILD_DATE)"
 
-.PHONY: all build frontend backend dev dev-backend dev-frontend dev-expose clean test test-postgres test-frontend help themes-fetch themes-clean lint lint-full lint-ratchet lint-json lint-fix fmt gofix-changed gofix-check-changed check-mojibake generate precommit deps docs-dev docs-build mutation mutation-go mutation-web
+.PHONY: all build frontend backend dev dev-backend dev-frontend dev-expose clean test test-postgres test-frontend test-frontend-changed help lint lint-full lint-ratchet lint-version typecheck-frontend check-i18n lint-json lint-fix fmt gofix-changed gofix-check-changed check-mojibake generate precommit deps docs-dev docs-build mutation mutation-go mutation-web
 
 # Default target
 all: build
@@ -42,27 +42,6 @@ build/docker:
 build/dockerx:
 	docker buildx build -t ghcr.io/autobrr/qui:dev -f distrib/docker/Dockerfile . --build-arg GIT_TAG=$(GIT_TAG) --build-arg GIT_COMMIT=$(GIT_COMMIT) --build-arg BUILD_DATE=$(BUILD_DATE) --build-arg VERSION=$(VERSION) --platform=linux/amd64,linux/arm64 --pull --load
 
-# Fetch premium themes from private repository
-themes-fetch:
-	@echo "Fetching premium themes..."
-	@if [ -n "$$THEMES_REPO_TOKEN" ]; then \
-		rm -rf .themes-temp && \
-		git clone --depth=1 --filter=blob:none --sparse \
-			https://x-access-token:$$THEMES_REPO_TOKEN@github.com/autobrr/qui-premium-themes.git .themes-temp && \
-		cd .themes-temp && git sparse-checkout set --cone themes && cd .. && \
-		mkdir -p internal/themes/assets/premium && \
-		cp .themes-temp/themes/*.css internal/themes/assets/premium/ && \
-		rm -rf .themes-temp && \
-		echo "Premium themes fetched successfully"; \
-	else \
-		echo "THEMES_REPO_TOKEN not set, skipping premium themes"; \
-	fi
-
-# Clean premium themes
-themes-clean:
-	@echo "Cleaning premium themes..."
-	rm -f internal/themes/assets/premium/*.css
-
 # Build frontend
 frontend:
 	@echo "Building frontend..."
@@ -72,7 +51,7 @@ frontend:
 	cp -r $(WEB_DIR)/dist $(INTERNAL_WEB_DIR)/
 
 # Build backend
-backend: themes-fetch
+backend:
 	@echo "Building backend..."
 	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/qui
 
@@ -102,7 +81,7 @@ dev-frontend-expose:
 	cd $(WEB_DIR) && pnpm dev --host
 
 # Clean build artifacts
-clean: themes-clean
+clean:
 	@echo "Cleaning..."
 	rm -rf $(WEB_DIR)/dist $(INTERNAL_WEB_DIR)/dist $(BINARY_NAME) $(BUILD_DIR)
 
@@ -119,6 +98,18 @@ test-postgres:
 test-frontend:
 	@echo "Running frontend tests..."
 	cd $(WEB_DIR) && pnpm test
+
+# Run the frontend tests when the branch changes a file under web/ or internal/. Some frontend tests read backend files.
+test-frontend-changed:
+	@base=$$(git merge-base origin/develop HEAD 2>/dev/null || true); \
+		if [ -n "$$base" ]; then \
+			changed=$$({ git diff --name-only "$$base"; git ls-files --others --exclude-standard; } | grep -E '^($(WEB_DIR)|internal)/' || true); \
+			if [ -z "$$changed" ]; then \
+				echo "No changed file under $(WEB_DIR)/ or internal/, skipping the frontend tests."; \
+				exit 0; \
+			fi; \
+		fi; \
+		$(MAKE) test-frontend
 
 # Validate OpenAPI specification
 test-openapi:
@@ -253,18 +244,28 @@ check-mojibake:
 		exit 1; \
 	fi
 
-# Write the generated files: the automation rule JSON reference in the docs and the query builder field table
+# Write the generated files: the automation rule JSON reference in the docs, the query builder field table, and the API key area table
 generate:
 	go run ./internal/automationsgen
 
-# Local pre-commit gate: mojibake check, generated files, fmt and gofix on changed files, then lint
-precommit: check-mojibake generate fmt gofix-changed lint lint-ratchet
+# Local pre-commit gate: mojibake check, generated files, fmt and gofix on changed files, lint, the frontend type and i18n checks, then the frontend tests when the branch changes web/ or internal/
+precommit: check-mojibake generate fmt gofix-changed lint lint-ratchet typecheck-frontend check-i18n test-frontend-changed
 	@echo "Pre-commit checks passed."
 
-# Lint new Go issues since the develop merge-base, then all frontend files
-lint:
+# Warn when the local golangci-lint is not the version that CI pins, because lint and lint-ratchet can then find problems that CI does not
+lint-version:
+	@pin=$$(sed -n 's/^ *version: \(v[0-9.]*\)$$/\1/p' .github/workflows/lint.yml | head -1); \
+	have=v$$(golangci-lint version --short 2>/dev/null); \
+	if [ -n "$$pin" ] && [ "$$have" != "$$pin" ]; then \
+		echo "warning: golangci-lint is $$have, but CI pins $$pin. lint and lint-ratchet can find problems that CI does not."; \
+	fi
+
+# Lint new Go issues since the origin/develop merge-base, then all frontend files
+lint: lint-version
 	@echo "Linting changed Go code..."
-	golangci-lint run --new-from-merge-base=develop --timeout=5m
+	golangci-lint run --new-from-merge-base=origin/develop --timeout=5m
+	@echo "Finding unused Go code in the whole repo..."
+	golangci-lint run --enable-only=unused --timeout=5m ./...
 	@echo "Linting frontend..."
 	cd $(WEB_DIR) && pnpm lint
 
@@ -275,14 +276,24 @@ lint-full:
 	@echo "Linting frontend..."
 	cd $(WEB_DIR) && pnpm lint
 
+# Type-check the frontend with the command that the frontend build runs first
+typecheck-frontend:
+	@echo "Type-checking frontend..."
+	cd $(WEB_DIR) && pnpm exec tsc -b
+
+# The i18n checks that lint.yml runs in CI
+check-i18n:
+	@echo "Checking i18n..."
+	cd $(WEB_DIR) && pnpm check:i18n
+
 # Hold the linters in scripts/ratchet/golangci.yml to their shrink-only allowlist
-lint-ratchet:
-	go run ./scripts/ratchet -base $$(git merge-base HEAD develop)
+lint-ratchet: lint-version
+	go run ./scripts/ratchet -base "$$(git merge-base origin/develop HEAD || echo origin/develop)"
 
 # Lint with JSON output (for AI agent consumption)
 lint-json:
 	@echo "Generating lint report..."
-	golangci-lint run --new-from-merge-base=develop --output.json.path=./lint-report.json --timeout=5m || true
+	golangci-lint run --new-from-merge-base=origin/develop --output.json.path=./lint-report.json --timeout=5m || true
 	@echo "Lint report saved to lint-report.json"
 
 # Lint with auto-fix where possible
@@ -333,6 +344,7 @@ help:
 	@echo "  make test           - Run all Go tests with race detection"
 	@echo "  make test-postgres  - Run Postgres integration tests with a temporary server"
 	@echo "  make test-frontend  - Run frontend vitest suite"
+	@echo "  make test-frontend-changed - Run frontend vitest suite when the branch changes web/ or internal/"
 	@echo "  make test-openapi   - Validate OpenAPI specification"
 	@echo "  make mutation       - Mutation test changed Go lines and TypeScript files (MUTATION_BASE=origin/develop)"
 	@echo ""
@@ -347,16 +359,14 @@ help:
 	@echo "  make fmt            - Format changed files only (fast, for iteration)"
 	@echo "  make gofix-changed  - Apply go fix to changed Go files only"
 	@echo "  make gofix-check-changed - Check go fix drift on changed Go files only"
-	@echo "  make generate       - Write generated files (automation rule JSON reference, query builder fields)"
-	@echo "  make precommit      - Run local pre-commit gate (generate + fmt + gofix + lint + lint-ratchet)"
+	@echo "  make generate       - Write generated files (automation rule JSON reference, query builder fields, API key areas)"
+	@echo "  make precommit      - Run local pre-commit gate (generate + fmt + gofix + lint + lint-ratchet + frontend type and i18n checks + frontend tests when web/ or internal/ changed)"
 	@echo ""
 	@echo "Documentation:"
 	@echo "  make docs-dev       - Run documentation development server"
 	@echo "  make docs-build     - Build documentation for production"
 	@echo ""
 	@echo "Other:"
-	@echo "  make themes-fetch   - Fetch premium themes from private repository"
-	@echo "  make themes-clean   - Clean premium themes"
 	@echo "  make clean          - Clean build artifacts"
 	@echo "  make deps           - Install dependencies"
 	@echo "  make help           - Show this help message"

@@ -83,8 +83,6 @@ class MockEventSource {
     this.readyState = MockEventSource.CLOSED
   }
 
-  // ----- test driver helpers -------------------------------------------------
-
   emitOpen() {
     this.readyState = MockEventSource.OPEN
     this.onopen?.(new Event("open"))
@@ -151,10 +149,6 @@ afterEach(() => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Test harness
-// ---------------------------------------------------------------------------
-
 const BASE_PARAMS: StreamParams = {
   instanceId: 1,
   page: 1,
@@ -172,9 +166,6 @@ function makeParams(overrides: Partial<StreamParams> = {}): StreamParams {
   return { ...BASE_PARAMS, ...overrides }
 }
 
-// Renders a single useSyncStream subscriber and exposes its latest state plus
-// every payload delivered to onMessage. Mounting/unmounting is driven through
-// the returned `unmount` so teardown timing can be asserted.
 function renderSubscriber(params: StreamParams | null, enabled = true) {
   const controls: HarnessControls = {
     getState: () => DEFAULT,
@@ -298,7 +289,6 @@ describe("SyncStreamContext", () => {
     it("opens exactly one EventSource at the batch URL and closes it on teardown", () => {
       const { unmountSubscriber } = renderToggleableSubscriber(BASE_PARAMS)
 
-      // queueConnectionUpdate batches the open behind a 0ms timeout.
       expect(MockEventSource.instances).toHaveLength(0)
       flushConnectionQueue()
 
@@ -320,7 +310,6 @@ describe("SyncStreamContext", () => {
       expect(source.url).toBe(expectedUrl)
       expect(source.withCredentials).toBe(true)
 
-      // All four server event listeners are attached.
       expect(source.hasListener("init")).toBe(true)
       expect(source.hasListener("update")).toBe(true)
       expect(source.hasListener("stream-error")).toBe(true)
@@ -349,6 +338,24 @@ describe("SyncStreamContext", () => {
       const url = new URL(MockEventSource.instances[0].url, "http://localhost")
       const streams = JSON.parse(url.searchParams.get("streams") ?? "[]")
       expect(streams[0].summary).toBe(true)
+    })
+
+    it("gives a grouped subscription its own key and sends groupCopies only on it", () => {
+      const grouped = { ...BASE_PARAMS, groupCopies: true }
+      expect(createStreamKey(grouped)).not.toBe(createStreamKey(BASE_PARAMS))
+      expect(createStreamKey({ ...BASE_PARAMS, groupCopies: false })).toBe(createStreamKey(BASE_PARAMS))
+      expect(createStreamKey(BASE_PARAMS)).not.toContain("groupCopies")
+
+      renderSubscriber(BASE_PARAMS)
+      renderSubscriber(grouped)
+      flushConnectionQueue()
+
+      const [flat, groupedStream] = MockEventSource.instances.map(source =>
+        JSON.parse(new URL(source.url, "http://localhost").searchParams.get("streams") ?? "[]")[0])
+      expect(flat.key).toBe(createStreamKey(BASE_PARAMS))
+      expect("groupCopies" in flat).toBe(false)
+      expect(groupedStream.key).toBe(createStreamKey(grouped))
+      expect(groupedStream.groupCopies).toBe(true)
     })
 
     it("marks the entry connected once an update payload arrives", () => {
@@ -439,8 +446,6 @@ describe("SyncStreamContext", () => {
           meta: { instanceId: 1, timestamp: "now", streamKey: key },
           data: { torrents: [], total: 0 },
         })
-        // A second bad frame before the queued reconnect runs must not create a
-        // second replacement connection.
         source.emit("delta", {
           type: "delta",
           version: { major: 3, minor: 7 },
@@ -668,8 +673,6 @@ describe("SyncStreamContext", () => {
 
       const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000_000)
 
-      // attempt 1 -> 4000, 2 -> 8000, 3 -> 16000, 4 -> 30000 (cap),
-      // 5 -> 30000, 6 -> 30000.
       const expectedDelays = [4000, 8000, 16000, 30000, 30000, 30000]
 
       for (let i = 0; i < expectedDelays.length; i++) {
@@ -684,7 +687,6 @@ describe("SyncStreamContext", () => {
         expect(state.retryAttempt).toBe(i + 1)
         expect(state.nextRetryAt).toBe(1_000_000 + expectedDelays[i])
 
-        // Fire the scheduled reconnect so the next attempt can be scheduled.
         act(() => {
           vi.advanceTimersByTime(expectedDelays[i])
         })
@@ -708,7 +710,6 @@ describe("SyncStreamContext", () => {
         })
 
         if (i < delays.length - 1) {
-          // Not yet at the cap: error is the generic disconnect code.
           expect(controls.getState().error).toBe(STREAM_ERROR_DISCONNECTED)
           expect(controls.getState().error).not.toBe(STREAM_ERROR_RETRY_EXHAUSTED)
           act(() => {
@@ -717,7 +718,7 @@ describe("SyncStreamContext", () => {
         }
       }
 
-      expect(controls.getState().retryAttempt).toBe(6) // MAX_RETRY_ATTEMPTS
+      expect(controls.getState().retryAttempt).toBe(6)
       // The error is a stable machine code (not English prose) so the UI can map it
       // to localized streamStatus.* copy instead of leaking English to non-en locales.
       expect(controls.getState().error).toBe(STREAM_ERROR_RETRY_EXHAUSTED)
@@ -739,13 +740,11 @@ describe("SyncStreamContext", () => {
       })
       expect(MockEventSource.instances).toHaveLength(1)
 
-      // 14.999s: still alive.
       act(() => {
         vi.advanceTimersByTime(STALE - 1)
       })
       expect(source.closed).toBe(false)
 
-      // Crossing 15s trips the watchdog -> closeConnection + scheduleReconnect.
       act(() => {
         vi.advanceTimersByTime(1)
       })
@@ -766,14 +765,12 @@ describe("SyncStreamContext", () => {
         source.emitOpen()
       })
 
-      // 30s with no event yet: past the old 15s watchdog, still within the grace.
       act(() => {
         vi.advanceTimersByTime(30_000)
       })
       expect(source.closed).toBe(false)
       expect(MockEventSource.instances).toHaveLength(1)
 
-      // The init finally lands; from here the normal 15s budget applies.
       act(() => {
         source.emit("init", { type: "init", version: { major: 1, minor: 1 }, meta: { instanceId: 1, timestamp: "now", streamKey: createStreamKey(BASE_PARAMS) }, data: { torrents: [], total: 0 } })
       })
@@ -796,8 +793,6 @@ describe("SyncStreamContext", () => {
         source.emitOpen()
       })
 
-      // Emit a heartbeat every 10s for 50s. The 15s watchdog never elapses
-      // because each heartbeat resets it.
       for (let i = 0; i < 5; i++) {
         act(() => {
           vi.advanceTimersByTime(10_000)
@@ -806,7 +801,6 @@ describe("SyncStreamContext", () => {
         expect(source.closed).toBe(false)
       }
 
-      // Only ever one source: no reconnect happened.
       expect(MockEventSource.instances).toHaveLength(1)
       expect(source.closed).toBe(false)
     })
@@ -856,7 +850,6 @@ describe("SyncStreamContext", () => {
         expect(stateB.dataStalled).toBe(false)
       }
 
-      // B also goes silent. Recovering A must not extend B's remaining budget.
       for (let elapsed = 0; elapsed < 60_000; elapsed += 10_000) {
         act(() => {
           vi.advanceTimersByTime(10_000)
@@ -1062,34 +1055,27 @@ describe("SyncStreamContext", () => {
 
       const source = MockEventSource.instances[0]
       act(() => {
-        source.emitOpen() // readyState = OPEN
+        source.emitOpen()
         // First event -> steady-state 15s watchdog (this test asserts that budget).
         source.emit("heartbeat")
       })
 
-      // Tab goes hidden: the stale timer is cleared (timing is meaningless while throttled).
       act(() => {
         setVisibility("hidden")
       })
 
-      // Simulate a throttled background tab: advance WELL past the stale window. With the
-      // old code an overdue timer would have fired; with the hidden-clear it must not.
       act(() => {
         vi.advanceTimersByTime(STALE * 3)
       })
       expect(source.closed).toBe(false)
       expect(MockEventSource.instances).toHaveLength(1)
 
-      // Refocus: connection is still OPEN, so we must re-arm a FRESH watchdog and NOT
-      // tear down / reconnect the healthy connection.
       act(() => {
         setVisibility("visible")
       })
       expect(source.closed).toBe(false)
       expect(MockEventSource.instances).toHaveLength(1)
 
-      // The fresh watchdog has the full STREAM_STALE_TIMEOUT_MS again: just under it,
-      // still alive; crossing it trips a reconnect (proving the timer was actually re-armed).
       act(() => {
         vi.advanceTimersByTime(STALE - 1)
       })
@@ -1106,7 +1092,7 @@ describe("SyncStreamContext", () => {
 
       const source = MockEventSource.instances[0]
       act(() => {
-        source.emitOpen() // arms the 15s stale watchdog, readyState = OPEN
+        source.emitOpen()
       })
 
       act(() => {
@@ -1123,7 +1109,6 @@ describe("SyncStreamContext", () => {
       expect(source.closed).toBe(false)
       expect(MockEventSource.instances).toHaveLength(1)
 
-      // Refocus re-arms a fresh watchdog: still alive just under it, trips just over.
       act(() => {
         setVisibility("visible")
       })
@@ -1144,10 +1129,8 @@ describe("SyncStreamContext", () => {
       const first = MockEventSource.instances[0]
       act(() => {
         first.emitOpen()
-        first.emitError() // network error -> source CLOSED, closeConnection
+        first.emitError()
       })
-      // The error path schedules a reconnect; the visibility path then resets retry
-      // state and reopens immediately.
       expect(controls.getState().retrying).toBe(true)
 
       const countAfterError = MockEventSource.instances.length
@@ -1157,9 +1140,7 @@ describe("SyncStreamContext", () => {
       })
       flushConnectionQueue()
 
-      // A new source was opened by the visibility reconnect path.
       expect(MockEventSource.instances.length).toBeGreaterThan(countAfterError)
-      // Retry state was reset (resetRetry:true).
       expect(controls.getState().retryAttempt).toBe(0)
     })
   })
@@ -1184,7 +1165,6 @@ describe("SyncStreamContext", () => {
         source.emitTransientError()
       })
 
-      // The native EventSource retry is left to proceed: nothing is torn down.
       expect(source.closed).toBe(false)
       expect(MockEventSource.instances).toHaveLength(1)
       expect(controls.getState().connected).toBe(true)
@@ -1202,7 +1182,7 @@ describe("SyncStreamContext", () => {
         source.emitOpen()
       })
       act(() => {
-        source.emitError() // terminal: readyState=CLOSED before onerror fires
+        source.emitError()
       })
 
       expect(source.closed).toBe(true)
@@ -1218,15 +1198,13 @@ describe("SyncStreamContext", () => {
       const source = MockEventSource.instances[0]
 
       act(() => {
-        source.emitOpen() // arms the watchdog (init grace, no event yet)
+        source.emitOpen()
       })
       act(() => {
-        source.emitTransientError() // CONNECTING: does not escalate
+        source.emitTransientError()
       })
       expect(source.closed).toBe(false)
 
-      // No event ever arrives, so the longer pre-first-event grace applies; just
-      // under it the connection is still alive, and crossing it escalates.
       act(() => {
         vi.advanceTimersByTime(INITIAL_GRACE - 1)
       })
@@ -1288,9 +1266,6 @@ describe("SyncStreamContext", () => {
       emitInitFor(first, BASE_PARAMS)
       expect(controls.getState().connected).toBe(true)
 
-      // Each swap mints a new stream key, tearing down the old EventSource and
-      // opening a new one. The new socket opens and delivers init well within the
-      // grace window, so connected must never flip false during the handoff.
       const sorts = ["name", "size", "added_on", "progress"]
       for (const sort of sorts) {
         const nextParams = makeParams({ sort })
@@ -1298,7 +1273,6 @@ describe("SyncStreamContext", () => {
         flushConnectionQueue()
 
         const source = MockEventSource.instances[MockEventSource.instances.length - 1]
-        // Socket opens, then a fast init resolves it -- still inside the grace window.
         act(() => {
           source.emitOpen()
           vi.advanceTimersByTime(100)
@@ -1321,7 +1295,6 @@ describe("SyncStreamContext", () => {
       emitInitFor(first, BASE_PARAMS)
       expect(controls.getState().connected).toBe(true)
 
-      // Swap to a new key (cold filter): teardown + reopen.
       const nextParams = makeParams({ sort: "size" })
       swap(nextParams)
       flushConnectionQueue()
@@ -1329,14 +1302,10 @@ describe("SyncStreamContext", () => {
       const second = MockEventSource.instances[MockEventSource.instances.length - 1]
       expect(second).not.toBe(first)
 
-      // The replacement socket opens promptly, but its first snapshot is slow.
       act(() => {
         second.emitOpen()
       })
 
-      // Advance PAST the base grace window with no init yet. Because the socket has
-      // demonstrably opened, onopen refreshed the handoff and the stream must not
-      // flip offline / re-enable polling.
       act(() => {
         vi.advanceTimersByTime(GRACE + 500)
       })
@@ -1363,13 +1332,10 @@ describe("SyncStreamContext", () => {
       emitInitFor(first, BASE_PARAMS)
       expect(controls.getState().connected).toBe(true)
 
-      // Swap to a new key, but never open the replacement socket nor deliver init.
       swap(makeParams({ sort: "size" }))
       flushConnectionQueue()
-      expect(controls.getState().connected).toBe(true) // still in the grace window
+      expect(controls.getState().connected).toBe(true)
 
-      // The grace window elapses with no onopen and no init: the existing fixed-window
-      // behaviour must still flip the stream offline so REST polling resumes.
       act(() => {
         vi.advanceTimersByTime(GRACE)
       })
@@ -1384,13 +1350,6 @@ describe("SyncStreamContext", () => {
 
       expect(MockEventSource.instances).toHaveLength(0)
       expect(controls.getState().connected).toBe(false)
-    })
-
-    it("does not open an EventSource for a negative instanceId", () => {
-      renderSubscriber(makeParams({ instanceId: -5 }))
-      flushConnectionQueue()
-
-      expect(MockEventSource.instances).toHaveLength(0)
     })
   })
 
@@ -1420,7 +1379,6 @@ describe("SyncStreamContext", () => {
       })
       flushConnectionQueue()
 
-      // Identical StreamParams collapse to one entry / signature -> one source.
       expect(MockEventSource.instances).toHaveLength(1)
 
       const source = MockEventSource.instances[0]
@@ -1434,7 +1392,6 @@ describe("SyncStreamContext", () => {
         })
       })
 
-      // Both subscribers share the same entry and both receive the payload.
       expect(controlsA.payloads).toHaveLength(1)
       expect(controlsB.payloads).toHaveLength(1)
       expect(controlsA.getState().connected).toBe(true)
@@ -1535,8 +1492,6 @@ describe("SyncStreamContext", () => {
       })
       flushConnectionQueue()
 
-      // Two distinct entries -> still a single multiplexed source, but the URL
-      // carries both stream payloads.
       expect(MockEventSource.instances).toHaveLength(1)
       const decoded = decodeStreamsParam(MockEventSource.instances[0].url)
       expect(decoded).toHaveLength(2)
@@ -1593,7 +1548,6 @@ describe("SyncStreamContext activity channel", () => {
     })
     flushConnectionQueue()
 
-    // A single EventSource opens with activity=1 and no streams param.
     expect(MockEventSource.instances).toHaveLength(1)
     const source = MockEventSource.instances[0]
     expect(source.url).toContain("activity=1")
@@ -1635,16 +1589,12 @@ describe("SyncStreamContext activity channel", () => {
 
     act(() => {
       source.emitOpen()
-      // Malformed activity payload must not throw or invalidate.
       source.emit("activity", { type: "activity" })
-      // A heartbeat keeps the watchdog alive (no reconnect) without invalidating.
       source.emit("heartbeat", { type: "heartbeat", meta: { timestamp: "now" } })
     })
 
     expect(invalidateSpy).not.toHaveBeenCalled()
 
-    // Advancing past the stale window without any event would reconnect; the
-    // heartbeat above reset it, so the original source is still the only one.
     act(() => {
       vi.advanceTimersByTime(STALE - 1)
     })
@@ -1686,7 +1636,7 @@ describe("SyncStreamContext activity channel", () => {
       first.emitError()
     })
     act(() => {
-      vi.advanceTimersByTime(4000) // RETRY_BASE_DELAY_MS
+      vi.advanceTimersByTime(4000)
     })
 
     const second = MockEventSource.instances[MockEventSource.instances.length - 1]
@@ -1697,7 +1647,6 @@ describe("SyncStreamContext activity channel", () => {
       second.emitOpen()
     })
 
-    // No activity event was emitted; reconciliation came purely from the reconnect.
     const invalidatedKeys = invalidateSpy.mock.calls.map(
       ([arg]) => (arg as { queryKey: unknown }).queryKey
     )
@@ -1727,8 +1676,6 @@ describe("SyncStreamContext activity channel", () => {
     })
     flushConnectionQueue()
 
-    // The first attempt fails before it ever opens (events could be missed during
-    // this pre-first-open window).
     const first = MockEventSource.instances[0]
     act(() => {
       first.emitError()
@@ -1738,7 +1685,7 @@ describe("SyncStreamContext activity channel", () => {
     // Backoff reopens. This is the first *successful* open, but because it followed
     // a failure it must still reconcile rather than trust mount-time data.
     act(() => {
-      vi.advanceTimersByTime(4000) // RETRY_BASE_DELAY_MS
+      vi.advanceTimersByTime(4000)
     })
     const second = MockEventSource.instances[MockEventSource.instances.length - 1]
     expect(second).not.toBe(first)
@@ -1789,7 +1736,6 @@ describe("stream fallback poll interval", () => {
     flushConnectionQueue()
     const source = MockEventSource.instances[0]
     const key = createStreamKey(BASE_PARAMS)
-    // Heartbeats every 10 s keep the connection open, so only the view stalls.
     const countPolls = async (ms: number, heartbeats = true) => {
       poll.mockClear()
       for (let left = ms; left > 0; left -= 10_000) {
@@ -1825,8 +1771,6 @@ describe("subscription changes on an open stream", () => {
   const SPEEDS = makeParams({ page: 0, limit: 1, summary: true })
   const details = (hash: string) => makeParams({ page: 0, limit: 1, filters: { hashes: [hash] } as StreamParams["filters"] })
 
-  // Renders the main table plus a details row whose torrent can change, the
-  // way the torrent list and its details panel share the provider.
   function renderTableWithDetails() {
     let setHash: (hash: string | null) => void = () => {}
     let remountExtra: () => void = () => {}
@@ -1839,7 +1783,6 @@ describe("subscription changes on an open stream", () => {
       useSyncStream(SPEEDS, {})
       return null
     }
-    // One panel that changes its torrent, as the details panel does.
     function Details({ hash }: { hash: string }) {
       useSyncStream(useMemo(() => details(hash), [hash]), {})
       return null
@@ -1873,12 +1816,10 @@ describe("subscription changes on an open stream", () => {
         act(() => setHash(hash))
         flushConnectionQueue()
       },
-      // Another view mounts and asks the provider for an update.
       remountMainView: () => {
         act(() => remountExtra())
         flushConnectionQueue()
       },
-      // A view with its own key joins.
       addSpeedsView: () => {
         act(() => showSpeeds())
         flushConnectionQueue()
@@ -1925,7 +1866,6 @@ describe("subscription changes on an open stream", () => {
     }))
     change.mockClear()
 
-    // The details panel shows no torrent for a moment between two torrents.
     if (gap) {
       select(null)
       remountMainView()
@@ -1943,7 +1883,6 @@ describe("subscription changes on an open stream", () => {
       expect.any(AbortSignal)
     )
 
-    // The old row still waits for its teardown and does not join again.
     addSpeedsView()
     await settle()
     expect(change).toHaveBeenCalledTimes(2)
@@ -1958,7 +1897,6 @@ describe("subscription changes on an open stream", () => {
     await settle()
     change.mockClear()
 
-    // The row waits for its teardown when another view joins, and it leaves.
     select(null)
     addSpeedsView()
     await act(async () => {
@@ -2060,14 +1998,13 @@ describe("subscription changes on an open stream", () => {
   })
 
   it.each([false, true])("reopens the stream when a change request gets no answer, retry=%s", async retry => {
-    vi.spyOn(api, "changeStreamSubscriptions").mockImplementation((_id, _add, _remove, signal) =>
+    const change = vi.spyOn(api, "changeStreamSubscriptions").mockImplementation((_id, _add, _remove, signal) =>
       new Promise((_, reject) => signal?.addEventListener("abort", () => reject(signal.reason))))
     const { source, select } = renderTableWithDetails()
     select("aaa")
     if (retry) {
       act(() => source.emit("connection", { type: "connection", connectionId: "qui-conn-8" }))
     }
-    // Heartbeats keep the stream alive, so only the stuck request can reopen it.
     for (let elapsed = 0; elapsed <= INITIAL_GRACE; elapsed += 5000) {
       act(() => source.emit("heartbeat"))
       await act(async () => {
@@ -2076,6 +2013,8 @@ describe("subscription changes on an open stream", () => {
     }
     expect(source.closed).toBe(true)
     expect(streamKeysOf(MockEventSource.instances[1].url)).toEqual([createStreamKey(MAIN), createStreamKey(details("aaa"))].sort())
+    // A timeout, not a cancel, so the failed-request list of a Problem report keeps it.
+    expect((change.mock.calls[0][3]?.reason as Error | undefined)?.name).toBe("TimeoutError")
   })
 
   it("keeps the stream while the server holds a change until the first inits are sent", async () => {

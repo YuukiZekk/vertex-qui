@@ -84,7 +84,6 @@ func TestExecIdentity(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, info.FileID, linked.FileID, "a hardlink has the identity of its source")
 
-	// Lstat never follows: a planted symlink reports no identity at all.
 	planted, err := backend.Lstat(t.Context(), symlink)
 	require.NoError(t, err)
 	assert.True(t, planted.FileID.IsZero())
@@ -258,9 +257,67 @@ func TestExecWalkFallsBackToSFTPOnAnUnreadableDirectory(t *testing.T) {
 	assert.ErrorIs(t, files[0].FileIDErr, errNoIdentity, "the sftp walk carries no identity")
 }
 
-// The key loses its shell: the reconnect writes the tier down, and a backend
-// built on the stored exec tier gets ErrUnsupported for identity instead of
-// a guess, while its sftp reads go on.
+func TestExecWalkFallsBackToSFTPOnATornRecord(t *testing.T) {
+	t.Parallel()
+
+	backend, server := newExecBackend(t)
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "file"), nil, 0o600))
+	server.TruncateOnExec("-mindepth", "f 1 2 1 0")
+
+	ch, err := backend.WalkDir(t.Context(), root, fsops.WalkOptions{WantFileID: true})
+	require.NoError(t, err)
+	var files []fsops.WalkEntry
+	for e := range ch {
+		require.NoError(t, e.Err)
+		if e.Mode.IsRegular() {
+			files = append(files, e)
+		}
+	}
+	require.Len(t, files, 1)
+	assert.ErrorIs(t, files[0].FileIDErr, errNoIdentity, "the sftp walk carries no identity")
+}
+
+// The walk ends with nothing but the root sent, because an sftp walk on the redialled connection reads no identity.
+// regression: #3838
+func TestExecWalkEndsWhenFindLosesTheConnection(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name   string
+		output string
+	}{
+		{name: "before any output"},
+		{name: "inside a record", output: "f 1 2 1 0"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			backend, server := newExecBackend(t)
+			root := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(root, "file"), nil, 0o600))
+			server.DropOnExec("-mindepth", tt.output)
+
+			ch, err := backend.WalkDir(t.Context(), root, fsops.WalkOptions{WantFileID: true})
+			require.NoError(t, err)
+			var entries []fsops.WalkEntry
+			for e := range ch {
+				entries = append(entries, e)
+			}
+
+			require.Len(t, entries, 2, "the root and the cut, with no file from an sftp walk")
+			cut := entries[1]
+			require.ErrorIs(t, cut.Err, fsops.ErrConnectionLost)
+			require.Equal(t, root, cut.Path)
+			// The pool hands out the dropped client until its watcher clears the entry.
+			require.Eventually(t, func() bool {
+				_, err := backend.Lstat(t.Context(), root)
+				return err == nil
+			}, 5*time.Second, 5*time.Millisecond, "sftp can redial, so only the cut ends this walk")
+		})
+	}
+}
+
 func TestExecTierDropAnswersUnsupported(t *testing.T) {
 	t.Parallel()
 
@@ -303,9 +360,6 @@ func TestParseFindRecord(t *testing.T) {
 	}
 }
 
-// A host that prints more records than the caller allows, as a hostile host
-// can for a batch, fails the read at the limit and not at the end of its
-// output.
 func TestFindStopsAtItsLimit(t *testing.T) {
 	t.Parallel()
 
@@ -326,7 +380,6 @@ func TestFindStopsAtItsLimit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, entries, 3)
 
-	// The byte cap bounds memory when a host prints long records.
 	entries, err = find(t.Context(), conn, cmd, 3, 8)
 	require.ErrorIs(t, err, errFindLimit)
 	assert.Empty(t, entries)
@@ -345,8 +398,6 @@ func sftpFixturePath(p string) string {
 	return fsops.SlashPaths.Join("/", filepath.ToSlash(p))
 }
 
-// lstatBatchTree is a directory with one of each kind of path LstatBatch gets,
-// and enough plain files for two batches.
 func lstatBatchTree(t *testing.T) []string {
 	t.Helper()
 	dir := t.TempDir()
@@ -549,9 +600,6 @@ func TestBatchSingleStatsOverlapRoundTrips(t *testing.T) {
 	}
 }
 
-// A connection lost before a batch is not an answer about the paths. The
-// pool remembers the failed dial, so each path gets its own
-// fsops.ErrConnectionLost at once, and no path reads as missing.
 func TestExecBatchAfterALostConnectionReportsEachPathAsLost(t *testing.T) {
 	t.Parallel()
 
@@ -576,8 +624,6 @@ func TestExecBatchAfterALostConnectionReportsEachPathAsLost(t *testing.T) {
 	}
 }
 
-// The exec tier reads find, the sftp tier reads sftp attrs, and both answer
-// a batch the same way. Only identity differs, since sftp has none.
 func TestBatchTiersAgree(t *testing.T) {
 	t.Parallel()
 

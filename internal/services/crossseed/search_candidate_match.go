@@ -21,6 +21,7 @@ import (
 type searchCandidateClass string
 
 const (
+	searchCandidateClassFileEvidence     searchCandidateClass = "file-evidence"
 	searchCandidateClassRejected         searchCandidateClass = "rejected"
 	searchCandidateClassStrict           searchCandidateClass = "strict"
 	searchCandidateClassWebSourceRelabel searchCandidateClass = "web-source-relabel"
@@ -92,7 +93,8 @@ type searchCandidateDecision struct {
 // keeps. It travels as one value from classification through cached results
 // to apply so adding a safety field cannot leave one transport path behind.
 type searchDecisionProvenance struct {
-	Class searchCandidateClass
+	Catalog catalogFileEvidence
+	Class   searchCandidateClass
 	// SearchCandidateName lets apply reject new metadata in the downloaded name.
 	SearchCandidateName string
 	SourceInstanceID    int
@@ -126,9 +128,16 @@ func (provenance searchDecisionProvenance) clone() searchDecisionProvenance {
 
 func (provenance searchDecisionProvenance) bindSource(instanceID int, hash string) searchDecisionProvenance {
 	bound := provenance.clone()
+	if bound.catalog() {
+		return bound
+	}
 	bound.SourceInstanceID = instanceID
 	bound.SourceHash = normalizeHash(hash)
 	return bound
+}
+
+func (provenance searchDecisionProvenance) matchesSource(instanceID int, hash string) bool {
+	return !provenance.catalog() || (provenance.SourceInstanceID == instanceID && provenance.SourceHash == normalizeHash(hash))
 }
 
 func (provenance searchDecisionProvenance) admitted() bool {
@@ -136,6 +145,9 @@ func (provenance searchDecisionProvenance) admitted() bool {
 }
 
 func searchDecisionRequiresVerification(decision searchDecisionProvenance) bool {
+	if decision.catalog() {
+		return false
+	}
 	return decision.Class == searchCandidateClassTitleRescue ||
 		decision.Relaxed.needsVerification()
 }
@@ -149,6 +161,16 @@ const (
 	sizeEvidenceStrictScoreBonus   = 4.0
 )
 
+// policy is the Match policy that classifySearchCandidate decides with.
+func (input searchCandidateInput) policy() matchPolicy {
+	return matchPolicy{
+		TitleRescue:                input.RescueTitleMismatches,
+		IndividualEpisodes:         input.FindIndividualEpisodes,
+		SizeTolerancePercent:       input.TolerancePercent,
+		AllowMissingCandidateGroup: input.AllowMissingCandidateGroup,
+	}
+}
+
 // classifySearchCandidate asks the Match verdict about one search result and
 // adds the score and the provenance that apply keeps.
 func (m matcher) classifySearchCandidate(input searchCandidateInput) searchCandidateDecision {
@@ -159,12 +181,7 @@ func (m matcher) classifySearchCandidate(input searchCandidateInput) searchCandi
 		CandidateTitles: input.CandidateTitles,
 		EpisodeMap:      input.EpisodeMap,
 	}
-	policy := matchPolicy{
-		TitleRescue:                input.RescueTitleMismatches,
-		IndividualEpisodes:         input.FindIndividualEpisodes,
-		SizeTolerancePercent:       input.TolerancePercent,
-		AllowMissingCandidateGroup: input.AllowMissingCandidateGroup,
-	}
+	policy := input.policy()
 	verdict := m.hybridToleranceVerdict(input, evidence, policy, m.matchVerdict(input.Source, input.Candidate, evidence, policy))
 	decision := searchCandidateDecision{
 		Class:                 searchCandidateClassRejected,
@@ -223,7 +240,7 @@ func (m matcher) classifySearchCandidate(input searchCandidateInput) searchCandi
 		}
 	case searchCandidateClassHybridTolerance:
 		decision.MatchReason = "one-sided HYBRID within size tolerance; " + decision.MatchReason
-	case searchCandidateClassRejected:
+	case searchCandidateClassRejected, searchCandidateClassFileEvidence:
 	}
 	if verdict.MappedEpisode != "" {
 		decision.MatchReason = verdict.MappedEpisode + "; " + decision.MatchReason
@@ -477,19 +494,20 @@ func candidateRequiresVerification(candidate CrossSeedCandidate, selectedHash st
 	}
 	sourceHash := normalizeHash(req.SearchDecision.SourceHash)
 	return sourceHash != "" && normalizeHash(selectedHash) == sourceHash &&
-		req.SearchDecision.Relaxed.needsVerification()
+		searchDecisionRequiresVerification(req.SearchDecision)
 }
 
 // crossFieldGroupSiteFallback reports whether a group mismatch carries the
 // marks of rls splitting one fansub name across two fields. A bracket-anime
-// name puts the fansub tag in Site and leaves Group to the last unused word, so
-// "[KIRI] Show S01 [...][Batch]" parses as Group "Batch" plus Site "KIRI" while
-// the scene-styled counterpart "Show.S01...-KIRI" parses as Group "KIRI" with no
-// site. The evidence is the cross-field agreement between the split side's Site
-// and the tagged side's Group. A shared Site is never evidence: an indexer label
-// such as [eztv] also lands in Site and is stamped on every group that tracker
-// lists, so two of its listings agreeing there says nothing. Even then this is
-// eligibility for verification, never proof of identity.
+// name that ends in its fansub tag puts the tag in Site and leaves Group to the
+// last unused word, so "Show S01 [...][Batch][KIRI]" parses as Group "Batch"
+// plus Site "KIRI" while the scene-styled counterpart "Show.S01...-KIRI" parses
+// as Group "KIRI" with no site. The evidence is the cross-field agreement
+// between the split side's Site and the tagged side's Group. A shared Site is
+// never evidence: an indexer label such as [eztv] also lands in Site and is
+// stamped on every group that tracker lists, so two of its listings agreeing
+// there says nothing. Even then this is eligibility for verification, never
+// proof of identity.
 func (m matcher) crossFieldGroupSiteFallback(source, candidate namedRelease) bool {
 	_, ok := m.crossFieldGroupSiteFallbackIdentity(source, candidate)
 	return ok

@@ -7,11 +7,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -25,12 +27,10 @@ import (
 	"github.com/autobrr/qui/internal/testutil/testdb"
 )
 
-// Helper function to insert a test instance with interned fields
 func insertTestInstance(t *testing.T, db *database.DB, name string) int {
 	t.Helper()
 	ctx := context.Background()
 
-	// Intern strings
 	var nameID, hostID, usernameID int64
 	err := db.QueryRowContext(ctx, "INSERT INTO string_pool (value) VALUES (?) ON CONFLICT (value) DO UPDATE SET value = value RETURNING id", name).Scan(&nameID)
 	require.NoError(t, err)
@@ -155,7 +155,6 @@ func TestStartBlocksWhileRecoveringMissedBackups(t *testing.T) {
 
 	select {
 	case <-started:
-		// Expected with a fixed implementation.
 	case <-timer.C:
 		// Drain the queue to let Start finish before failing the test.
 		drained := make(chan struct{})
@@ -297,6 +296,25 @@ func TestShouldSkipLiveExportForBackup(t *testing.T) {
 	}
 }
 
+// regression: #3765
+func TestExecuteBackupFailsWhenTheVersionIsUnknown(t *testing.T) {
+	t.Parallel()
+
+	db := setupTestBackupDB(t)
+	ctx := t.Context()
+	instanceID := insertTestInstance(t, db, "version-unknown")
+	store := models.NewBackupStore(db)
+	sm := &stubBackupSyncManager{
+		torrents:   []qbt.Torrent{{Hash: "abc", Name: "Show.S01E01-GRP", TotalSize: 123}},
+		versionErr: errors.New("read the qBittorrent version: 502"),
+	}
+	svc := NewService(store, sm, Config{WorkerCount: 1, DataDir: t.TempDir()}, nil)
+
+	_, err := svc.executeBackup(ctx, job{runID: 44, instanceID: instanceID, kind: models.BackupRunKindManual})
+	require.ErrorContains(t, err, "502")
+	require.Zero(t, sm.exportCalls.Load())
+}
+
 func TestExecuteBackupSkipsUncachedHybridBeforeExport(t *testing.T) {
 	t.Parallel()
 
@@ -330,7 +348,7 @@ func TestExecuteBackupSkipsUncachedHybridBeforeExport(t *testing.T) {
 	require.NotNil(t, result)
 	require.Equal(t, 0, result.torrentCount)
 	require.Empty(t, result.items)
-	require.Equal(t, 0, sm.exportCalls)
+	require.Zero(t, sm.exportCalls.Load())
 
 	svc.progressMu.RLock()
 	progress := svc.progress[42]
@@ -398,7 +416,7 @@ func TestExecuteBackupUsesCachedBlobForHybridTorrent(t *testing.T) {
 	require.NotNil(t, result)
 	require.Equal(t, 1, result.torrentCount)
 	require.Len(t, result.items, 1)
-	require.Equal(t, 0, sm.exportCalls)
+	require.Zero(t, sm.exportCalls.Load())
 	require.NotNil(t, result.items[0].TorrentBlobPath)
 	require.Equal(t, blobRelPath, *result.items[0].TorrentBlobPath)
 }
@@ -481,7 +499,6 @@ func TestRecoverIncompleteRuns(t *testing.T) {
 	fixedTime := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return fixedTime }
 
-	// Create a pending run
 	pendingRun := &models.BackupRun{
 		InstanceID:  instanceID,
 		Kind:        models.BackupRunKindHourly,
@@ -491,7 +508,6 @@ func TestRecoverIncompleteRuns(t *testing.T) {
 	}
 	require.NoError(t, store.CreateRun(ctx, pendingRun))
 
-	// Create a running run
 	runningRun := &models.BackupRun{
 		InstanceID:  instanceID,
 		Kind:        models.BackupRunKindDaily,
@@ -503,7 +519,6 @@ func TestRecoverIncompleteRuns(t *testing.T) {
 	runningRun.StartedAt = &startedAt
 	require.NoError(t, store.CreateRun(ctx, runningRun))
 
-	// Create a successful run (should not be affected)
 	successRun := &models.BackupRun{
 		InstanceID:  instanceID,
 		Kind:        models.BackupRunKindWeekly,
@@ -515,16 +530,13 @@ func TestRecoverIncompleteRuns(t *testing.T) {
 	successRun.CompletedAt = &completedAt
 	require.NoError(t, store.CreateRun(ctx, successRun))
 
-	// Verify incomplete runs exist
 	incompleteRuns, err := store.FindIncompleteRuns(ctx)
 	require.NoError(t, err)
 	require.Len(t, incompleteRuns, 2, "should find 2 incomplete runs")
 
-	// Run recovery
 	err = svc.recoverIncompleteRuns(ctx)
 	require.NoError(t, err)
 
-	// Check that pending run is now failed
 	recoveredPending, err := store.GetRun(ctx, pendingRun.ID)
 	require.NoError(t, err)
 	require.Equal(t, models.BackupRunStatusFailed, recoveredPending.Status)
@@ -533,7 +545,6 @@ func TestRecoverIncompleteRuns(t *testing.T) {
 	require.NotNil(t, recoveredPending.ErrorMessage)
 	require.Equal(t, "Backup interrupted by application restart", *recoveredPending.ErrorMessage)
 
-	// Check that running run is now failed
 	recoveredRunning, err := store.GetRun(ctx, runningRun.ID)
 	require.NoError(t, err)
 	require.Equal(t, models.BackupRunStatusFailed, recoveredRunning.Status)
@@ -542,12 +553,10 @@ func TestRecoverIncompleteRuns(t *testing.T) {
 	require.NotNil(t, recoveredRunning.ErrorMessage)
 	require.Equal(t, "Backup interrupted by application restart", *recoveredRunning.ErrorMessage)
 
-	// Check that successful run is unchanged
 	unchangedSuccess, err := store.GetRun(ctx, successRun.ID)
 	require.NoError(t, err)
 	require.Equal(t, models.BackupRunStatusSuccess, unchangedSuccess.Status)
 
-	// Verify no incomplete runs remain
 	remainingIncomplete, err := store.FindIncompleteRuns(ctx)
 	require.NoError(t, err)
 	require.Empty(t, remainingIncomplete, "should have no incomplete runs after recovery")
@@ -564,7 +573,6 @@ func TestCheckMissedBackups(t *testing.T) {
 	fixedTime := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return fixedTime }
 
-	// Enable all backup kinds
 	settings := &models.BackupSettings{
 		InstanceID:     instanceID,
 		Enabled:        true,
@@ -579,96 +587,6 @@ func TestCheckMissedBackups(t *testing.T) {
 	}
 	require.NoError(t, store.UpsertSettings(ctx, settings))
 
-	// Create successful runs that are now overdue
-	hourlyRun := &models.BackupRun{
-		InstanceID:  instanceID,
-		Kind:        models.BackupRunKindHourly,
-		Status:      models.BackupRunStatusSuccess,
-		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.Add(-2 * time.Hour), // 2 hours ago, overdue
-	}
-	hourlyCompletedAt := fixedTime.Add(-2 * time.Hour)
-	hourlyRun.CompletedAt = &hourlyCompletedAt
-	require.NoError(t, store.CreateRun(ctx, hourlyRun))
-
-	dailyRun := &models.BackupRun{
-		InstanceID:  instanceID,
-		Kind:        models.BackupRunKindDaily,
-		Status:      models.BackupRunStatusSuccess,
-		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.Add(-23 * time.Hour), // 23 hours ago, not overdue
-	}
-	dailyCompletedAt := fixedTime.Add(-23 * time.Hour)
-	dailyRun.CompletedAt = &dailyCompletedAt
-	require.NoError(t, store.CreateRun(ctx, dailyRun))
-
-	// Weekly and monthly are not overdue yet
-	weeklyRun := &models.BackupRun{
-		InstanceID:  instanceID,
-		Kind:        models.BackupRunKindWeekly,
-		Status:      models.BackupRunStatusSuccess,
-		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.Add(-6 * 24 * time.Hour), // 6 days ago, not overdue
-	}
-	weeklyCompletedAt := fixedTime.Add(-6 * 24 * time.Hour)
-	weeklyRun.CompletedAt = &weeklyCompletedAt
-	require.NoError(t, store.CreateRun(ctx, weeklyRun))
-
-	monthlyRun := &models.BackupRun{
-		InstanceID:  instanceID,
-		Kind:        models.BackupRunKindMonthly,
-		Status:      models.BackupRunStatusSuccess,
-		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.AddDate(0, 0, -20), // 20 days ago, not overdue
-	}
-	monthlyCompletedAt := fixedTime.AddDate(0, 0, -20)
-	monthlyRun.CompletedAt = &monthlyCompletedAt
-	require.NoError(t, store.CreateRun(ctx, monthlyRun))
-
-	// Run checkMissedBackups
-	err := svc.checkMissedBackups(ctx)
-	require.NoError(t, err)
-
-	// Check that exactly one new run was queued
-	var count int
-	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM instance_backup_runs_view WHERE requested_by = 'startup-recovery'").Scan(&count)
-	require.NoError(t, err)
-	require.Equal(t, 1, count)
-
-	// Check the kind of the queued run
-	var kind string
-	err = db.QueryRowContext(ctx, "SELECT kind FROM instance_backup_runs_view WHERE requested_by = 'startup-recovery'").Scan(&kind)
-	require.NoError(t, err)
-	require.Equal(t, string(models.BackupRunKindHourly), kind)
-}
-
-func TestCheckMissedBackupsMultipleMissed(t *testing.T) {
-	db := setupTestBackupDB(t)
-
-	ctx := context.Background()
-	instanceID := insertTestInstance(t, db, "test-instance")
-
-	store := models.NewBackupStore(db)
-	svc := NewService(store, nil, Config{WorkerCount: 1}, nil)
-	fixedTime := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
-	svc.now = func() time.Time { return fixedTime }
-
-	// Enable all backup kinds
-	settings := &models.BackupSettings{
-		InstanceID:     instanceID,
-		Enabled:        true,
-		HourlyEnabled:  true,
-		DailyEnabled:   true,
-		WeeklyEnabled:  true,
-		MonthlyEnabled: true,
-		KeepHourly:     1,
-		KeepDaily:      1,
-		KeepWeekly:     1,
-		KeepMonthly:    1,
-	}
-	require.NoError(t, store.UpsertSettings(ctx, settings))
-
-	// Create successful runs that are all overdue
 	hourlyRun := &models.BackupRun{
 		InstanceID:  instanceID,
 		Kind:        models.BackupRunKindHourly,
@@ -685,23 +603,42 @@ func TestCheckMissedBackupsMultipleMissed(t *testing.T) {
 		Kind:        models.BackupRunKindDaily,
 		Status:      models.BackupRunStatusSuccess,
 		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.Add(-25 * time.Hour),
+		RequestedAt: fixedTime.Add(-23 * time.Hour),
 	}
-	dailyCompletedAt := fixedTime.Add(-25 * time.Hour)
+	dailyCompletedAt := fixedTime.Add(-23 * time.Hour)
 	dailyRun.CompletedAt = &dailyCompletedAt
 	require.NoError(t, store.CreateRun(ctx, dailyRun))
 
-	// Run checkMissedBackups
+	weeklyRun := &models.BackupRun{
+		InstanceID:  instanceID,
+		Kind:        models.BackupRunKindWeekly,
+		Status:      models.BackupRunStatusSuccess,
+		RequestedBy: "scheduler",
+		RequestedAt: fixedTime.Add(-6 * 24 * time.Hour),
+	}
+	weeklyCompletedAt := fixedTime.Add(-6 * 24 * time.Hour)
+	weeklyRun.CompletedAt = &weeklyCompletedAt
+	require.NoError(t, store.CreateRun(ctx, weeklyRun))
+
+	monthlyRun := &models.BackupRun{
+		InstanceID:  instanceID,
+		Kind:        models.BackupRunKindMonthly,
+		Status:      models.BackupRunStatusSuccess,
+		RequestedBy: "scheduler",
+		RequestedAt: fixedTime.AddDate(0, 0, -20),
+	}
+	monthlyCompletedAt := fixedTime.AddDate(0, 0, -20)
+	monthlyRun.CompletedAt = &monthlyCompletedAt
+	require.NoError(t, store.CreateRun(ctx, monthlyRun))
+
 	err := svc.checkMissedBackups(ctx)
 	require.NoError(t, err)
 
-	// Should queue the first missed backup even when multiple are missed
 	var count int
 	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM instance_backup_runs_view WHERE requested_by = 'startup-recovery'").Scan(&count)
 	require.NoError(t, err)
 	require.Equal(t, 1, count)
 
-	// Check the kind of the queued run (should be the first missed one, which is hourly)
 	var kind string
 	err = db.QueryRowContext(ctx, "SELECT kind FROM instance_backup_runs_view WHERE requested_by = 'startup-recovery'").Scan(&kind)
 	require.NoError(t, err)
@@ -719,7 +656,6 @@ func TestCheckMissedBackupsNoneMissed(t *testing.T) {
 	fixedTime := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return fixedTime }
 
-	// Enable all backup kinds
 	settings := &models.BackupSettings{
 		InstanceID:     instanceID,
 		Enabled:        true,
@@ -734,13 +670,12 @@ func TestCheckMissedBackupsNoneMissed(t *testing.T) {
 	}
 	require.NoError(t, store.UpsertSettings(ctx, settings))
 
-	// Create successful runs that are recent (not overdue)
 	hourlyRun := &models.BackupRun{
 		InstanceID:  instanceID,
 		Kind:        models.BackupRunKindHourly,
 		Status:      models.BackupRunStatusSuccess,
 		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.Add(-30 * time.Minute), // 30 minutes ago, not overdue
+		RequestedAt: fixedTime.Add(-30 * time.Minute),
 	}
 	hourlyCompletedAt := fixedTime.Add(-30 * time.Minute)
 	hourlyRun.CompletedAt = &hourlyCompletedAt
@@ -751,7 +686,7 @@ func TestCheckMissedBackupsNoneMissed(t *testing.T) {
 		Kind:        models.BackupRunKindDaily,
 		Status:      models.BackupRunStatusSuccess,
 		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.Add(-2 * time.Hour), // 2 hours ago, not overdue for daily
+		RequestedAt: fixedTime.Add(-2 * time.Hour),
 	}
 	dailyCompletedAt := fixedTime.Add(-2 * time.Hour)
 	dailyRun.CompletedAt = &dailyCompletedAt
@@ -762,7 +697,7 @@ func TestCheckMissedBackupsNoneMissed(t *testing.T) {
 		Kind:        models.BackupRunKindWeekly,
 		Status:      models.BackupRunStatusSuccess,
 		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.Add(-3 * 24 * time.Hour), // 3 days ago, not overdue for weekly
+		RequestedAt: fixedTime.Add(-3 * 24 * time.Hour),
 	}
 	weeklyCompletedAt := fixedTime.Add(-3 * 24 * time.Hour)
 	weeklyRun.CompletedAt = &weeklyCompletedAt
@@ -773,17 +708,15 @@ func TestCheckMissedBackupsNoneMissed(t *testing.T) {
 		Kind:        models.BackupRunKindMonthly,
 		Status:      models.BackupRunStatusSuccess,
 		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.AddDate(0, 0, -10), // 10 days ago, not overdue for monthly
+		RequestedAt: fixedTime.AddDate(0, 0, -10),
 	}
 	monthlyCompletedAt := fixedTime.AddDate(0, 0, -10)
 	monthlyRun.CompletedAt = &monthlyCompletedAt
 	require.NoError(t, store.CreateRun(ctx, monthlyRun))
 
-	// Run checkMissedBackups
 	err := svc.checkMissedBackups(ctx)
 	require.NoError(t, err)
 
-	// Should not queue any backups since none are missed
 	var count int
 	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM instance_backup_runs_view WHERE requested_by = 'startup-recovery'").Scan(&count)
 	require.NoError(t, err)
@@ -801,7 +734,6 @@ func TestCheckMissedBackupsFirstRun(t *testing.T) {
 	fixedTime := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return fixedTime }
 
-	// Enable all backup kinds
 	settings := &models.BackupSettings{
 		InstanceID:     instanceID,
 		Enabled:        true,
@@ -816,23 +748,66 @@ func TestCheckMissedBackupsFirstRun(t *testing.T) {
 	}
 	require.NoError(t, store.UpsertSettings(ctx, settings))
 
-	// No previous runs exist - this is the first time qui is running
-
-	// Run checkMissedBackups
 	err := svc.checkMissedBackups(ctx)
 	require.NoError(t, err)
 
-	// Should queue the first backup (hourly) since no previous runs exist
 	var count int
 	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM instance_backup_runs_view WHERE requested_by = 'startup-recovery'").Scan(&count)
 	require.NoError(t, err)
 	require.Equal(t, 1, count)
 
-	// Check the kind of the queued run (should be hourly as the first in the order)
 	var kind string
 	err = db.QueryRowContext(ctx, "SELECT kind FROM instance_backup_runs_view WHERE requested_by = 'startup-recovery'").Scan(&kind)
 	require.NoError(t, err)
 	require.Equal(t, string(models.BackupRunKindHourly), kind)
+}
+
+// regression: #3875
+func TestSchedulerSkipsDisabledInstanceUntilEnabled(t *testing.T) {
+	db := setupTestBackupDB(t)
+
+	ctx := t.Context()
+	instanceID := insertTestInstance(t, db, "disabled-instance")
+
+	store := models.NewBackupStore(db)
+	svc := NewService(store, nil, Config{WorkerCount: 1}, nil)
+
+	require.NoError(t, store.UpsertSettings(ctx, &models.BackupSettings{
+		InstanceID:    instanceID,
+		Enabled:       true,
+		HourlyEnabled: true,
+		KeepHourly:    0, // needs normalizing
+	}))
+
+	_, err := db.ExecContext(ctx, "UPDATE instances SET is_active = 0 WHERE id = ?", instanceID)
+	require.NoError(t, err)
+
+	require.NoError(t, svc.scheduleDueBackups(ctx))
+	require.NoError(t, svc.checkMissedBackups(ctx))
+
+	runs, err := store.ListRunsByKind(ctx, instanceID, models.BackupRunKindHourly, 10)
+	require.NoError(t, err)
+	require.Empty(t, runs)
+
+	saved, err := store.GetSettings(ctx, instanceID)
+	require.NoError(t, err)
+	require.True(t, saved.Enabled)
+	require.True(t, saved.HourlyEnabled)
+	require.Equal(t, 0, saved.KeepHourly)
+
+	_, err = db.ExecContext(ctx, "UPDATE instances SET is_active = 1 WHERE id = ?", instanceID)
+	require.NoError(t, err)
+
+	require.NoError(t, svc.scheduleDueBackups(ctx))
+
+	runs, err = store.ListRunsByKind(ctx, instanceID, models.BackupRunKindHourly, 10)
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	require.Equal(t, "scheduler", runs[0].RequestedBy)
+
+	saved, err = store.GetSettings(ctx, instanceID)
+	require.NoError(t, err)
+	require.Equal(t, 1, saved.KeepHourly)
 }
 
 func TestIsBackupMissedIgnoresFailedRuns(t *testing.T) {
@@ -846,7 +821,6 @@ func TestIsBackupMissedIgnoresFailedRuns(t *testing.T) {
 	fixedTime := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return fixedTime }
 
-	// Create a successful run 30 minutes ago (not overdue)
 	successRun := &models.BackupRun{
 		InstanceID:  instanceID,
 		Kind:        models.BackupRunKindHourly,
@@ -858,7 +832,6 @@ func TestIsBackupMissedIgnoresFailedRuns(t *testing.T) {
 	successRun.CompletedAt = &successCompletedAt
 	require.NoError(t, store.CreateRun(ctx, successRun))
 
-	// Create a failed run 10 minutes ago (should be ignored)
 	failedRun := &models.BackupRun{
 		InstanceID:  instanceID,
 		Kind:        models.BackupRunKindHourly,
@@ -870,7 +843,6 @@ func TestIsBackupMissedIgnoresFailedRuns(t *testing.T) {
 	failedRun.CompletedAt = &failedCompletedAt
 	require.NoError(t, store.CreateRun(ctx, failedRun))
 
-	// Should not be missed because the successful run is recent
 	missed := svc.isBackupMissed(ctx, instanceID, models.BackupRunKindHourly, true, fixedTime)
 	require.False(t, missed)
 }
@@ -886,7 +858,6 @@ func TestIsBackupMissedFailedRunsOnly(t *testing.T) {
 	fixedTime := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return fixedTime }
 
-	// Create only failed runs (no successful runs)
 	failedRun1 := &models.BackupRun{
 		InstanceID:  instanceID,
 		Kind:        models.BackupRunKindHourly,
@@ -909,69 +880,8 @@ func TestIsBackupMissedFailedRunsOnly(t *testing.T) {
 	failedRun2.CompletedAt = &failedCompletedAt2
 	require.NoError(t, store.CreateRun(ctx, failedRun2))
 
-	// Should be missed because there are no successful runs (treated as first run)
 	missed := svc.isBackupMissed(ctx, instanceID, models.BackupRunKindHourly, true, fixedTime)
 	require.True(t, missed)
-}
-
-func TestIsBackupMissedMixedStatusRuns(t *testing.T) {
-	db := setupTestBackupDB(t)
-
-	ctx := context.Background()
-	instanceID := insertTestInstance(t, db, "test-instance")
-
-	store := models.NewBackupStore(db)
-	svc := NewService(store, nil, Config{WorkerCount: 1}, nil)
-	fixedTime := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
-	svc.now = func() time.Time { return fixedTime }
-
-	// Create a successful run 30 minutes ago (not overdue)
-	successRun := &models.BackupRun{
-		InstanceID:  instanceID,
-		Kind:        models.BackupRunKindHourly,
-		Status:      models.BackupRunStatusSuccess,
-		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.Add(-30 * time.Minute),
-	}
-	successCompletedAt := fixedTime.Add(-30 * time.Minute)
-	successRun.CompletedAt = &successCompletedAt
-	require.NoError(t, store.CreateRun(ctx, successRun))
-
-	// Create various non-successful runs after the successful one
-	runningRun := &models.BackupRun{
-		InstanceID:  instanceID,
-		Kind:        models.BackupRunKindHourly,
-		Status:      models.BackupRunStatusRunning,
-		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.Add(-20 * time.Minute),
-	}
-	runningStartedAt := fixedTime.Add(-20 * time.Minute)
-	runningRun.StartedAt = &runningStartedAt
-	require.NoError(t, store.CreateRun(ctx, runningRun))
-
-	pendingRun := &models.BackupRun{
-		InstanceID:  instanceID,
-		Kind:        models.BackupRunKindHourly,
-		Status:      models.BackupRunStatusPending,
-		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.Add(-15 * time.Minute),
-	}
-	require.NoError(t, store.CreateRun(ctx, pendingRun))
-
-	failedRun := &models.BackupRun{
-		InstanceID:  instanceID,
-		Kind:        models.BackupRunKindHourly,
-		Status:      models.BackupRunStatusFailed,
-		RequestedBy: "scheduler",
-		RequestedAt: fixedTime.Add(-10 * time.Minute),
-	}
-	failedCompletedAt := fixedTime.Add(-10 * time.Minute)
-	failedRun.CompletedAt = &failedCompletedAt
-	require.NoError(t, store.CreateRun(ctx, failedRun))
-
-	// Should not be missed because the successful run is recent, ignoring all the non-successful runs
-	missed := svc.isBackupMissed(ctx, instanceID, models.BackupRunKindHourly, true, fixedTime)
-	require.False(t, missed)
 }
 
 func TestIsBackupMissedOverdueWithFailedRunsAfterSuccess(t *testing.T) {
@@ -985,7 +895,6 @@ func TestIsBackupMissedOverdueWithFailedRunsAfterSuccess(t *testing.T) {
 	fixedTime := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
 	svc.now = func() time.Time { return fixedTime }
 
-	// Create a successful run 2 hours ago (overdue for hourly)
 	successRun := &models.BackupRun{
 		InstanceID:  instanceID,
 		Kind:        models.BackupRunKindHourly,
@@ -997,7 +906,6 @@ func TestIsBackupMissedOverdueWithFailedRunsAfterSuccess(t *testing.T) {
 	successRun.CompletedAt = &successCompletedAt
 	require.NoError(t, store.CreateRun(ctx, successRun))
 
-	// Create failed runs after the successful one (should be ignored)
 	failedRun := &models.BackupRun{
 		InstanceID:  instanceID,
 		Kind:        models.BackupRunKindHourly,
@@ -1009,7 +917,6 @@ func TestIsBackupMissedOverdueWithFailedRunsAfterSuccess(t *testing.T) {
 	failedRun.CompletedAt = &failedCompletedAt
 	require.NoError(t, store.CreateRun(ctx, failedRun))
 
-	// Should be missed because the successful run is overdue, even though there are failed runs after it
 	missed := svc.isBackupMissed(ctx, instanceID, models.BackupRunKindHourly, true, fixedTime)
 	require.True(t, missed)
 }
@@ -1136,7 +1043,6 @@ func TestAdaptiveExportDelayExtendsWhenExportSlow(t *testing.T) {
 		defer cancel()
 
 		start := time.Now()
-		// Simulate an export that took 200ms with a 50ms minimum — should wait 200ms.
 		require.NoError(t, adaptiveExportDelay(ctx, 50*time.Millisecond, 200*time.Millisecond))
 		require.Equal(t, 200*time.Millisecond, time.Since(start))
 	})
@@ -1327,7 +1233,7 @@ func TestCleanupTorrentBlobsDefersWhileRunActive(t *testing.T) {
 	}
 	require.NoError(t, store.CreateRun(ctx, active))
 
-	svc.cleanupTorrentBlobs(ctx, []*models.BackupItem{{TorrentBlobPath: &blobRelPath}})
+	svc.cleanupTorrentBlobs(ctx, []string{blobRelPath})
 
 	require.FileExists(t, blobAbsPath, "blob deletion must wait while a backup run is active")
 }
@@ -1343,12 +1249,10 @@ func TestCleanupTorrentBlobsKeepsBlobWhenCountsUnavailable(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(blobAbsPath), 0o755))
 	require.NoError(t, os.WriteFile(blobAbsPath, []byte("blob"), 0o600))
 
-	items := []*models.BackupItem{{TorrentBlobPath: &blobRelPath}}
-
 	// A closed database makes every reference count fail; unknown counts must
 	// keep the blob, not delete it.
 	require.NoError(t, db.Close())
-	svc.cleanupTorrentBlobs(context.Background(), items)
+	svc.cleanupTorrentBlobs(context.Background(), []string{blobRelPath})
 
 	require.FileExists(t, blobAbsPath)
 }
@@ -1404,14 +1308,10 @@ func TestCleanupTorrentBlobsKeepsReferencedBlobs(t *testing.T) {
 		TorrentBlobPath: &blobRelPath,
 	}}))
 
-	items, err := store.ListItems(ctx, runA.ID)
-	require.NoError(t, err)
-	require.Len(t, items, 1)
-
 	require.NoError(t, store.CleanupRun(ctx, runA.ID))
-	svc.cleanupTorrentBlobs(ctx, items)
+	svc.cleanupTorrentBlobs(ctx, []string{blobRelPath})
 
-	_, err = os.Stat(blobAbsPath)
+	_, err := os.Stat(blobAbsPath)
 	require.NoError(t, err)
 }
 
@@ -1439,7 +1339,7 @@ func checkDeleteRunKeepsBlobsWhileARunReferencesThem(t *testing.T, db *database.
 	dataDir := t.TempDir()
 	svc := NewService(store, nil, Config{WorkerCount: 1, DataDir: dataDir}, nil)
 
-	blobs := map[string]string{} // rel -> abs
+	blobs := map[string]string{}
 	blob := func(name string) *string {
 		rel := filepath.ToSlash(filepath.Join("backups", "torrents", "aa", "bb", name))
 		abs := filepath.Join(dataDir, filepath.FromSlash(rel))
@@ -1486,6 +1386,77 @@ func checkDeleteRunKeepsBlobsWhileARunReferencesThem(t *testing.T, db *database.
 	requireBlobs("after deleting C")
 }
 
+func TestApplyRetentionRemovesFilesOnlyDeletedRunsUsedSQLite(t *testing.T) {
+	t.Parallel()
+	checkApplyRetentionRemovesFilesOnlyDeletedRunsUsed(t, setupTestBackupDB(t))
+}
+
+func TestApplyRetentionRemovesFilesOnlyDeletedRunsUsedPostgresIntegration(t *testing.T) {
+	t.Parallel()
+	checkApplyRetentionRemovesFilesOnlyDeletedRunsUsed(t, testdb.NewMigratedPostgres(t, "backups-retention-files"))
+}
+
+// One pass deletes three of four runs. Torrent "b" gets a new blob in each
+// run, so the deleted runs leave blobs that no remaining run uses, and "a" and
+// "d" keep a blob that the remaining run still uses.
+func checkApplyRetentionRemovesFilesOnlyDeletedRunsUsed(t *testing.T, db *database.DB) {
+	ctx := t.Context()
+	instances, err := models.NewInstanceStore(db, []byte("01234567890123456789012345678901"))
+	require.NoError(t, err)
+	instance, err := instances.Create(ctx, "retention-files", "http://localhost:8080", "user", "pass", nil, nil, false, nil)
+	require.NoError(t, err)
+	store := models.NewBackupStore(db)
+	dataDir := t.TempDir()
+	svc := NewService(store, nil, Config{WorkerCount: 1, DataDir: dataDir}, nil)
+
+	files := map[string]string{}
+	file := func(dir, name string) *string {
+		rel := filepath.ToSlash(filepath.Join("backups", dir, name))
+		abs := filepath.Join(dataDir, filepath.FromSlash(rel))
+		require.NoError(t, os.MkdirAll(filepath.Dir(abs), 0o755))
+		require.NoError(t, os.WriteFile(abs, []byte(name), 0o600))
+		files[name] = abs
+		return &rel
+	}
+	blob := func(name string) *string { return file(filepath.Join("torrents", "aa", "bb"), name) }
+	a, b1, b2, b3, c, d := blob("a.torrent"), blob("b1.torrent"), blob("b2.torrent"), blob("b3.torrent"), blob("c.torrent"), blob("d.torrent")
+
+	base := time.Unix(0, 0).UTC()
+	commit := func(n int, items ...models.BackupItem) int64 {
+		at := base.Add(time.Duration(n) * time.Hour)
+		run := &models.BackupRun{InstanceID: instance.ID, Kind: models.BackupRunKindHourly, Status: models.BackupRunStatusSuccess,
+			RequestedBy: "tester", RequestedAt: at, CompletedAt: &at,
+			ManifestPath: file("runs", fmt.Sprintf("run-%d.json", n)), ArchivePath: file("runs", fmt.Sprintf("run-%d.zip", n))}
+		require.NoError(t, store.CreateRun(ctx, run))
+		require.NoError(t, store.InsertItems(ctx, run.ID, items))
+		return run.ID
+	}
+	item := func(hash string, blobPath *string) models.BackupItem {
+		return models.BackupItem{TorrentHash: hash, Name: hash, SizeBytes: 1, TorrentBlobPath: blobPath}
+	}
+	commit(1, item("a", a), item("b", b1), item("c", c))
+	commit(2, item("a", a), item("b", b2), item("c", c))
+	commit(3, item("a", a), item("b", b2), item("d", d))
+	kept := commit(4, item("a", a), item("b", b3), item("d", d))
+
+	settings := models.DefaultBackupSettings(instance.ID)
+	settings.KeepHourly = 1
+	require.NoError(t, svc.applyRetention(ctx, instance.ID, settings))
+
+	runIDs, err := store.ListRunIDs(ctx, instance.ID)
+	require.NoError(t, err)
+	require.Equal(t, []int64{kept}, runIDs)
+
+	keptFiles := []string{"a.torrent", "b3.torrent", "d.torrent", "run-4.json", "run-4.zip"}
+	for name, abs := range files {
+		if slices.Contains(keptFiles, name) {
+			require.FileExists(t, abs, "%s is used by the remaining run", name)
+		} else {
+			require.NoFileExists(t, abs, "%s is used only by deleted runs", name)
+		}
+	}
+}
+
 func TestCleanupOrphanedBlobs(t *testing.T) {
 	t.Parallel()
 
@@ -1505,8 +1476,6 @@ func TestCleanupOrphanedBlobs(t *testing.T) {
 	for _, p := range []string{referencedAbs, orphanAbs, freshOrphanAbs} {
 		require.NoError(t, os.WriteFile(p, []byte("blob"), 0o600))
 	}
-	// Age the referenced and orphaned blobs past the guard; only the orphan
-	// may be removed. The fresh orphan stays inside the age guard.
 	old := time.Now().Add(-48 * time.Hour)
 	require.NoError(t, os.Chtimes(referencedAbs, old, old))
 	require.NoError(t, os.Chtimes(orphanAbs, old, old))
@@ -1564,16 +1533,20 @@ type stubBackupSyncManager struct {
 	torrents    []qbt.Torrent
 	categories  map[string]qbt.Category
 	tags        []string
-	webAPIVer   string
 	exportData  []byte
 	exportName  string
 	exportTrack string
 	exportErr   error
-	exportCalls int
+	exportCalls atomic.Int32
+	versionErr  error
 }
 
-func (s *stubBackupSyncManager) GetAllTorrents(context.Context, int) ([]qbt.Torrent, error) {
-	return append([]qbt.Torrent(nil), s.torrents...), nil
+func (s *stubBackupSyncManager) GetAllTorrentRefs(context.Context, int) ([]*qbt.Torrent, error) {
+	refs := make([]*qbt.Torrent, len(s.torrents))
+	for i := range s.torrents {
+		refs[i] = &s.torrents[i]
+	}
+	return refs, nil
 }
 
 func (s *stubBackupSyncManager) GetCategories(context.Context, int) (map[string]qbt.Category, error) {
@@ -1590,11 +1563,11 @@ func (s *stubBackupSyncManager) GetTags(context.Context, int) ([]string, error) 
 	return append([]string(nil), s.tags...), nil
 }
 
-func (s *stubBackupSyncManager) GetInstanceWebAPIVersion(context.Context, int) (string, error) {
-	return s.webAPIVer, nil
+func (s *stubBackupSyncManager) OmitsTrackersOnExport(context.Context, int) (bool, error) {
+	return false, s.versionErr
 }
 
 func (s *stubBackupSyncManager) ExportTorrent(context.Context, int, string) ([]byte, string, string, error) {
-	s.exportCalls++
+	s.exportCalls.Add(1)
 	return append([]byte(nil), s.exportData...), s.exportName, s.exportTrack, s.exportErr
 }

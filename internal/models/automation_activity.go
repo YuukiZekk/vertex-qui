@@ -32,13 +32,19 @@ const (
 	ActivityActionAutoManaged         = "auto_managed"         // Batch auto management operation
 	ActivityActionExportedToInstance  = "exported_to_instance" // Export torrent to another instance
 	ActivityActionDryRunNoMatch       = "dry_run_no_match"     // Manual dry-run completed with no matching actions
+	ActivityActionRuleSkipped         = "rule_skipped"         // Rule reads a field that the instance does not send
 )
+
+// ActivityActionTransferredToInstance is the start of a Transfer of a
+// torrent to another instance.
+const ActivityActionTransferredToInstance = "transferred_to_instance"
 
 // Activity outcome types
 const (
 	ActivityOutcomeSuccess = "success"
 	ActivityOutcomeFailed  = "failed"
 	ActivityOutcomeDryRun  = "dry-run"
+	ActivityOutcomeSkipped = "skipped"
 )
 
 type AutomationActivity struct {

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+import { InstanceMarkIcon } from "@/components/instances/marks/InstanceMarkIcon"
 import { InstancePreferencesDialog } from "@/components/instances/preferences/InstancePreferencesDialog"
 import { UnifiedScopeDropdownSection } from "@/components/layout/UnifiedScopeDropdownSection"
 import { SpreadsheetRibbonTabs } from "@/components/spreadsheet/SpreadsheetRibbonTabs"
@@ -16,6 +17,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog"
 import { TorrentManagementBar } from "@/components/torrents/TorrentManagementBar"
+import { themeArea } from "@/lib/theme-areas"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -24,16 +26,13 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Logo } from "@/components/ui/Logo"
 import { NapsterLogo } from "@/components/ui/NapsterLogo"
 import { SwizzinLogo } from "@/components/ui/SwizzinLogo"
-import { SupportDialog } from "@/components/support/SupportDialog"
+import { SupportButton } from "@/components/support/SupportButton"
 import { ThemeToggle } from "@/components/ui/ThemeToggle"
 import {
   Tooltip,
@@ -42,11 +41,11 @@ import {
 } from "@/components/ui/tooltip"
 import { useLayoutRoute } from "@/contexts/LayoutRouteContext"
 import { useTorrentSelectionContext, useTorrentSelectionSummary } from "@/contexts/TorrentSelectionContext"
-import { useAuth } from "@/hooks/useAuth"
-import { useCrossSeedInstanceState } from "@/hooks/useCrossSeedInstanceState"
 import { useActiveTaskCount } from "@/hooks/useActiveTaskCount"
 import { useDebounce } from "@/hooks/useDebounce"
+import { instanceCapabilitiesQuery } from "@/hooks/useInstanceCapabilities"
 import { useInstances } from "@/hooks/useInstances"
+import { useIsMobile } from "@/hooks/useMediaQuery"
 import { usePersistedCompactViewState } from "@/hooks/usePersistedCompactViewState"
 import { usePersistedFilterSidebarState } from "@/hooks/usePersistedFilterSidebarState"
 import { usePersistedUnifiedInstanceFilter } from "@/hooks/usePersistedUnifiedInstanceFilter"
@@ -57,6 +56,7 @@ import {
   isAllInstancesScope,
   normalizeUnifiedInstanceIds
 } from "@/lib/instances"
+import { modShortcut } from "@/lib/keyboard"
 import { useSpreadsheetDisguise } from "@/lib/spreadsheet-disguise"
 import { hasSelection } from "@/lib/torrent-selection"
 import { cn } from "@/lib/utils"
@@ -64,15 +64,13 @@ import type { InstanceCapabilities } from "@/types"
 import { useQueries, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate, useSearch } from "@tanstack/react-router"
 import { navigateWithSearch } from "@/lib/router-search"
-import { changeLanguage, languageNames, supportedLanguages } from "@/i18n"
-import { Archive, Check, ChevronsUpDown, Cog, Download, FileEdit, FileText, FunnelPlus, FunnelX, GitBranch, Globe, HardDrive, Heart, Home, Info, ListTodo, Loader2, LogOut, Menu, Plus, Rss, Search, SearchCode, Server, Settings, X, Zap } from "lucide-react"
+import { ChevronsUpDown, Cog, FileEdit, FunnelPlus, FunnelX, Info, ListTodo, Plus, Search, X } from "lucide-react"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { useTranslation } from "react-i18next"
 
 interface HeaderProps {
-  children?: ReactNode
-  sidebarCollapsed?: boolean
+  sidebarIconOnly?: boolean
 }
 
 interface UnifiedActionDropdownProps {
@@ -112,14 +110,8 @@ function UnifiedActionDropdown({ icon, tooltip, label, instances, onSelectInstan
             onSelect={() => onSelectInstance(instance.id)}
             className="cursor-pointer"
           >
-            <HardDrive className="mr-2 h-4 w-4 flex-shrink-0" />
+            <InstanceMarkIcon instanceId={instance.id} problem={!instance.connected} className="mr-2" />
             <span className="flex-1 truncate">{instance.name}</span>
-            <span
-              className={cn(
-                "ml-2 h-2 w-2 rounded-full flex-shrink-0",
-                instance.connected ? "bg-green-500" : "bg-red-500"
-              )}
-            />
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -127,20 +119,19 @@ function UnifiedActionDropdown({ icon, tooltip, label, instances, onSelectInstan
   )
 }
 
-export function Header({
-  children,
-  sidebarCollapsed = false,
-}: HeaderProps) {
-  const { t, i18n } = useTranslation("common")
-  const { logout } = useAuth()
+export function Header({ sidebarIconOnly = false }: HeaderProps) {
+  // The icon-only sidebar has no room for the name of the instance or for the Unified scope, so the header shows them.
+  const showTitleOnDesktop = sidebarIconOnly
+  const { t } = useTranslation("common")
   const navigate = useNavigate()
   const routeSearch = useSearch({ strict: false }) as { q?: string; modal?: string;[key: string]: unknown }
   const { state: layoutRouteState } = useLayoutRoute()
   const spreadsheetDisguise = useSpreadsheetDisguise()
 
-  const { selection, dispatch: dispatchSelection } = useTorrentSelectionContext()
+  const { selection } = useTorrentSelectionContext()
   const selectionSummary = useTorrentSelectionSummary()
-  const clearSelection = useCallback(() => dispatchSelection({ type: "clear" }), [dispatchSelection])
+  // CSS hides the header on the phone layout, so the management bar does not mount there.
+  const isMobile = useIsMobile()
 
   const selectedInstanceId = layoutRouteState.instanceId
   const isInstanceRoute = selectedInstanceId !== null
@@ -176,9 +167,7 @@ export function Header({
   )
   const unifiedCapabilitiesResults = useQueries({
     queries: unifiedManageableInstances.map((instance) => ({
-      queryKey: ["instance-capabilities", instance.id],
-      queryFn: () => api.getInstanceCapabilities(instance.id),
-      staleTime: 60_000,
+      ...instanceCapabilitiesQuery(instance.id),
       enabled: isAllInstancesRoute,
     })),
   })
@@ -230,7 +219,8 @@ export function Header({
     setSearchValue(prev => (prev.trim() === routeQuery ? prev : routeQuery))
   }, [selectedInstanceId, routeSearch?.q])
 
-  // Update URL search param after debounce
+  // Update URL search param after debounce. Only new text writes the URL: on a
+  // change of page, the debounced text is older than the q of the new URL.
   useEffect(() => {
     if (!shouldShowInstanceControls) return
     const trimmedSearch = debouncedSearch.trim()
@@ -239,11 +229,10 @@ export function Header({
     else delete next.q
     navigateWithSearch({ navigate, search: next, replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, shouldShowInstanceControls])
+  }, [debouncedSearch])
 
-  const isGlobSearch = !!searchValue && /[*?[\]]/.test(searchValue)
+  const isGlobSearch = !!searchValue && /[*?]/.test(searchValue)
   const [filterSidebarCollapsed, setFilterSidebarCollapsed] = usePersistedFilterSidebarState(false)
-  const [showSupport, setShowSupport] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const lastFilterToggleRef = useRef(0)
 
@@ -257,46 +246,22 @@ export function Header({
     setFilterSidebarCollapsed((prev) => !prev)
   }, [setFilterSidebarCollapsed])
 
-  // Detect platform for appropriate key display
-  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
-  const shortcutKey = isMac ? "⌘K" : "Ctrl+K"
-
-  // Global keyboard shortcut to focus search
+  // Many layouts type "/" with Shift, for example Shift+7 on a Nordic or a German keyboard.
   useHotkeys(
-    "meta+k, ctrl+k",
-    (event) => {
-      event.preventDefault()
-      searchInputRef.current?.focus()
-    },
+    ["/", "shift+/"],
+    () => searchInputRef.current?.focus(),
     {
+      useKey: true,
       preventDefault: true,
-      enableOnFormTags: ["input", "textarea", "select"],
       enabled: shouldShowInstanceControls,
+      // A narrow window hides the search field, and the key then stays with the browser.
+      ignoreEventWhen: event => !searchInputRef.current?.offsetParent || (event.target instanceof Element && event.target.closest("[role=\"dialog\"]") !== null),
     },
     [shouldShowInstanceControls]
   )
   const { theme } = useTheme()
   const { viewMode } = usePersistedCompactViewState("desktop")
   const activeTaskCount = useActiveTaskCount(selectedInstanceId, canManageSelectedInstance && shouldShowInstanceControls)
-
-  // Query for available updates
-  const { data: updateInfo } = useQuery({
-    queryKey: ["latest-version"],
-    queryFn: () => api.getLatestVersion(),
-    refetchInterval: 2 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-  })
-  const updateItemClass = "flex items-center gap-2 text-green-600 dark:text-green-400 focus:text-green-600 dark:focus:text-green-400 cursor-pointer"
-  const updateItemLabel = updateInfo && (
-    <>
-      <Download className="mr-2 h-4 w-4" />
-      <div className="flex flex-col">
-        <span className="font-medium">{t("header.updateAvailable")}</span>
-        <span className="text-[10px] opacity-80">{t("header.updateVersion", { version: updateInfo.tag_name })}</span>
-      </div>
-    </>
-  )
 
   // Query instance capabilities via the dedicated lightweight endpoint
   const { data: instanceCapabilities } = useQuery<InstanceCapabilities>({
@@ -329,8 +294,6 @@ export function Header({
     setInstanceSettingsOpen(false)
   }, [selectedInstanceId])
 
-  const { state: crossSeedInstanceState } = useCrossSeedInstanceState()
-
   // Dense mode uses reduced header height
   const headerHeight = viewMode === "dense" ? "lg:h-12" : "lg:h-16"
   const innerHeight = viewMode === "dense" ? "h-10 lg:h-auto" : "h-12 lg:h-auto"
@@ -339,17 +302,16 @@ export function Header({
   // Assigned, not returned inline: the spreadsheet ribbon strip mounts as a
   // sibling above the header without reindenting the whole header tree.
   const headerElement = (
-    <header className={cn("sticky top-0 z-50 hidden md:flex flex-wrap lg:flex-nowrap items-start lg:items-center justify-between sm:border-b bg-background pl-2 pr-4 md:pl-4 md:pr-4 lg:pl-0 lg:static py-2 lg:py-0", headerHeight)}>
+    <header {...themeArea("app-header")} className={cn("sticky top-0 z-50 hidden md:flex flex-wrap lg:flex-nowrap items-start lg:items-center justify-between sm:border-b bg-background pl-2 pr-4 md:pl-4 md:pr-4 lg:pl-2 lg:static py-2 lg:py-0", headerHeight, !isInstanceRoute && "sideways:hidden")}>
       <div className={cn("hidden md:flex items-center gap-2 mr-2 order-1 lg:order-none", innerHeight)}>
-        {children}
         {instanceName && (hasMultipleActiveInstances || isAllInstancesRoute) ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 className={cn(
-                  "group flex items-center gap-2 pl-2 sm:pl-0 text-xl font-semibold transition-all duration-300 hover:opacity-90 rounded-sm px-1 -mx-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  "group flex items-center gap-2 text-xl font-semibold transition-all duration-300 hover:opacity-90 rounded-sm px-1 -mx-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   "lg:hidden", // Hidden on desktop by default
-                  sidebarCollapsed && "lg:flex", // Visible on desktop when sidebar collapsed
+                  showTitleOnDesktop && "lg:flex", // Visible on desktop when the sidebar shows only icons
                   !shouldShowQuiOnMobile && "hidden sm:flex" // Hide on mobile when on instance routes
                 )}
                 aria-label={t("header.currentInstance", { name: instanceName })}
@@ -397,15 +359,9 @@ export function Header({
                           instance.id === selectedInstanceId ? "bg-accent text-accent-foreground font-medium" : "hover:bg-accent/80 data-[highlighted]:bg-accent/80 text-foreground"
                         )}
                       >
-                        <HardDrive className="h-4 w-4 flex-shrink-0" />
+                        <InstanceMarkIcon instanceId={instance.id} problem={!instance.connected} colored={instance.id !== selectedInstanceId} />
                         <span className="flex-1 truncate">{instance.name}</span>
-                        <span
-                          className={cn(
-                            "h-2 w-2 rounded-full flex-shrink-0",
-                            instance.connected ? "bg-green-500" : "bg-red-500"
-                          )}
-                          aria-label={instance.connected ? t("header.connected") : t("header.disconnected")}
-                        />
+                        {!instance.connected && <span className="sr-only">{t("header.disconnected")}</span>}
                       </Link>
                     </DropdownMenuItem>
                   ))
@@ -419,7 +375,7 @@ export function Header({
           <h1 className={cn(
             "flex items-center gap-2 pl-2 sm:pl-0 text-xl font-semibold transition-all duration-300",
             "lg:hidden", // Hidden on desktop by default
-            sidebarCollapsed && "lg:flex", // Visible on desktop when sidebar collapsed
+            showTitleOnDesktop && "lg:flex", // Visible on desktop when the sidebar shows only icons
             !shouldShowQuiOnMobile && "hidden sm:flex" // Hide on mobile when on instance routes
           )}>
             {theme === "swizzin" ? (
@@ -442,7 +398,7 @@ export function Header({
           <div className={cn(
             "hidden md:flex items-center gap-2 order-2 lg:order-none",
             innerHeight,
-            sidebarCollapsed && "lg:ml-2"
+            showTitleOnDesktop && "lg:ml-2"
           )}>
             {/* Filter button */}
             <Tooltip>
@@ -581,14 +537,11 @@ export function Header({
             )}
           </div>
           {/* Management Bar - only shows when torrents selected, wraps to new line on tablet */}
-          {selectionSummary && hasSelection(selection) && (
+          {!isMobile && selectionSummary && hasSelection(selection) && (
             <div className="sm:w-full sm:basis-full lg:basis-auto lg:w-auto sm:order-5 lg:order-none flex justify-center lg:justify-start lg:ml-2 animate-in fade-in duration-400 ease-out motion-reduce:animate-none motion-reduce:duration-0">
               <TorrentManagementBar
                 instanceId={selectedInstanceId ?? undefined}
-                instanceIds={isAllInstancesRoute && normalizedUnifiedInstanceIds.length > 0 ? normalizedUnifiedInstanceIds : undefined}
                 actionTarget={selectionSummary.actionTarget}
-                totalSelectionSize={selectionSummary.selectedTotalSize}
-                onComplete={clearSelection}
               />
             </div>
           )}
@@ -654,7 +607,7 @@ export function Header({
                 )}
                 {/* Info tooltip */}
                 <Tooltip>
-                  <TooltipTrigger asChild>
+                  <TooltipTrigger asChild openOnTap>
                     <button
                       type="button"
                       className="p-1 hover:bg-muted rounded-sm transition-colors hidden sm:block"
@@ -673,7 +626,8 @@ export function Header({
                         <li>• {t("header.smartSearchFields")}</li>
                         <li>• {t("header.smartSearchEnter")}</li>
                         <li>• {t("header.smartSearchAuto")}</li>
-                        <li>• {t("header.smartSearchShortcut", { shortcutKey })}</li>
+                        <li>• {t("header.smartSearchShortcut", { shortcutKey: "/" })}</li>
+                        <li>• {t("header.smartSearchPalette", { shortcutKey: modShortcut("K") })}</li>
                       </ul>
                     </div>
                   </TooltipContent>
@@ -686,232 +640,9 @@ export function Header({
       )}
 
 
-      <div className={cn("grid grid-cols-[auto_auto_auto] items-center gap-1 transition-all duration-300 ease-out sm:order-4 lg:order-none", smInnerHeight)}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hover:bg-muted transition-colors"
-              aria-label={t("support.title")}
-              onClick={() => setShowSupport(true)}
-            >
-              <Heart className="h-4 w-4 fill-current text-red-500" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t("support.title")}</TooltipContent>
-        </Tooltip>
+      <div className={cn("grid grid-cols-[auto_auto] items-center gap-1 transition-all duration-300 ease-out sm:order-4 lg:order-none", smInnerHeight)}>
+        <SupportButton />
         <ThemeToggle />
-        <div className={cn(
-          "transition-all duration-300 ease-out overflow-hidden",
-          sidebarCollapsed ? "w-10 opacity-100" : "w-0 opacity-0"
-        )}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="hover:bg-muted hover:text-foreground transition-colors relative">
-                <Menu className="h-4 w-4" />
-                {updateInfo && (
-                  <span className="absolute top-1 right-1 h-2 w-2 bg-green-500 rounded-full" />
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              {updateInfo && (
-                <>
-                  <DropdownMenuItem asChild>
-                    {/* Settings holds the Install update button. */}
-                    <Link to="/settings" search={{ tab: "application", modal: "install-update" }} className={updateItemClass}>{updateItemLabel}</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/dashboard"
-                  className="flex cursor-pointer"
-                >
-                  <Home className="mr-2 h-4 w-4" />
-                  {t("nav.dashboard")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/search"
-                  className="flex cursor-pointer"
-                >
-                  <Search className="mr-2 h-4 w-4" />
-                  {t("nav.search")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/cross-seed"
-                  className="flex cursor-pointer"
-                >
-                  <GitBranch className="mr-2 h-4 w-4" />
-                  {t("nav.crossSeed")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/automations"
-                  className="flex cursor-pointer"
-                >
-                  <Zap className="mr-2 h-4 w-4" />
-                  {t("nav.automations")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/backups"
-                  className="flex cursor-pointer"
-                >
-                  <Archive className="mr-2 h-4 w-4" />
-                  {t("nav.backups")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/rss"
-                  className="flex cursor-pointer"
-                >
-                  <Rss className="mr-2 h-4 w-4" />
-                  {t("nav.rss")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/settings"
-                  search={{ tab: "instances" }}
-                  className="flex cursor-pointer"
-                >
-                  <Server className="mr-2 h-4 w-4" />
-                  {t("nav.instances")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/settings"
-                  search={{ tab: "logs" }}
-                  className="flex cursor-pointer"
-                >
-                  <FileText className="mr-2 h-4 w-4" />
-                  {t("nav.logs")}
-                </Link>
-              </DropdownMenuItem>
-              {activeInstances.length > 0 && <DropdownMenuSeparator />}
-              {activeInstances.length > 0 ? (
-                <>
-                  <DropdownMenuLabel className="text-xs text-muted-foreground uppercase tracking-wide">
-                    {t("nav.instances")}
-                  </DropdownMenuLabel>
-                  {hasMultipleActiveInstances && (
-                    <UnifiedScopeDropdownSection
-                      activeInstances={activeInstances}
-                      effectiveUnifiedInstanceIds={effectiveUnifiedInstanceIds}
-                      isAllInstancesRoute={isAllInstancesRoute}
-                      onResetUnifiedScope={resetUnifiedScope}
-                      onToggleUnifiedScopeInstance={toggleUnifiedScopeInstance}
-                      scopeKeyPrefix="header-menu-scope"
-                    />
-                  )}
-                  {activeInstances.map((instance) => {
-                    const csState = crossSeedInstanceState[instance.id]
-                    const hasRss = csState?.rssEnabled || csState?.rssRunning
-                    const hasSearch = csState?.searchRunning
-
-                    return (
-                      <DropdownMenuItem key={instance.id} asChild>
-                        <Link
-                          to="/instances/$instanceId"
-                          params={{ instanceId: instance.id.toString() }}
-                          className="flex cursor-pointer"
-                        >
-                          <HardDrive className="mr-2 h-4 w-4" />
-                          <span className="truncate">{instance.name}</span>
-                          <span className="ml-auto flex items-center gap-1.5">
-                            {hasRss && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="flex items-center">
-                                    {csState?.rssRunning ? (
-                                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                                    ) : (
-                                      <Rss className="h-3 w-3 text-muted-foreground" />
-                                    )}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent side="left" className="text-xs">
-                                  {csState?.rssRunning ? t("header.rssRunning") : t("header.rssEnabled")}
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                            {hasSearch && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="flex items-center">
-                                    <SearchCode className="h-3 w-3 text-muted-foreground" />
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent side="left" className="text-xs">
-                                  {t("header.scanRunning")}
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                            <span
-                              className={cn(
-                                "h-2 w-2 rounded-full flex-shrink-0",
-                                instance.connected ? "bg-green-500" : "bg-red-500"
-                              )}
-                            />
-                          </span>
-                        </Link>
-                      </DropdownMenuItem>
-                    )
-                  })}
-                </>
-              ) : (
-                <DropdownMenuItem disabled className="text-xs text-muted-foreground">
-                  {t("header.noActiveInstances")}
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link
-                  to="/settings"
-                  className="flex cursor-pointer"
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  {t("nav.settings")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <Globe className="h-4 w-4" />
-                  {languageNames[i18n.resolvedLanguage as keyof typeof languageNames] ?? i18n.resolvedLanguage}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  {supportedLanguages.map((lng) => (
-                    <DropdownMenuItem
-                      key={lng}
-                      onClick={() => changeLanguage(lng)}
-                      className="flex items-center justify-between gap-4"
-                    >
-                      {languageNames[lng]}
-                      {i18n.resolvedLanguage === lng && <Check className="h-3.5 w-3.5" />}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => logout()}>
-                <LogOut className="mr-2 h-4 w-4" />
-                {t("sidebar.logout")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
       </div>
 
       {/* Instance Preferences Dialog */}
@@ -980,7 +711,6 @@ export function Header({
         )
       })()}
 
-      <SupportDialog open={showSupport} onOpenChange={setShowSupport} />
     </header>
   )
 

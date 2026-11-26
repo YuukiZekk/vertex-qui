@@ -3,29 +3,17 @@
   "card": {
     "status": {
       "disabled": "Disabilitato",
-      "enabled": "Abilitato",
       "connected": "Connesso",
       "disconnected": "Disconnesso"
     },
     "tooltips": {
-      "disableInstance": "Disabilita istanza",
-      "enableInstance": "Abilita istanza",
       "moveUp": "Sposta su",
       "moveDown": "Sposta giù"
     },
     "actions": {
-      "edit": "Modifica",
       "testConnection": "Prova connessione",
-      "delete": "Elimina"
-    },
-    "labels": {
-      "username": "Nome utente:",
-      "basicAuth": "Basic Auth:",
-      "tlsVerification": "Verifica TLS:",
-      "tlsSkipped": "Ignorata",
-      "tlsStrict": "Rigorosa",
-      "localFileAccess": "Accesso ai file locali:",
-      "testingConnection": "Prova della connessione in corso..."
+      "delete": "Elimina",
+      "changeIcon": "Cambia icona"
     },
     "deleteDialog": {
       "title": "Elimina istanza",
@@ -35,7 +23,6 @@
     },
     "toast": {
       "instanceDisabledTitle": "Istanza disabilitata",
-      "testDisabledDescription": "Abilita l'istanza prima di provare la connessione.",
       "testSuccessTitle": "Prova di connessione riuscita",
       "testSuccessDescription": "Connessione all'istanza qBittorrent riuscita",
       "testFailedTitle": "Prova di connessione non riuscita",
@@ -56,7 +43,13 @@
     "passwordRequired": "Password obbligatoria",
     "decryptionDescription": "Impossibile decifrare la password salvata. Di solito accade quando il segreto della sessione è cambiato.",
     "reenterPassword": "Inserisci di nuovo la password",
-    "recentErrors": "Errori recenti ({{count}})"
+    "recentErrors": "Errori recenti ({{count}})",
+    "errorTypes": {
+      "connection": "Connessione",
+      "authentication": "Autenticazione",
+      "ban": "Ban",
+      "api": "API"
+    }
   },
   "form": {
     "labels": {
@@ -88,30 +81,32 @@
     },
     "validation": {
       "nameRequired": "Il nome dell'istanza è obbligatorio",
-      "basicAuthPasswordRequired": "La password basic auth è obbligatoria quando la basic auth è abilitata"
+      "basicAuthPasswordRequired": "La password basic auth è obbligatoria quando la basic auth è abilitata",
+      "usernameRequired": "Il nome utente è obbligatorio",
+      "passwordRequired": "La password è obbligatoria",
+      "apiKeyRequired": "La chiave API è obbligatoria"
     },
     "buttons": {
-      "saving": "Salvataggio...",
       "updateInstance": "Aggiorna istanza",
-      "addInstance": "Aggiungi istanza",
-      "cancel": "Annulla"
+      "addInstance": "Aggiungi istanza"
     },
     "toast": {
-      "missingCredentialsTitle": "Credenziali mancanti",
       "instanceUpdatedTitle": "Istanza aggiornata",
       "instanceUpdatedDescription": "Istanza aggiornata correttamente. Prova della connessione in background...",
-      "updateFailedTitle": "Aggiornamento non riuscito",
       "updateFailedDescription": "Impossibile aggiornare l'istanza",
       "instanceCreatedTitle": "Istanza creata",
       "instanceCreatedDescription": "Istanza creata correttamente. Prova della connessione in background...",
-      "createFailedTitle": "Creazione non riuscita",
       "createFailedDescription": "Impossibile creare l'istanza"
     },
     "authType": {
       "none": "Nessuno",
       "usernamePassword": "Nome utente e password",
       "apiKey": "Chiave API"
-    }
+    },
+    "sshAfterSave": "L'accesso SSH ai file dell'istanza si configura nelle impostazioni dell'istanza dopo il salvataggio.",
+    "addTitle": "Aggiungi istanza",
+    "addDescription": "Configura una nuova istanza qBittorrent",
+    "editTitle": "Modifica istanza"
   },
   "settingsButton": {
     "tooltip": "Impostazioni istanza"
@@ -150,7 +145,8 @@
         "downloads": "Download",
         "bittorrent": "BitTorrent",
         "rss": "RSS",
-        "webui": "WebUI"
+        "webui": "WebUI",
+        "ssh": "SSH"
       },
       "sections": {
         "instanceConfig": {
@@ -162,6 +158,10 @@
         },
         "seedingLimits": {
           "title": "Limiti di distribuzione"
+        },
+        "ssh": {
+          "title": "Accesso SSH",
+          "description": "Raggiungi i file di questa istanza via SSH quando qui e qBittorrent girano su macchine diverse"
         }
       }
     },
@@ -555,7 +555,9 @@
         "move": "Sposta",
         "externalProgram": "Programma esterno",
         "dryRun": "Dry run",
-        "exportToInstance": "Esporta nell'istanza"
+        "exportToInstance": "Esporta nell'istanza",
+        "transferToInstance": "Trasferisci a un'istanza",
+        "ruleSkipped": "Regola non eseguita"
       },
       "shareLimit": {
         "global": "Globale",
@@ -608,7 +610,9 @@
         "exportedDryRun_one": "{{count}} torrent verrebbe esportato",
         "exportedDryRun_other": "{{count}} torrent verrebbero esportati",
         "exportFailed_one": "Esportazione di {{count}} torrent non riuscita",
-        "exportFailed_other": "Esportazione di {{count}} torrent non riuscita"
+        "exportFailed_other": "Esportazione di {{count}} torrent non riuscita",
+        "transferredDryRun_one": "{{count}} torrent verrebbe trasferito",
+        "transferredDryRun_other": "{{count}} torrent verrebbero trasferiti"
       },
       "deleteDialog": {
         "title": "Elimina regola",
@@ -667,7 +671,9 @@
         "deletedActivityEntries": "{{count}} voci di attività eliminate",
         "deleteActivityFailed": "Eliminazione dell'attività non riuscita"
       },
-      "exported": "Esportato"
+      "exported": "Esportato",
+      "transferStarted": "Avviato",
+      "skipped": "Saltata"
     },
     "runWorkflowNow": {
       "action": "Esegui ora",
@@ -684,7 +690,8 @@
         "completedWithErrors": "Esecuzione completata per \"{{name}}\" con errori. Consulta il registro attività.",
         "dryRunCompleted": "Simulazione completata per \"{{name}}\"",
         "inProgress": "È in corso un'altra esecuzione. Riprova tra un momento.",
-        "failed": "Impossibile eseguire il workflow"
+        "failed": "Impossibile eseguire il workflow",
+        "skipped": "\"{{name}}\" non è stata eseguita. Vedi il registro attività."
       }
     },
     "workflowPreview": {
@@ -727,10 +734,8 @@
     "orphanScanOverview": {
       "title": "Scansione orfani",
       "noInstancesDescription": "Nessuna istanza configurata. Aggiungine una nelle Impostazioni per usare questo servizio.",
-      "tooltip": "Trova i file su disco che non sono associati ad alcun torrent in qBittorrent.\nRichiede l'accesso al filesystem locale abilitato per ogni istanza.",
+      "tooltip": "Trova i file su disco che non sono associati ad alcun torrent in qBittorrent.\nRichiede l'accesso ai file di ogni istanza. Abilita \"Accesso al filesystem locale\" o configura l'accesso SSH nelle impostazioni dell'istanza.",
       "description": "Scansiona le cartelle di download e identifica i file orfani da rimuovere.",
-      "noLocalAccess": "Nessun accesso locale",
-      "noLocalAccessTooltip": "qui e qBittorrent devono essere eseguiti sulla stessa macchina. Abilita \"Accesso al filesystem locale\" nelle impostazioni dell'istanza per usare la scansione orfani.",
       "remoteLimits": "L'eliminazione e la pulizia automatica su un'istanza remota richiedono l'identità dei file, che qui può leggere solo se il server gli consente di eseguire GNU find e stat.",
       "remoteNoIdentity": "Questa istanza remota non lo consente, quindi qui non riconosce quando due percorsi sono lo stesso file e un file raggiungibile da un secondo percorso, ad esempio tramite un bind mount, può comparire nell'elenco anche se un torrent lo usa. Le scansioni qui si possono visualizzare ed esportare, ma non eliminare.",
       "on": "On",
@@ -756,6 +761,8 @@
       "viewPreview": "Visualizza anteprima",
       "recentScans": "Scansioni recenti",
       "scannedPaths": "Percorsi selezionati per la scansione ({{total}})",
+      "scanPathsLoading": "Caricamento dei percorsi di scansione...",
+      "scanPathsLoadFailed": "Impossibile caricare i percorsi di scansione",
       "zeroOrphans": "0 orfani",
       "deletedStats": "{{deleted}} eliminati · {{size}}",
       "deletedFiles_one": "{{count}} file",
@@ -786,7 +793,9 @@
         "cancelFailed": "Annullamento non riuscito"
       },
       "errorMessage": "Messaggio di errore",
-      "scanPaths": "Percorsi di scansione"
+      "scanPaths": "Percorsi di scansione",
+      "noFilesystemAccess": "Nessun accesso al filesystem",
+      "noFilesystemAccessTooltip": "La scansione orfani richiede l'accesso ai file di questa istanza. Abilita \"Accesso al filesystem locale\" o configura l'accesso SSH nelle impostazioni dell'istanza."
     },
     "orphanScanPreview": {
       "title": "Anteprima orfani",
@@ -962,7 +971,9 @@
         "external_program": "Programma esterno",
         "auto_managed": "Gestito automaticamente",
         "dry_run_no_match": "Simulazione (nessuna corrispondenza)",
-        "exported_to_instance": "Esporta verso l'istanza"
+        "exported_to_instance": "Esporta verso l'istanza",
+        "transferred_to_instance": "Trasferisci a un'istanza",
+        "rule_skipped": "Regola non eseguita"
       }
     },
     "reannounceOverview": {
@@ -1139,6 +1150,11 @@
         "skipChecking": "Ignora la verifica",
         "addPaused": "Aggiungi in pausa"
       },
+      "transfer": {
+        "title": "Trasferisci a un'istanza",
+        "description": "Sposta ogni torrent corrispondente con i suoi file nell'istanza di destinazione e verifica la copia prima di rimuovere qualcosa. La pagina Trasferimenti mostra ogni trasferimento.",
+        "remove": "Rimuovi «Trasferisci a un'istanza»"
+      },
       "priority": {
         "title": "Priorità del torrent",
         "description": "Controlla l'ordine in cui i torrent vengono elaborati.",
@@ -1162,6 +1178,7 @@
         "notSupportedForScoreMultiplier": "Non supportato per i moltiplicatori di punteggio"
       },
       "conditionsLabel": "Condizioni (facoltativo)",
+      "mixedActionConditions": "Ogni azione di questo workflow ha la propria condizione. Ora qui usa una sola condizione per workflow. Se salvi, ogni azione riceve la condizione qui sopra. Per conservare le altre, crea prima un workflow per ogni condizione.",
       "actions": {
         "title": "Azione",
         "addAction": "Aggiungi un'azione",
@@ -1180,7 +1197,8 @@
         "category": "Categoria",
         "move": "Sposta",
         "externalProgram": "Esegui programma esterno",
-        "exportToInstance": "Esporta nell'istanza"
+        "exportToInstance": "Esporta nell'istanza",
+        "transferToInstance": "Trasferisci a un'istanza"
       },
       "option": {
         "noChange": "Nessuna modifica",
@@ -1275,19 +1293,38 @@
       "freeSpace": {
         "title": "Origine dello spazio libero",
         "aria": "Informazioni sull'origine dello spazio libero",
-        "description": "Scegli da dove leggere lo spazio libero. L'opzione predefinita usa lo spazio libero riportato da qBittorrent. Usa \"Percorso sul server\" per controllare lo spazio libero su un disco o punto di montaggio specifico.",
+        "description": "Scegli da dove leggere lo spazio libero. L'opzione predefinita usa lo spazio libero riportato da qBittorrent. Usa \"Percorso sul server\" per controllare lo spazio libero su un disco o punto di montaggio specifico. \"Percorso sull'host qBittorrent\" interroga qBittorrent stesso e richiede qBittorrent 5.3.",
         "selectSource": "Seleziona l'origine",
         "defaultSource": "Predefinito (qBittorrent)",
         "pathSource": "Percorso sul server",
         "pathSourceWindowsUnsupported": "Percorso sul server (non supportato su Windows)",
-        "pathSourceLocalAccessRequired": "Percorso sul server (richiede l'Accesso locale)",
+        "qbitPathSource": "Percorso sull'host qBittorrent",
+        "qbitPathSourceUnsupported": "Percorso sull'host qBittorrent (richiede qBittorrent 5.3)",
         "pathPlaceholder": "/mnt/downloads",
         "pathHelp": "Inserisci il percorso su cui controllare lo spazio libero (es., un punto di montaggio)",
+        "qbitPathHelp": "Inserisci un percorso sull'host qBittorrent. Lo spazio libero lo misura qBittorrent, quindi qui non deve accedere a quel disco.",
         "errors": {
           "unsupportedWindows": "L'origine dello spazio libero basata sul percorso non è supportata su Windows.",
-          "localAccessRequired": "L'origine dello spazio libero basata sul percorso richiede l'Accesso al filesystem locale.",
-          "pathRequired": "Il percorso è obbligatorio quando si usa \"Percorso sul server\"."
-        }
+          "qbitPathUnsupported": "Questa istanza è precedente a qBittorrent 5.3 e non può riportare lo spazio libero di un percorso.",
+          "pathRequired": "Il percorso è obbligatorio quando si usa \"Percorso sul server\".",
+          "filesystemAccessRequired": "L'origine dello spazio libero basata sul percorso richiede l'accesso al filesystem locale o via SSH.",
+          "allowanceRequired": "Inserisci uno spazio consentito maggiore di 0.",
+          "allowanceAccessRequired": "L'origine dello spazio consentito richiede l'accesso al filesystem locale, o l'accesso SSH con shell."
+        },
+        "pathSourceFilesystemAccessRequired": "Percorso sul server (richiede accesso locale o SSH)",
+        "allowanceSource": "Spazio consentito su un percorso",
+        "allowanceSourceWindowsUnsupported": "Spazio consentito su un percorso (non supportato su Windows)",
+        "allowanceSourceAccessRequired": "Spazio consentito su un percorso (richiede accesso locale, o accesso SSH con shell)",
+        "allowanceLabel": "Spazio consentito",
+        "allowancePathLabel": "Cartella da misurare",
+        "allowanceUnitAria": "Unità dello spazio consentito",
+        "allowanceHelp": "Inserisci lo spazio consentito dal tuo piano, nell'unità usata dal tuo provider. qui sottrae la dimensione dei file sotto il percorso. La maggior parte dei provider conta a passi di 1000 ({{decimalUnit}}), non di 1024 ({{binaryUnit}}): la differenza è di circa il 9%.",
+        "allowanceUnits": {
+          "MB": "MB",
+          "GB": "GB",
+          "TB": "TB"
+        },
+        "allowancePathHelp": "Ad esempio, la tua directory home"
       },
       "grouping": {
         "title": "Gruppi di condizioni raggruppate",
@@ -1382,8 +1419,7 @@
       "enableDryRunPrompt": {
         "title": "Abilitare la simulazione (dry run)?",
         "description": "La simulazione (dry run) simula tutte le azioni senza modificare nulla. Puoi rivedere i torrent interessati nel registro delle attività.",
-        "enableWithout": "Abilita senza simulazione",
-        "enableWith": "Abilita con simulazione"
+        "saveAndEnable": "Salva e abilita"
       },
       "customGroup": {
         "title": "Aggiungi gruppo personalizzato",
@@ -1432,7 +1468,9 @@
           "moved": "Sposta",
           "externalProgram": "Programma esterno",
           "noMatches": "Nessuna corrispondenza",
-          "exportedToInstance": "Esporta verso istanza"
+          "exportedToInstance": "Esporta verso istanza",
+          "transferredToInstance": "Trasferisci a un'istanza",
+          "ruleSkipped": "Regola non eseguita"
         },
         "actionFallback": "Azione sconosciuta ({{action}})",
         "summary": {
@@ -1477,8 +1515,8 @@
         "switchedDeleteModeForFreeSpace": "Passato a \"Rimuovi con i file\" perché la condizione Spazio libero richiede che venga effettivamente liberato spazio su disco",
         "switchedIntervalForFreeSpace": "Passato all'intervallo di 5 minuti perché le eliminazioni per Spazio libero hanno un'attesa di circa 5 minuti",
         "pathSourceUnsupportedWindows": "L'origine dello spazio libero basata sul percorso non è supportata su Windows. Passato al valore predefinito di qBittorrent.",
+        "qbitPathSourceUnsupported": "Questa istanza non può riportare lo spazio libero di un percorso. Passato all'origine predefinita.",
         "switchFreeSpaceSourceDefault": "Cambia l'origine dello spazio libero in Predefinito (qBittorrent)",
-        "enableLocalAccessOrDefault": "Abilita l'accesso al filesystem locale nelle impostazioni dell'istanza, oppure usa Predefinito (qBittorrent)",
         "enterPathOrDefault": "Inserisci un percorso o riporta l'origine dello spazio libero su Predefinito (qBittorrent)",
         "addScoreRule": "Aggiungi almeno una regola di punteggio per l'ordinamento per Punteggio",
         "fieldMultiplierInvalid": "Il moltiplicatore del campo deve essere un numero valido",
@@ -1495,7 +1533,8 @@
         "groupIdInvalid": "L'ID del gruppo può contenere solo caratteri alfanumerici e trattini bassi",
         "selectGroupKey": "Seleziona almeno una chiave",
         "groupExists": "Esiste già un gruppo con questo ID",
-        "customGroupAdded": "Gruppo personalizzato aggiunto"
+        "customGroupAdded": "Gruppo personalizzato aggiunto",
+        "setUpFilesystemAccessOrDefault": "Configura l'accesso al filesystem locale o via SSH nelle impostazioni dell'istanza, oppure usa Predefinito (qBittorrent)"
       },
       "trackerMatchInclude": "Includi",
       "trackerMatchExclude": "Escludi"
@@ -1745,6 +1784,92 @@
       "testEmailQueued": "qBittorrent ha messo in coda l'email di prova",
       "testEmailQueuedDescription": "qBittorrent usa le impostazioni salvate. Controlla la posta in arrivo e il log di qBittorrent per eventuali errori.",
       "testEmailFailed": "Impossibile inviare l'email di prova"
+    },
+    "ssh": {
+      "localWins": "L'accesso al filesystem locale è attivo, quindi qui legge i file di questa istanza in locale e non usa queste impostazioni SSH.",
+      "labels": {
+        "host": "Host SSH",
+        "hostDescription": "Nome host o indirizzo IP della macchina che contiene i file di questa istanza, senza schema né porta. Cambiare host o porta elimina la chiave host fissata, quindi la prossima prova è di nuovo un primo contatto.",
+        "port": "Porta",
+        "username": "Nome utente",
+        "privateKey": "Chiave privata",
+        "privateKeyDescription": "Una chiave privata OpenSSH senza passphrase. qui la salva cifrata e non la mostra più. Serve di nuovo quando cambiano host, porta o nome utente."
+      },
+      "placeholders": {
+        "host": "seedbox.example.com",
+        "privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----",
+        "privateKeyStored": "Una chiave è salvata. Incollane una nuova per sostituirla."
+      },
+      "validation": {
+        "hostRequired": "L'host SSH è obbligatorio",
+        "portRange": "La porta deve essere compresa tra 1 e 65535",
+        "usernameRequired": "Il nome utente è obbligatorio",
+        "keyRequired": "La chiave privata è necessaria quando cambiano host, porta o nome utente"
+      },
+      "buttons": {
+        "save": "Salva impostazioni SSH",
+        "clear": "Rimuovi accesso SSH",
+        "test": "Prova connessione",
+        "testing": "Prova in corso...",
+        "confirm": "Conferma chiave host",
+        "replace": "Sostituisci chiave host"
+      },
+      "test": {
+        "title": "Connessione",
+        "pinnedAtRest": "Chiave host fissata. Prova la connessione per vedere cosa consente l'host.",
+        "unpinnedAtRest": "Nessuna chiave host fissata. Prova la connessione per confermare l'impronta dell'host.",
+        "saveFirst": "Salva prima le modifiche. Il test usa le credenziali salvate."
+      },
+      "status": {
+        "unpinned": {
+          "title": "Primo contatto",
+          "text": "Confronta questa impronta con quella dell'host prima di confermarla. Le connessioni successive rifiuteranno qualsiasi altra chiave."
+        },
+        "pinned": {
+          "title": "Chiave host fissata"
+        },
+        "mismatch": {
+          "title": "Chiave host cambiata",
+          "text": "L'host ha presentato una chiave diversa da quella fissata. Sostituiscila solo se ti aspetti il cambiamento, per esempio dopo una reinstallazione del server."
+        },
+        "pinUnreadable": {
+          "title": "Chiave fissata illeggibile",
+          "text": "La chiave fissata non può essere decifrata, di solito perché la chiave di cifratura di qui è cambiata. Sostituiscila per continuare.",
+          "noKey": "L'host non ha risposto, quindi non c'è alcuna chiave con cui sostituirla."
+        },
+        "error": {
+          "title": "Connessione non riuscita"
+        }
+      },
+      "fingerprint": {
+        "label": "Impronta",
+        "pinned": "Fissata",
+        "presented": "Presentata"
+      },
+      "probes": {
+        "tier": "Livello: {{tier}}",
+        "tierSftp": "SFTP",
+        "tierExec": "SFTP + comandi",
+        "tierHint": "I comandi richiedono una shell POSIX con GNU find e stat sull'host. Senza di essi qui usa solo SFTP e non può leggere l'identità dei file.",
+        "sftp": "SFTP",
+        "statvfs": "Spazio libero (statvfs)",
+        "hardlink": "Hardlink (hardlink@openssh.com)",
+        "limits": "Estensione limits",
+        "exec": "Comandi",
+        "gnuUserland": "GNU find e stat",
+        "yes": "Disponibile",
+        "no": "Non disponibile"
+      },
+      "replaceDialog": {
+        "title": "Sostituire la chiave host fissata?",
+        "description": "D'ora in poi qui considererà attendibile la chiave presentata per questo host e rifiuterà quella fissata.",
+        "cancel": "Annulla",
+        "confirm": "Sostituisci"
+      },
+      "toast": {
+        "saved": "Impostazioni SSH salvate",
+        "cleared": "Accesso SSH rimosso"
+      }
     }
   },
   "backups": {
@@ -1993,6 +2118,126 @@
       "success": "Riuscito",
       "failed": "Non riuscito",
       "canceled": "Annullato"
+    }
+  },
+  "access": {
+    "local": "File locali",
+    "remote": "File via SSH",
+    "none": "Nessun accesso ai file",
+    "limits": {
+      "noIdentity": "Nessuna identità dei file: qui non riconosce quando due percorsi sono lo stesso file. La scansione orfani non può eliminare qui e una destinazione hardlink esistente blocca un'aggiunta con hardlink.",
+      "noReflinks": "Nessun reflink su un'istanza remota.",
+      "noHardlinkExtension": "Nessun hardlink: il server non annuncia hardlink@openssh.com. Un'aggiunta cross-seed con hardlink qui fallisce, oppure aggiunge in modalità normale se «Ripiega sulla modalità normale in caso di errore» è attivo."
+    }
+  },
+  "deleteHistory": {
+    "label": "Elimina anche la cronologia dei trasferimenti",
+    "description": "Senza questa opzione, qui mantiene la cronologia con il nome dell'istanza.",
+    "failed": "L'istanza è stata eliminata, ma qui non è riuscito a eliminare tutta la sua cronologia. Controlla in Impostazioni > Statistiche ed elimina il resto da lì."
+  },
+  "list": {
+    "label": "Istanze",
+    "emptyTitle": "Nessuna istanza ancora configurata",
+    "emptyDescription": "Aggiungi un client qBittorrent perché qui ne gestisca i torrent.",
+    "tlsSkipped": "Verifica TLS disattivata",
+    "reorderFailed": "Impossibile riordinare le istanze"
+  },
+  "publicPeerAddress": {
+    "label": "Indirizzo peer pubblico",
+    "noResolvedAddress": "qui non riesce ancora a determinare un indirizzo",
+    "description": "L'indirizzo e la porta con cui gli altri client BitTorrent raggiungono questo qBittorrent, per Trasferimenti e Condivisioni. Lascia vuoto per usare l'indirizzo che qui ricava da qBittorrent a ogni utilizzo. Impostalo quando qBittorrent gira in Docker o dietro NAT."
+  },
+  "mark": {
+    "picker": {
+      "title": "Icona di {{name}}",
+      "previewCollapsed": "Barra laterale compressa",
+      "previewElsewhere": "Ovunque altrove",
+      "automatic": "Automatico",
+      "letters": "Lettere",
+      "color": "Colore",
+      "colorCurrent": "Colore · {{color}}",
+      "reset": "Ripristina predefinito",
+      "description": "Scegline uno: Automatico, lettere (solo barra compressa) o icona.",
+      "iconHeading": "Icona",
+      "arrowHint": "Usa i tasti freccia per spostarti tra le icone."
+    },
+    "colors": {
+      "none": "Nessun colore",
+      "sky": "Cielo",
+      "violet": "Viola",
+      "pink": "Rosa acceso",
+      "orange": "Arancione",
+      "amber": "Ambra",
+      "lime": "Lime",
+      "emerald": "Smeraldo",
+      "teal": "Verde acqua"
+    },
+    "iconGroups": {
+      "servers": "Server",
+      "hardware": "Hardware",
+      "places": "Luoghi",
+      "media": "Media",
+      "nature": "Natura",
+      "symbols": "Simboli",
+      "objects": "Oggetti"
+    },
+    "icons": {
+      "server": "Server",
+      "nas": "NAS",
+      "tower": "PC tower",
+      "homeServer": "Server domestico",
+      "seedbox": "Seedbox",
+      "container": "Container",
+      "cloud": "Nuvola",
+      "cloudDownload": "Download dal cloud",
+      "hardDrive": "Disco rigido",
+      "driveDownload": "Disco dei download",
+      "database": "Database",
+      "cpu": "Processore",
+      "memory": "Memoria",
+      "router": "Router",
+      "monitor": "Monitor",
+      "laptop": "Portatile",
+      "house": "Casa",
+      "building": "Edificio",
+      "warehouse": "Magazzino",
+      "globe": "Globo",
+      "mapPin": "Segnaposto",
+      "flag": "Bandiera",
+      "mountain": "Montagna",
+      "tent": "Tenda",
+      "film": "Pellicola",
+      "tv": "TV",
+      "music": "Musica",
+      "podcast": "Podcast",
+      "book": "Libro",
+      "audiobook": "Audiolibro",
+      "gamepad": "Gamepad",
+      "image": "Immagine",
+      "cat": "Gatto",
+      "dog": "Cane",
+      "bird": "Uccello",
+      "fish": "Pesce",
+      "rabbit": "Coniglio",
+      "turtle": "Tartaruga",
+      "bug": "Insetto",
+      "leaf": "Foglia",
+      "star": "Stella",
+      "heart": "Cuore",
+      "flame": "Fiamma",
+      "zap": "Fulmine",
+      "rocket": "Razzo",
+      "crown": "Corona",
+      "shield": "Scudo",
+      "ghost": "Fantasma",
+      "box": "Scatola",
+      "archive": "Archivio",
+      "software": "Software",
+      "disc": "Disco",
+      "layers": "Livelli",
+      "anchor": "Ancora",
+      "magnet": "Calamita",
+      "satellite": "Satellite"
     }
   }
 }

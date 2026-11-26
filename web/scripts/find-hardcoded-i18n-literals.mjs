@@ -2,7 +2,10 @@ import fs from "node:fs"
 import path from "node:path"
 import ts from "typescript"
 
-const webRoot = path.resolve(import.meta.dirname, "..")
+// With --preserve-symlinks-main, import.meta.filename can be a symlink outside the repository, so the root comes from
+// the real path.
+const scriptPath = fs.realpathSync(import.meta.filename)
+const webRoot = path.resolve(path.dirname(scriptPath), "..")
 const srcRoot = path.join(webRoot, "src")
 
 const interestingAttributeNames = new Set([
@@ -35,8 +38,6 @@ const interestingPropertyNames = new Set([
   "reason",
 ])
 
-// Every table in this file renders only through a getTranslated* helper with its English
-// as defaultValue. constants.test.ts checks each helper's keys exist in en.
 const fallbackOnlyFile = "src/components/query-builder/constants.ts"
 
 const interestingVariableNames = new Set([
@@ -59,16 +60,12 @@ const interestingVariableNames = new Set([
   "errorMessage",
 ])
 
-// Suffixes that indicate a variable holds user-facing text.
-// Matched case-insensitively against the end of compound variable names
-// so `connectionStatusTooltip` matches via "Tooltip".
 const interestingVariableSuffixes = [
   "Tooltip", "Label", "AriaLabel", "Summary",
   "Message", "Title", "Description", "Placeholder",
   "Heading", "Text", "Caption",
 ]
 
-// Functions whose return values are user-facing text.
 const formatFunctionPattern = /^(?:format|get\w*(?:Label|Summary|Text|Tooltip|Status|Display|Caption))/
 
 const ignoredJsxTags = new Set([
@@ -82,8 +79,6 @@ function normalizeText(text) {
   return text.replace(/\s+/g, " ").trim()
 }
 
-// Check whether an AST node is "transparent" for context detection --
-// i.e. the string's UI purpose comes from whatever wraps this node.
 function isTransparentExpression(node) {
   return ts.isConditionalExpression(node)
     || ts.isParenthesizedExpression(node)
@@ -93,14 +88,10 @@ function isTransparentExpression(node) {
 
 function shouldTrackText(text, relaxed = false) {
   if (!text) return false
-  // URL defaults / placeholders
   if (/^https?:\/\//.test(text)) return false
-  // Duration abbreviation compounds: "<1s", "5m 30s", "2h 15m", "m s", "h m", "< 1m"
   if (/^[<>]?\s*\d*\s*[dhms](?:\s+\d*\s*[dhms])?$/.test(text)) return false
-  // JSON / code example patterns in placeholders
   if (/^\{[\s\S]*:[\s\S]*\}$/.test(text)) return false
   if (!/[A-Za-z]/.test(text)) return false
-  // Dotted identifiers like "foo.bar.baz"
   if (/^[a-z0-9-]+(?:\.[a-z0-9_-]+)+$/i.test(text)) return false
   // CSS/UI variant names and common non-UI return values (before the relaxed
   // lowercase check so these are always filtered regardless of context)
@@ -111,11 +102,9 @@ function shouldTrackText(text, relaxed = false) {
   // those gates return true in relaxed mode for short caps or longer lowercase
   // words, which would incorrectly flag entries like "RSS" or "autobrr".
   if (/^(?:[dhms]|ms|lt|qBit|API v|IPv4|IPv6|Napster|Swizzin|RSS|README|autobrr|qui-premium|qui-patron|cross-seed|<redacted>|libtorrent\s.*\.x|cross-seed\/|\.cross|\/\s*[dhms]|\*\*\*masked\*\*\*|\/\/\*\*\*masked\*\*\*)$/u.test(text)) return false
-  // ALL_CAPS constants -- but in relaxed mode, flag short UI words like "ALL"
   if (/^[A-Z0-9_]+$/.test(text)) {
     return relaxed && text.length >= 3
   }
-  // Single lowercase words -- in relaxed mode, flag longer ones like "action"
   if (/^[a-z0-9-]+$/.test(text)) {
     return relaxed && text.length >= 5
   }
@@ -172,9 +161,6 @@ function hasTranslationCallAncestor(node) {
   return false
 }
 
-// Walk up through transparent expressions and JsxExpression wrappers
-// to find a JSX element/fragment parent -- meaning the string renders as
-// child content of a JSX element.
 function isJsxChildExpressionString(node) {
   let current = node.parent
   while (current) {
@@ -191,9 +177,6 @@ function isJsxChildExpressionString(node) {
   return false
 }
 
-// Walk up through transparent expressions and JsxExpression to find a
-// JSX attribute with an interesting name.  Catches template literals
-// inside `aria-label={`Send test to ${name}`}`.
 function isInterestingJsxAttributeString(node) {
   let current = node.parent
   while (current) {
@@ -227,8 +210,6 @@ function isInterestingPropertyString(node, sourceFile) {
   return interestingPropertyNames.has(propertyName) && !isFallbackOnlyFile(sourceFile)
 }
 
-// Walk up through transparent expressions to find a variable declaration,
-// then check if the variable name is interesting (exact match or suffix).
 function isInterestingVariableString(node, sourceFile) {
   if (!/\.[jt]sx$/i.test(sourceFile.fileName)) return false
 
@@ -260,12 +241,9 @@ function isToastCallString(node) {
     && expression.expression.text === "toast"
 }
 
-// Detect string literals returned from functions whose names suggest they
-// produce user-facing text (formatAction, getProxyTypeLabel, etc.).
 function isFormatFunctionReturn(node, sourceFile) {
   if (!/\.[jt]sx$/i.test(sourceFile.fileName)) return false
 
-  // Walk up to find a return statement (through transparent expressions).
   let current = node.parent
   while (current) {
     if (ts.isReturnStatement(current)) break
@@ -277,7 +255,6 @@ function isFormatFunctionReturn(node, sourceFile) {
   }
   if (!current) return false
 
-  // Walk up from the return to find the enclosing named function.
   current = current.parent
   while (current) {
     if (ts.isFunctionDeclaration(current) && current.name) {
@@ -290,7 +267,6 @@ function isFormatFunctionReturn(node, sourceFile) {
       }
       return false
     }
-    // Walk through blocks, switch/case structure, and if-else chains.
     if (
       ts.isBlock(current)
       || ts.isCaseClause(current)
@@ -325,9 +301,6 @@ function readTemplateText(node) {
 
 function addMatch(matches, seen, sourceFile, node, text, kind) {
   const normalized = normalizeText(text)
-  // Use relaxed filtering for contexts where we're already confident the
-  // string is user-facing (JSX content, known attribute/property names,
-  // format function returns).
   const relaxed = kind === "jsx-text"
     || kind === "jsx-attribute"
     || kind === "object-property"
@@ -456,7 +429,9 @@ function printMatches(matches) {
   console.log(`\nFound ${matches.length} hardcoded string matches across ${grouped.size} files.`)
 }
 
-if (process.argv[1] === import.meta.filename) {
+// A path through a symlink, such as /var on macOS, resolves before the compare. The test runner can pass a glob that
+// names no file.
+if (fs.existsSync(process.argv[1] ?? "") && fs.realpathSync(process.argv[1]) === scriptPath) {
   const files = walkFiles(srcRoot)
   const matches = findHardcodedStringsInFiles(files)
 

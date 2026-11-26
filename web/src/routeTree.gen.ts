@@ -19,12 +19,14 @@ import { Route as AuthenticatedBackupsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedBrushRouteImport } from './routes/_authenticated/brush'
 import { Route as AuthenticatedCrossSeedRouteImport } from './routes/_authenticated/cross-seed'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedFlowsRouteImport } from './routes/_authenticated/flows'
 import { Route as AuthenticatedInstancesRouteImport } from './routes/_authenticated/instances'
 import { Route as AuthenticatedRssRouteImport } from './routes/_authenticated/rss'
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
-import { Route as AuthenticatedFlowsRouteImport } from './routes/_authenticated/flows'
 import { Route as AuthenticatedSitesRouteImport } from './routes/_authenticated/sites'
+import { Route as AuthenticatedStatisticsRouteImport } from './routes/_authenticated/statistics'
+import { Route as AuthenticatedTransfersRouteImport } from './routes/_authenticated/transfers'
 import { Route as AuthenticatedInstancesIndexRouteImport } from './routes/_authenticated/instances.index'
 import { Route as AuthenticatedInstancesInstanceIdRouteImport } from './routes/_authenticated/instances.$instanceId'
 
@@ -78,6 +80,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedFlowsRoute = AuthenticatedFlowsRouteImport.update({
+  id: '/flows',
+  path: '/flows',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedInstancesRoute = AuthenticatedInstancesRouteImport.update({
   id: '/instances',
   path: '/instances',
@@ -98,14 +105,19 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedFlowsRoute = AuthenticatedFlowsRouteImport.update({
-  id: '/flows',
-  path: '/flows',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedSitesRoute = AuthenticatedSitesRouteImport.update({
   id: '/sites',
   path: '/sites',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedStatisticsRoute = AuthenticatedStatisticsRouteImport.update({
+  id: '/statistics',
+  path: '/statistics',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedTransfersRoute = AuthenticatedTransfersRouteImport.update({
+  id: '/transfers',
+  path: '/transfers',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedInstancesIndexRoute =
@@ -131,12 +143,14 @@ export interface FileRoutesByFullPath {
   '/brush': typeof AuthenticatedBrushRoute
   '/cross-seed': typeof AuthenticatedCrossSeedRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/flows': typeof AuthenticatedFlowsRoute
   '/instances': typeof AuthenticatedInstancesRouteWithChildren
   '/rss': typeof AuthenticatedRssRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
-  '/flows': typeof AuthenticatedFlowsRoute
   '/sites': typeof AuthenticatedSitesRoute
+  '/statistics': typeof AuthenticatedStatisticsRoute
+  '/transfers': typeof AuthenticatedTransfersRoute
   '/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/instances/': typeof AuthenticatedInstancesIndexRoute
 }
@@ -150,11 +164,13 @@ export interface FileRoutesByTo {
   '/brush': typeof AuthenticatedBrushRoute
   '/cross-seed': typeof AuthenticatedCrossSeedRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/flows': typeof AuthenticatedFlowsRoute
   '/rss': typeof AuthenticatedRssRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
-  '/flows': typeof AuthenticatedFlowsRoute
   '/sites': typeof AuthenticatedSitesRoute
+  '/statistics': typeof AuthenticatedStatisticsRoute
+  '/transfers': typeof AuthenticatedTransfersRoute
   '/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/instances': typeof AuthenticatedInstancesIndexRoute
 }
@@ -170,12 +186,14 @@ export interface FileRoutesById {
   '/_authenticated/brush': typeof AuthenticatedBrushRoute
   '/_authenticated/cross-seed': typeof AuthenticatedCrossSeedRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/flows': typeof AuthenticatedFlowsRoute
   '/_authenticated/instances': typeof AuthenticatedInstancesRouteWithChildren
   '/_authenticated/rss': typeof AuthenticatedRssRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
-  '/_authenticated/flows': typeof AuthenticatedFlowsRoute
   '/_authenticated/sites': typeof AuthenticatedSitesRoute
+  '/_authenticated/statistics': typeof AuthenticatedStatisticsRoute
+  '/_authenticated/transfers': typeof AuthenticatedTransfersRoute
   '/_authenticated/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/_authenticated/instances/': typeof AuthenticatedInstancesIndexRoute
 }
@@ -191,12 +209,14 @@ export interface FileRouteTypes {
     | '/brush'
     | '/cross-seed'
     | '/dashboard'
+    | '/flows'
     | '/instances'
     | '/rss'
     | '/search'
     | '/settings'
-    | '/flows'
     | '/sites'
+    | '/statistics'
+    | '/transfers'
     | '/instances/$instanceId'
     | '/instances/'
   fileRoutesByTo: FileRoutesByTo
@@ -210,11 +230,13 @@ export interface FileRouteTypes {
     | '/brush'
     | '/cross-seed'
     | '/dashboard'
+    | '/flows'
     | '/rss'
     | '/search'
     | '/settings'
-    | '/flows'
     | '/sites'
+    | '/statistics'
+    | '/transfers'
     | '/instances/$instanceId'
     | '/instances'
   id:
@@ -229,12 +251,14 @@ export interface FileRouteTypes {
     | '/_authenticated/brush'
     | '/_authenticated/cross-seed'
     | '/_authenticated/dashboard'
+    | '/_authenticated/flows'
     | '/_authenticated/instances'
     | '/_authenticated/rss'
     | '/_authenticated/search'
     | '/_authenticated/settings'
-    | '/_authenticated/flows'
     | '/_authenticated/sites'
+    | '/_authenticated/statistics'
+    | '/_authenticated/transfers'
     | '/_authenticated/instances/$instanceId'
     | '/_authenticated/instances/'
   fileRoutesById: FileRoutesById
@@ -319,6 +343,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/flows': {
+      id: '/_authenticated/flows'
+      path: '/flows'
+      fullPath: '/flows'
+      preLoaderRoute: typeof AuthenticatedFlowsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/instances': {
       id: '/_authenticated/instances'
       path: '/instances'
@@ -347,18 +378,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/flows': {
-      id: '/_authenticated/flows'
-      path: '/flows'
-      fullPath: '/flows'
-      preLoaderRoute: typeof AuthenticatedFlowsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/sites': {
       id: '/_authenticated/sites'
       path: '/sites'
       fullPath: '/sites'
       preLoaderRoute: typeof AuthenticatedSitesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/statistics': {
+      id: '/_authenticated/statistics'
+      path: '/statistics'
+      fullPath: '/statistics'
+      preLoaderRoute: typeof AuthenticatedStatisticsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/transfers': {
+      id: '/_authenticated/transfers'
+      path: '/transfers'
+      fullPath: '/transfers'
+      preLoaderRoute: typeof AuthenticatedTransfersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/instances/': {
@@ -401,12 +439,14 @@ interface AuthenticatedRouteChildren {
   AuthenticatedBrushRoute: typeof AuthenticatedBrushRoute
   AuthenticatedCrossSeedRoute: typeof AuthenticatedCrossSeedRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedFlowsRoute: typeof AuthenticatedFlowsRoute
   AuthenticatedInstancesRoute: typeof AuthenticatedInstancesRouteWithChildren
   AuthenticatedRssRoute: typeof AuthenticatedRssRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
-  AuthenticatedFlowsRoute: typeof AuthenticatedFlowsRoute
   AuthenticatedSitesRoute: typeof AuthenticatedSitesRoute
+  AuthenticatedStatisticsRoute: typeof AuthenticatedStatisticsRoute
+  AuthenticatedTransfersRoute: typeof AuthenticatedTransfersRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -415,12 +455,14 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedBrushRoute: AuthenticatedBrushRoute,
   AuthenticatedCrossSeedRoute: AuthenticatedCrossSeedRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedFlowsRoute: AuthenticatedFlowsRoute,
   AuthenticatedInstancesRoute: AuthenticatedInstancesRouteWithChildren,
   AuthenticatedRssRoute: AuthenticatedRssRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
-  AuthenticatedFlowsRoute: AuthenticatedFlowsRoute,
   AuthenticatedSitesRoute: AuthenticatedSitesRoute,
+  AuthenticatedStatisticsRoute: AuthenticatedStatisticsRoute,
+  AuthenticatedTransfersRoute: AuthenticatedTransfersRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

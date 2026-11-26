@@ -7,7 +7,23 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// regression: #3726
+func TestParseLintPaths(t *testing.T) {
+	raw := []byte(`{"Issues": [
+		{"FromLinter": "gocognit", "Pos": {"Filename": "internal\\api\\handlers\\auth.go"}},
+		{"FromLinter": "gocognit", "Pos": {"Filename": "internal/api/handlers/auth.go"}},
+		{"FromLinter": "contextcheck", "Pos": {"Filename": "internal\\api/handlers/auth.go"}}
+	]}`)
+	got, err := parseLint(raw)
+	require.NoError(t, err)
+	assert.Equal(t, counts{
+		"gocognit":     {"internal/api/handlers/auth.go": 2},
+		"contextcheck": {"internal/api/handlers/auth.go": 1},
+	}, got)
+}
 
 func TestCompare(t *testing.T) {
 	allow := counts{"nilerr": {"a.go": 2, "b.go": 1}}
@@ -38,6 +54,15 @@ func TestCompare(t *testing.T) {
 			assert.Equal(t, tt.want, compare(tt.got, allow, tt.base))
 		})
 	}
+}
+
+// A new rule starts with the count of each file. Its entries can only shrink
+// once the base has them.
+func TestCompareNewLinter(t *testing.T) {
+	got := counts{"nilerr": {"a.go": 1}, "forbidigo": {"c.go": 3}}
+	assert.Empty(t, compare(got, got, counts{"nilerr": {"a.go": 1}}))
+	assert.Equal(t, []string{"c.go: the forbidigo entry grew from 3 to 4. The allowlist only shrinks."},
+		compare(counts{"forbidigo": {"c.go": 4}}, counts{"forbidigo": {"c.go": 4}}, counts{"forbidigo": {"c.go": 3}}))
 }
 
 func TestCompareZeroEntry(t *testing.T) {
@@ -78,4 +103,27 @@ func TestHidesGocognit(t *testing.T) {
 	for _, tt := range tests {
 		assert.Equal(t, tt.want, hidesGocognit(tt.comment), tt.comment)
 	}
+}
+
+func TestSuppressionGrowth(t *testing.T) {
+	parse := func(raw string) counts {
+		got, err := parseSuppressions([]byte(raw))
+		require.NoError(t, err)
+		return counts{suppressionsRule: got}
+	}
+	was := parse(`{"src/a.tsx": {"qui/no-comments": {"count": 2}, "no-undef": {"count": 9}}}`)
+	assert.Empty(t, growth(parse(`{"src/a.tsx": {"qui/no-comments": {"count": 1}, "no-undef": {"count": 20}}}`), was))
+	assert.Empty(t, growth(parse(`{"src/b.tsx": {"qui/no-comments": {"count": 1}}, "src/c.tsx": {"qui/no-comments": {"count": 1}}}`), was), "a move keeps the total level")
+	assert.Equal(t, []string{
+		"qui/no-comments: the total grew from 2 to 3. The total only shrinks: a moved comment keeps it level, a new comment does not.",
+	}, growth(parse(`{"src/a.tsx": {"qui/no-comments": {"count": 2}}, "src/b.tsx": {"qui/no-comments": {"count": 1}}}`), was))
+}
+
+func TestGrowthOfGoComments(t *testing.T) {
+	base := counts{commentsLinter: {"a.go": 3, "b.go": 1}, "gocognit": {"a.go": 1}}
+	assert.Empty(t, growth(counts{commentsLinter: {"c.go": 4}, "gocognit": {"a.go": 1}}, base))
+	assert.Equal(t, []string{
+		"comments: the total grew from 4 to 5. The total only shrinks: a moved comment keeps it level, a new comment does not.",
+		"b.go: the gocognit entry grew from 0 to 1. The allowlist only shrinks.",
+	}, growth(counts{commentsLinter: {"a.go": 5}, "gocognit": {"b.go": 1}}, base))
 }

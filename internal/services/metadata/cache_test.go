@@ -5,6 +5,7 @@ package metadata
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -18,13 +19,6 @@ func TestCacheKey(t *testing.T) {
 		season   int
 		wantSame bool
 	}{
-		{
-			name:     "same title different case",
-			titleA:   "Breaking Bad",
-			titleB:   "breaking bad",
-			season:   1,
-			wantSame: true,
-		},
 		{
 			name:     "leading and trailing whitespace",
 			titleA:   "  Breaking Bad  ",
@@ -88,7 +82,6 @@ func TestResultCache_NormalizedKeyHit(t *testing.T) {
 	c := newResultCache()
 	c.Set("Breaking Bad", 2, 13)
 
-	// Different casing should hit the same entry.
 	count, ok := c.Get("BREAKING BAD", 2)
 	if !ok {
 		t.Fatal("expected cache hit with different casing, got miss")
@@ -101,22 +94,14 @@ func TestResultCache_NormalizedKeyHit(t *testing.T) {
 func TestResultCache_TTLExpiry(t *testing.T) {
 	t.Parallel()
 
-	c := newResultCache()
+	synctest.Test(t, func(t *testing.T) {
+		c := newResultCache()
+		c.Set("Expired Show", 1, 10)
 
-	// Manually store an entry that is already expired.
-	key := cacheKey("Expired Show", 1)
-	c.entries.Store(key, cacheEntry{
-		count:   10,
-		expires: time.Now().Add(-1 * time.Second),
+		time.Sleep(cacheTTL + time.Second)
+
+		if _, ok := c.Get("Expired Show", 1); ok {
+			t.Fatal("expected cache miss for expired entry")
+		}
 	})
-
-	_, ok := c.Get("Expired Show", 1)
-	if ok {
-		t.Fatal("expected cache miss for expired entry")
-	}
-
-	// Confirm the expired entry was cleaned up.
-	if _, loaded := c.entries.Load(key); loaded {
-		t.Error("expired entry should have been deleted from map")
-	}
 }

@@ -19,15 +19,18 @@ export interface ParsedTheme {
   };
 }
 
-/**
- * Parse CSS theme file and extract variables and metadata
- */
+export const THEME_NAME_PATTERN = /@name:\s*(.+?)(?:\s*\n|\s*\*)/;
+
+export function findThemeCssProblem(cssContent: string): "missing-root" | "missing-dark" | null {
+  if (!extractCSSVariables(cssContent, ":root")) return "missing-root";
+  if (!extractCSSVariables(cssContent, ".dark")) return "missing-dark";
+  return null;
+}
+
 export function parseThemeCSS(cssContent: string): ParsedTheme | null {
   try {
-    // Extract metadata from CSS comments
     const metadata = extractMetadata(cssContent);
 
-    // Extract CSS variables
     const lightVars = extractCSSVariables(cssContent, ":root");
     const darkVars = extractCSSVariables(cssContent, ".dark");
 
@@ -36,7 +39,6 @@ export function parseThemeCSS(cssContent: string): ParsedTheme | null {
       return null;
     }
 
-    // Parse variations if included
     let variations: string[] | undefined;
     if (metadata.variations) {
       variations = parseVariations(metadata.variations, lightVars, darkVars, metadata.name);
@@ -69,8 +71,7 @@ function extractMetadata(cssContent: string): ThemeMetadata {
     name: "Untitled Theme",
   };
 
-  // Extract individual metadata fields for more flexible parsing
-  const nameMatch = cssContent.match(/@name:\s*(.+?)(?:\s*\n|\s*\*)/);
+  const nameMatch = cssContent.match(THEME_NAME_PATTERN);
   const descMatch = cssContent.match(/@description:\s*(.+?)(?:\s*\n|\s*\*)/);
   const lightOnlyMatch = cssContent.match(/@lightOnly:\s*(true|false)/);
   const variationsMatch = cssContent.match(/@variations:\s*(.+?)(?:\s*\n|\s*\*\/)/);
@@ -99,7 +100,6 @@ function parseVariations(
 ): string[] | undefined {
   const variations = variationsStr.split(",").map(v => v.trim());
 
-  // Check variation variables exist
   for (const variation of variations) {
     const varName = `--variation-${variation}`;
 
@@ -115,27 +115,20 @@ function parseVariations(
   return variations.length > 0 ? variations : undefined;
 }
 
-/**
- * Extract CSS variables from a selector block
- */
 function extractCSSVariables(cssContent: string, selector: string): Record<string, string> | null {
   const variables: Record<string, string> = {};
 
-  // Escape special characters in selector for regex
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  // Match the selector block
   const blockRegex = new RegExp(`${escapedSelector}\\s*{([^}]+)}`, "ms");
   const blockMatch = cssContent.match(blockRegex);
 
   if (!blockMatch) {
-    console.warn(`No ${selector} block found in theme CSS`);
     return null;
   }
 
   const blockContent = blockMatch[1];
 
-  // Extract all CSS variables
   const varRegex = /(--[a-zA-Z0-9-]+):\s*([^;]+);/g;
   let match;
 

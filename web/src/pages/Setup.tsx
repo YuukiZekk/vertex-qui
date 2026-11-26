@@ -42,11 +42,9 @@ export function Setup() {
       return
     }
 
-    // Check if user already exists
     api.checkAuth().then(() => {
       navigate({ to: "/login" })
     }).catch(() => {
-      // No user exists, stay on setup page
     })
   }, [navigate, oidcConfig])
 
@@ -102,6 +100,7 @@ export function Setup() {
                     <Input
                       id={field.name}
                       type="text"
+                      autoComplete="username"
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
@@ -130,6 +129,7 @@ export function Setup() {
                     <Input
                       id={field.name}
                       type="password"
+                      autoComplete="new-password"
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
@@ -159,6 +159,7 @@ export function Setup() {
                     <Input
                       id={field.name}
                       type="password"
+                      autoComplete="new-password"
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}

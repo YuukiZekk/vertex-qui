@@ -5,15 +5,14 @@ package crossseed
 
 import (
 	"context"
+	"errors"
 	"iter"
 	"path"
 	"slices"
 
 	qbt "github.com/autobrr/go-qbittorrent"
 	"github.com/autobrr/rls"
-	"github.com/rs/zerolog/log"
 
-	"github.com/autobrr/qui/internal/models"
 	"github.com/autobrr/qui/internal/qbittorrent"
 	"github.com/autobrr/qui/pkg/stringutils"
 )
@@ -106,63 +105,6 @@ func nameNeedsFiles(release *rls.Release) bool {
 	seasonFolder := release.Title == "" && release.Series > 0
 	seasonlessBatch := release.Type == rls.Movie && release.Series == 0 && release.Year == 0
 	return seasonFolder || seasonlessBatch
-}
-
-// localReads holds the Read releases that readLocalTorrents took from files,
-// keyed by cacheKeyForTorrentFiles.
-type localReads map[string]namedRelease
-
-// read returns the Read release of a local torrent: from its files when
-// readLocalTorrents read them, else from its name.
-func (r localReads) read(m matcher, instanceID int, torrent *qbt.Torrent) namedRelease {
-	if read, ok := r[cacheKeyForTorrentFiles(instanceID, torrent.Hash)]; ok {
-		return read
-	}
-	return m.readName(torrent.Name)
-}
-
-// readLocalTorrents reads the torrents of one instance whose names need their
-// files (nameNeedsFiles), as search reads them. Their file lists load in one
-// batch. A torrent whose files do not load keeps its name read.
-func (s *Service) readLocalTorrents(ctx context.Context, instanceID int, torrents iter.Seq[*qbt.Torrent]) localReads {
-	reads := make(localReads)
-	byHash := make(map[string]*qbt.Torrent)
-	var hashes []string
-	for torrent := range torrents {
-		hash := normalizeHash(torrent.Hash)
-		if _, seen := byHash[hash]; seen || hash == "" || !nameNeedsFiles(s.matcher().readName(torrent.Name).release) {
-			continue
-		}
-		byHash[hash] = torrent
-		hashes = append(hashes, hash)
-	}
-	if len(hashes) == 0 || s.syncManager == nil {
-		return reads
-	}
-	filesByHash, err := s.syncManager.GetTorrentFilesBatch(ctx, instanceID, hashes)
-	if err != nil {
-		log.Debug().Err(err).Int("instanceID", instanceID).Int("hashCount", len(hashes)).
-			Msg("crossseed: some local torrents keep their name read, because their file lists could not be read")
-	}
-	// Load the category mapping rules once for the batch, not once per torrent.
-	var rules []models.CategoryMappingRule
-	if settings, err := s.GetAutomationSettings(ctx); err == nil && settings != nil {
-		rules = settings.CategoryMappingRules
-	}
-	for _, hash := range hashes {
-		if files := filesByHash[hash]; len(files) > 0 {
-			torrent := byHash[hash]
-			reads[cacheKeyForTorrentFiles(instanceID, hash)], _ = s.readRelease(torrent.Name, files, readPolicy{
-				mapContent: func(contentInfo ContentTypeInfo) ContentTypeInfo {
-					if ruleInfo, ok := categoryRuleContentType(rules, torrent.Category); ok {
-						return ruleInfo
-					}
-					return contentInfo
-				},
-			})
-		}
-	}
-	return reads
 }
 
 // viewTorrents yields the torrents of cached views.
@@ -447,4 +389,56 @@ func (s *Service) inferTVSeriesEpisodeFromFiles(torrentRelease *rls.Release, fil
 
 func isYearBearingMovieRelease(release *rls.Release) bool {
 	return release != nil && release.Type == rls.Movie && release.Year > 0
+}
+
+func (s *Service) readCatalogRelease(name string, files qbt.TorrentFiles, family rls.Type) (namedRelease, error) {
+	if family == rls.Unknown || catalogFileFamily(files) != family {
+		return namedRelease{}, errors.New("unproven file content family")
+	}
+	read := s.matcher().readName(name)
+	read.tagOrigin = read.release
+	// rls keeps episode tags private; retain their origins separately from this structural view.
+	derived := rls.Release{Type: family,
+		Artist:     read.release.Artist,
+		Title:      read.release.Title,
+		Subtitle:   read.release.Subtitle,
+		Alt:        read.release.Alt,
+		Platform:   read.release.Platform,
+		Arch:       read.release.Arch,
+		Source:     read.release.Source,
+		Resolution: read.release.Resolution,
+		FrameRate:  read.release.FrameRate,
+		Collection: read.release.Collection,
+		Year:       read.release.Year,
+		Month:      read.release.Month,
+		Day:        read.release.Day,
+		YearEnd:    read.release.YearEnd,
+		Version:    read.release.Version,
+		Disc:       read.release.Disc,
+		Codec:      read.release.Codec,
+		HDR:        read.release.HDR,
+		BitDepth:   read.release.BitDepth,
+		Audio:      read.release.Audio,
+		Channels:   read.release.Channels,
+		Other:      read.release.Other,
+		Cut:        read.release.Cut,
+		Edition:    read.release.Edition,
+		Language:   read.release.Language,
+		Size:       read.release.Size,
+		Region:     read.release.Region,
+		Container:  read.release.Container,
+		Genre:      read.release.Genre,
+		ID:         read.release.ID,
+		Group:      read.release.Group,
+		Meta:       read.release.Meta,
+		Site:       read.release.Site,
+		Sum:        read.release.Sum,
+		Pass:       read.release.Pass,
+		Req:        read.release.Req,
+		Ext:        read.release.Ext,
+	}
+
+	read.release = &derived
+	read.seasonNumeral = 0
+	return read, nil
 }

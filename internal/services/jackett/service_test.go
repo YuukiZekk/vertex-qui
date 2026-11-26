@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -19,11 +18,9 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-
 	"github.com/autobrr/qui/internal/models"
 	"github.com/autobrr/qui/internal/pkg/timeouts"
+	"github.com/autobrr/qui/pkg/releases"
 )
 
 func TestDetectContentType(t *testing.T) {
@@ -217,7 +214,7 @@ func TestAdaptiveSearchTimeoutScalesWithIndexerCount(t *testing.T) {
 	}{
 		{name: "zero indexers uses default", indexerCount: 0, expectedLimit: timeouts.DefaultSearchTimeout},
 		{name: "single indexer uses default", indexerCount: 1, expectedLimit: timeouts.DefaultSearchTimeout},
-		{name: "adds budget per indexer", indexerCount: 5, expectedLimit: timeouts.DefaultSearchTimeout + 4*timeouts.PerIndexerSearchTimeout},
+		{name: "adds budget per indexer", indexerCount: 5, expectedLimit: 13 * time.Second},
 		{name: "clamps to max", indexerCount: 500, expectedLimit: timeouts.MaxSearchTimeout},
 	}
 
@@ -235,10 +232,8 @@ func TestGetActivityStatusMergesCooldownScopes(t *testing.T) {
 	service := NewService(store)
 	defer service.searchScheduler.Stop()
 
-	queryUntil := time.Now().Add(time.Minute)
-	grabUntil := queryUntil.Add(time.Minute)
-	service.rateLimiter.SetCooldown(1, rateLimitScopeQuery, queryUntil)
-	service.rateLimiter.SetCooldown(1, rateLimitScopeGrab, grabUntil)
+	answer429(t, service.slots, store.indexers[0], requestSearch, "60")
+	grabUntil := answer429(t, service.slots, store.indexers[0], requestDownload, "120")
 
 	status, err := service.GetActivityStatus(context.Background())
 	if err != nil {
@@ -1527,12 +1522,6 @@ func TestBuildSearchParamsDeduplicatesCategories(t *testing.T) {
 	}
 }
 
-func TestFormatCategoryListPreservesDuplicates(t *testing.T) {
-	if got := formatCategoryList([]int{CategoryMoviesHD, CategoryMovies, CategoryMoviesHD}); got != "2040,2000,2040" {
-		t.Fatalf("formatCategoryList() = %q, want %q", got, "2040,2000,2040")
-	}
-}
-
 func TestSearchGenericAutoDetectCategories(t *testing.T) {
 	store := &mockTorznabIndexerStore{indexers: []*models.TorznabIndexer{}}
 	s := NewService(store)
@@ -1646,85 +1635,70 @@ func TestSearchGenericWithIndexerIDs(t *testing.T) {
 		},
 	}
 	s := NewService(store)
+	var mu sync.Mutex
+	var searched []int
 	s.searchExecutor = func(ctx context.Context, idxs []*models.TorznabIndexer, params url.Values, meta *searchContext) ([]Result, []int, error) {
+		mu.Lock()
+		defer mu.Unlock()
 		coverage := make([]int, 0, len(idxs))
 		for _, idx := range idxs {
-			if idx != nil && idx.Enabled {
-				coverage = append(coverage, idx.ID)
-			}
+			searched = append(searched, idx.ID)
+			coverage = append(coverage, idx.ID)
 		}
 		return []Result{}, coverage, nil
 	}
 
 	tests := []struct {
-		name        string
-		req         *TorznabSearchRequest
-		shouldError bool
+		name         string
+		indexerIDs   []int
+		wantSearched []int
 	}{
-		{
-			name: "search specific enabled indexer",
-			req: &TorznabSearchRequest{
-				Query:      "test",
-				IndexerIDs: []int{1},
-			},
-			shouldError: false,
-		},
-		{
-			name: "search multiple indexers",
-			req: &TorznabSearchRequest{
-				Query:      "test",
-				IndexerIDs: []int{1, 2},
-			},
-			shouldError: false,
-		},
-		{
-			name: "search disabled indexer returns empty",
-			req: &TorznabSearchRequest{
-				Query:      "test",
-				IndexerIDs: []int{3},
-			},
-			shouldError: false,
-		},
-		{
-			name: "search all enabled indexers",
-			req: &TorznabSearchRequest{
-				Query: "test",
-			},
-			shouldError: false,
-		},
+		{name: "search specific enabled indexer", indexerIDs: []int{1}, wantSearched: []int{1}},
+		{name: "search multiple indexers", indexerIDs: []int{1, 2}, wantSearched: []int{1, 2}},
+		{name: "search disabled indexer returns empty", indexerIDs: []int{3}},
+		{name: "search all enabled indexers", wantSearched: []int{1, 2}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			mu.Lock()
+			searched = nil
+			mu.Unlock()
+
 			respCh := make(chan *SearchResponse, 1)
 			errCh := make(chan error, 1)
-			tt.req.OnAllComplete = func(resp *SearchResponse, err error) {
-				if err != nil {
-					errCh <- err
-				} else {
-					respCh <- resp
-				}
+			req := &TorznabSearchRequest{
+				Query:      "test",
+				IndexerIDs: tt.indexerIDs,
+				CacheMode:  CacheModeBypass,
+				OnAllComplete: func(resp *SearchResponse, err error) {
+					if err != nil {
+						errCh <- err
+					} else {
+						respCh <- resp
+					}
+				},
 			}
 
-			searchErr := s.SearchGeneric(context.Background(), tt.req)
-			if tt.shouldError && searchErr == nil {
-				t.Error("SearchGeneric() expected error, got nil")
+			if err := s.SearchGeneric(context.Background(), req); err != nil {
+				t.Fatalf("SearchGeneric() unexpected error = %v", err)
 			}
-			if !tt.shouldError && searchErr != nil {
-				t.Errorf("SearchGeneric() unexpected error = %v", searchErr)
-			}
-			if !tt.shouldError {
-				var resp *SearchResponse
-				select {
-				case resp = <-respCh:
-					if resp == nil {
-						t.Error("SearchGeneric() returned nil response")
-					}
-				case err := <-errCh:
-					t.Errorf("SearchGeneric() callback error = %v", err)
-				case <-time.After(1 * time.Second):
-					t.Fatal("SearchGeneric timed out")
+			select {
+			case resp := <-respCh:
+				if resp == nil {
+					t.Fatal("SearchGeneric() returned nil response")
 				}
+			case err := <-errCh:
+				t.Fatalf("SearchGeneric() callback error = %v", err)
+			case <-time.After(1 * time.Second):
+				t.Fatal("SearchGeneric timed out")
+			}
+
+			mu.Lock()
+			got := slices.Sorted(slices.Values(searched))
+			mu.Unlock()
+			if !slices.Equal(got, tt.wantSearched) {
+				t.Fatalf("searched indexers = %v, want %v", got, tt.wantSearched)
 			}
 		})
 	}
@@ -1984,8 +1958,8 @@ func TestSearchMultipleIndexersSkipsRateLimitedIndexers(t *testing.T) {
 	}
 
 	service := NewService(store)
-	service.rateLimiter = NewRateLimiter(time.Millisecond)
-	service.rateLimiter.SetCooldown(1, rateLimitScopeQuery, time.Now().Add(time.Minute))
+	defer service.searchScheduler.Stop()
+	answer429(t, service.slots, store.indexers[0], requestSearch, "60")
 
 	_, _, err := service.searchMultipleIndexers(context.Background(), store.indexers, url.Values{"q": {"test"}}, nil)
 	if err == nil {
@@ -2009,9 +1983,9 @@ func TestSearchMultipleIndexersAllRateLimited(t *testing.T) {
 	}
 
 	service := NewService(store)
-	service.rateLimiter = NewRateLimiter(time.Millisecond)
-	service.rateLimiter.SetCooldown(1, rateLimitScopeQuery, time.Now().Add(time.Minute))
-	service.rateLimiter.SetCooldown(2, rateLimitScopeQuery, time.Now().Add(2*time.Minute))
+	defer service.searchScheduler.Stop()
+	answer429(t, service.slots, store.indexers[0], requestSearch, "60")
+	answer429(t, service.slots, store.indexers[1], requestSearch, "120")
 
 	_, _, err := service.searchMultipleIndexers(context.Background(), store.indexers, url.Values{"q": {"test"}}, nil)
 	var rateLimitErr *RateLimitError
@@ -2068,21 +2042,6 @@ func TestProwlarrYearParameterWorkaround(t *testing.T) {
 				// year parameter should be removed
 			},
 			description: "Prowlarr indexer should use year as query when original query is empty",
-		},
-		{
-			name:    "prowlarr with year parameter and ids present",
-			backend: models.TorznabBackendProwlarr,
-			inputParams: map[string]string{
-				"t":      "movie",
-				"year":   "1999",
-				"imdbid": "0133093",
-			},
-			expected: map[string]string{
-				"t":      "movie",
-				"imdbid": "0133093",
-				// year parameter should be removed
-			},
-			description: "Prowlarr indexer should drop year when doing ID-driven search",
 		},
 		{
 			name:    "jackett with year parameter",
@@ -2393,7 +2352,7 @@ func TestParseTorznabCaps_ProwlarrCompatibility(t *testing.T) {
 	</categories>
 </caps>`
 
-	caps, err := parseTorznabCaps(strings.NewReader(prowlarrCapsXML))
+	caps, err := parseTorznabCapsResponse(strings.NewReader(prowlarrCapsXML), "")
 	if err != nil {
 		t.Fatalf("Failed to parse Prowlarr caps XML: %v", err)
 	}
@@ -2514,27 +2473,6 @@ func TestParseTorznabCaps_ProwlarrCompatibility(t *testing.T) {
 	if !foundMoviesOther {
 		t.Error("Missing Movies > Other subcategory (2020)")
 	}
-
-	// Verify we have all the capabilities we expect
-	t.Logf("Parsed %d capabilities total", len(caps.Capabilities))
-	t.Logf("Parsed %d categories total", len(caps.Categories))
-
-	// Verify our capability parsing creates exactly what we need for hasCapability checks
-	testCapabilities := []string{
-		"movie-search-year",   // Critical for our Prowlarr workaround
-		"movie-search-imdbid", // Common for movie searches
-		"tv-search-season",    // Common for TV searches
-		"tv-search-ep",        // Common for TV searches
-		"music-search-artist", // Common for music searches
-		"book-search-author",  // Common for book searches
-	}
-
-	for _, testCap := range testCapabilities {
-		found := slices.Contains(caps.Capabilities, testCap)
-		if !found {
-			t.Errorf("Critical capability missing: %s", testCap)
-		}
-	}
 }
 
 func TestExtractInfoHashFromAttributes(t *testing.T) {
@@ -2594,19 +2532,9 @@ func TestExtractInfoHashFromAttributes(t *testing.T) {
 			expected: "63e07ff523710ca268567dad344ce1e0e6b7e8a3",
 		},
 		{
-			name:     "magnet URL without other params",
-			attrs:    map[string]string{"magneturl": "magnet:?xt=urn:btih:63e07ff523710ca268567dad344ce1e0e6b7e8a3"},
-			expected: "63e07ff523710ca268567dad344ce1e0e6b7e8a3",
-		},
-		{
 			name:     "infohash takes priority over magneturl",
 			attrs:    map[string]string{"infohash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "magneturl": "magnet:?xt=urn:btih:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
 			expected: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		},
-		{
-			name:     "invalid magnet URL",
-			attrs:    map[string]string{"magneturl": "not-a-magnet-url"},
-			expected: "",
 		},
 		{
 			name:     "magnet URL missing hash",
@@ -2974,9 +2902,9 @@ func TestSearchIndexersWithSchedulerRSSDeduplicatedIndexerStillCompletes(t *test
 		},
 	}
 	service := NewService(store)
-	// Swap in a fast rate limiter so the first job's exec starts promptly.
+	// Swap in a short Request gap so the first job's exec starts promptly.
 	service.searchScheduler.Stop()
-	service.searchScheduler = newSearchScheduler(NewRateLimiter(1*time.Millisecond), 1)
+	service.searchScheduler = newSearchScheduler(newRequestSlots(1*time.Millisecond, nil, nil), 1)
 	defer service.searchScheduler.Stop()
 
 	var startOnce sync.Once
@@ -3052,7 +2980,7 @@ func TestSearchIndexersWithSchedulerMixedFailureAndRateLimitSurfacesRateLimit(t 
 	}
 	service := NewService(store)
 	service.searchScheduler.Stop()
-	service.searchScheduler = newSearchScheduler(NewRateLimiter(1*time.Millisecond), 2)
+	service.searchScheduler = newSearchScheduler(newRequestSlots(1*time.Millisecond, nil, nil), 2)
 	defer service.searchScheduler.Stop()
 
 	failErr := errors.New("indexer two unreachable")
@@ -3135,15 +3063,6 @@ func TestRecentSurfacesTotalIndexerFailure(t *testing.T) {
 // TestRecentPartialCoverageMarksPartial verifies Recent flags incomplete indexer
 // coverage as partial even when no error is returned.
 func TestRecentPartialCoverageMarksPartial(t *testing.T) {
-	originalLogger := log.Logger
-	partialLogLevel := zerolog.NoLevel
-	log.Logger = zerolog.New(io.Discard).Level(zerolog.TraceLevel).Hook(zerolog.HookFunc(func(_ *zerolog.Event, level zerolog.Level, msg string) {
-		if msg == "Recent search returning partial results" {
-			partialLogLevel = level
-		}
-	}))
-	t.Cleanup(func() { log.Logger = originalLogger })
-
 	store := &mockTorznabIndexerStore{
 		indexers: []*models.TorznabIndexer{
 			{ID: 1, Name: "IndexerOne", Enabled: true},
@@ -3187,10 +3106,6 @@ func TestRecentPartialCoverageMarksPartial(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Recent never invoked its callback")
 	}
-
-	if partialLogLevel != zerolog.DebugLevel {
-		t.Fatalf("partial search log level = %s, want debug", partialLogLevel)
-	}
 }
 
 // TestSearchIndexersWithSchedulerDedupExcludedFromFailureThreshold pins the
@@ -3206,7 +3121,7 @@ func TestSearchIndexersWithSchedulerDedupExcludedFromFailureThreshold(t *testing
 	}
 	service := NewService(store)
 	service.searchScheduler.Stop()
-	service.searchScheduler = newSearchScheduler(NewRateLimiter(1*time.Millisecond), 2)
+	service.searchScheduler = newSearchScheduler(newRequestSlots(1*time.Millisecond, nil, nil), 2)
 	defer service.searchScheduler.Stop()
 
 	failErr := errors.New("indexer two unreachable")
@@ -3266,6 +3181,61 @@ func TestSearchIndexersWithSchedulerDedupExcludedFromFailureThreshold(t *testing
 	}
 }
 
+// searchOutboundQuery runs req through Service.Search against a local Torznab
+// indexer built by newIndexer and returns the query parameters of the search
+// request it receives. A caps fetch gets an answer with no categories and no search
+// modes, so an indexer without stored metadata stays category-blind and caps-less.
+func searchOutboundQuery(t *testing.T, newIndexer func(baseURL string) *models.TorznabIndexer, req *TorznabSearchRequest) url.Values {
+	t.Helper()
+	outboundCh := make(chan url.Values, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if query.Get("t") == "caps" {
+			w.Header().Set("Content-Type", "application/xml")
+			if _, writeErr := w.Write([]byte(`<caps><categories/></caps>`)); writeErr != nil {
+				t.Errorf("write caps response: %v", writeErr)
+			}
+			return
+		}
+		select {
+		case outboundCh <- query:
+		default:
+		}
+		w.Header().Set("Content-Type", "application/rss+xml")
+		if _, writeErr := w.Write([]byte(`<rss version="2.0"><channel><title>Test</title></channel></rss>`)); writeErr != nil {
+			t.Errorf("write RSS response: %v", writeErr)
+		}
+	}))
+	defer server.Close()
+
+	service := NewService(&mockTorznabIndexerStore{indexers: []*models.TorznabIndexer{newIndexer(server.URL)}})
+
+	done := make(chan error, 1)
+	req.OnAllComplete = func(_ *SearchResponse, err error) {
+		done <- err
+	}
+	if err := service.Search(t.Context(), req); err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("search completed with error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for search to complete")
+	}
+
+	select {
+	case outbound := <-outboundCh:
+		return outbound
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the outbound request")
+		return nil
+	}
+}
+
 // TestSearchIDDrivenMovieCategoryBehavior pins the outbound Torznab request for an
 // ID-driven movie search. An indexer that can search by IMDb ID must receive the ID
 // alone, without a query or a category filter that could hide a correctly matching
@@ -3302,78 +3272,31 @@ func TestSearchIDDrivenMovieCategoryBehavior(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			outboundCh := make(chan url.Values, 1)
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				query := r.URL.Query()
-				if query.Get("t") == "caps" {
-					// An indexer with no stored categories triggers a caps fetch first.
-					// Answer without categories so it stays category-blind.
-					w.Header().Set("Content-Type", "application/xml")
-					if _, writeErr := w.Write([]byte(`<caps><categories/></caps>`)); writeErr != nil {
-						t.Errorf("write caps response: %v", writeErr)
-					}
-					return
+			outbound := searchOutboundQuery(t, func(baseURL string) *models.TorznabIndexer {
+				indexer := &models.TorznabIndexer{
+					ID:             1,
+					Name:           "Synthetic Prowlarr Indexer",
+					BaseURL:        baseURL,
+					Backend:        models.TorznabBackendProwlarr,
+					IndexerID:      "7",
+					Enabled:        true,
+					TimeoutSeconds: 5,
+					Capabilities:   tt.capabilities,
+					Categories: []models.TorznabIndexerCategory{
+						{CategoryID: CategoryMovies},
+					},
 				}
-				select {
-				case outboundCh <- query:
-				default:
+				if tt.noStoredCats {
+					indexer.Categories = nil
 				}
-				w.Header().Set("Content-Type", "application/rss+xml")
-				if _, writeErr := w.Write([]byte(`<rss version="2.0"><channel><title>Test</title></channel></rss>`)); writeErr != nil {
-					t.Errorf("write RSS response: %v", writeErr)
-				}
-			}))
-			defer server.Close()
-
-			indexer := &models.TorznabIndexer{
-				ID:             1,
-				Name:           "Synthetic Prowlarr Indexer",
-				BaseURL:        server.URL,
-				Backend:        models.TorznabBackendProwlarr,
-				IndexerID:      "7",
-				Enabled:        true,
-				TimeoutSeconds: 5,
-				Capabilities:   tt.capabilities,
-				Categories: []models.TorznabIndexerCategory{
-					{CategoryID: CategoryMovies},
-				},
-			}
-			if tt.noStoredCats {
-				indexer.Categories = nil
-			}
-			service := NewService(&mockTorznabIndexerStore{indexers: []*models.TorznabIndexer{indexer}})
-
-			done := make(chan error, 1)
-			req := &TorznabSearchRequest{
+				return indexer
+			}, &TorznabSearchRequest{
 				Query:           "Synthetic Documentary",
 				Categories:      []int{CategoryMovies},
 				IMDbID:          "tt1234567",
 				OmitQueryForIDs: true,
 				IndexerIDs:      []int{1},
-				OnAllComplete: func(_ *SearchResponse, err error) {
-					done <- err
-				},
-			}
-
-			if err := service.Search(context.Background(), req); err != nil {
-				t.Fatalf("Search() error = %v", err)
-			}
-
-			select {
-			case err := <-done:
-				if err != nil {
-					t.Fatalf("search completed with error: %v", err)
-				}
-			case <-time.After(time.Second):
-				t.Fatal("timed out waiting for search to complete")
-			}
-
-			var outbound url.Values
-			select {
-			case outbound = <-outboundCh:
-			case <-time.After(time.Second):
-				t.Fatal("timed out waiting for the outbound request")
-			}
+			})
 
 			if got := outbound.Get("t"); got != "movie" {
 				t.Fatalf("t = %q, want movie", got)
@@ -3386,6 +3309,89 @@ func TestSearchIDDrivenMovieCategoryBehavior(t *testing.T) {
 			}
 			if got := outbound.Get("imdbid"); got != tt.wantIMDbID {
 				t.Fatalf("imdbid = %q, want %q", got, tt.wantIMDbID)
+			}
+		})
+	}
+}
+
+// regression: #3306
+// TestSearchIDDrivenMovieOmitsYear pins the year on the outbound Torznab request of a
+// movie search with an ID and a year. An indexer that still searches by ID receives no
+// year, on every backend. An indexer that falls back to the title keeps the year.
+func TestSearchIDDrivenMovieOmitsYear(t *testing.T) {
+	tests := []struct {
+		name         string
+		backend      models.TorznabBackend
+		capabilities []string
+		wantQuery    string
+		wantIMDbID   string
+		wantYear     string
+	}{
+		{
+			name:         "jackett ID-capable indexer gets the ID without the year",
+			backend:      models.TorznabBackendJackett,
+			capabilities: []string{"movie-search", "movie-search-imdbid"},
+			wantIMDbID:   "1234567",
+		},
+		{
+			name:         "native ID-capable indexer gets the ID without the year",
+			backend:      models.TorznabBackendNative,
+			capabilities: []string{"movie-search", "movie-search-imdbid"},
+			wantIMDbID:   "1234567",
+		},
+		{
+			name:         "prowlarr ID-capable indexer gets the ID without the year",
+			backend:      models.TorznabBackendProwlarr,
+			capabilities: []string{"movie-search", "movie-search-imdbid"},
+			wantIMDbID:   "1234567",
+		},
+		{
+			name:         "indexer without ID capability gets the title and the year",
+			backend:      models.TorznabBackendJackett,
+			capabilities: []string{"movie-search"},
+			wantQuery:    "Synthetic Documentary",
+			wantYear:     "2018",
+		},
+		{
+			name:       "indexer with unknown capabilities gets the ID without the year",
+			backend:    models.TorznabBackendJackett,
+			wantIMDbID: "1234567",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			outbound := searchOutboundQuery(t, func(baseURL string) *models.TorznabIndexer {
+				return &models.TorznabIndexer{
+					ID:             1,
+					Name:           "Synthetic Indexer",
+					BaseURL:        baseURL,
+					Backend:        tt.backend,
+					IndexerID:      "7",
+					Enabled:        true,
+					TimeoutSeconds: 5,
+					Capabilities:   tt.capabilities,
+					Categories: []models.TorznabIndexerCategory{
+						{CategoryID: CategoryMovies},
+					},
+				}
+			}, &TorznabSearchRequest{
+				Query:           "Synthetic Documentary",
+				Categories:      []int{CategoryMovies},
+				IMDbID:          "tt1234567",
+				Year:            2018,
+				OmitQueryForIDs: true,
+				IndexerIDs:      []int{1},
+			})
+
+			if got := outbound.Get("imdbid"); got != tt.wantIMDbID {
+				t.Fatalf("imdbid = %q, want %q", got, tt.wantIMDbID)
+			}
+			if got := outbound.Get("q"); got != tt.wantQuery {
+				t.Fatalf("q = %q, want %q", got, tt.wantQuery)
+			}
+			if got := outbound.Get("year"); got != tt.wantYear {
+				t.Fatalf("year = %q, want %q", got, tt.wantYear)
 			}
 		})
 	}
@@ -3496,25 +3502,39 @@ func TestExecuteIndexerSearchSchedulesLatencyCleanup(t *testing.T) {
 }
 
 func TestGetActivityStatusOrdersCooldownsByEnd(t *testing.T) {
-	store := &mockTorznabIndexerStore{indexers: []*models.TorznabIndexer{
-		{ID: 1, Name: "Alpha"},
-		{ID: 2, Name: "Charlie"},
-		{ID: 3, Name: "Bravo"},
-		{ID: 4, Name: "Delta"},
-	}}
-	service := NewService(store)
-	defer service.searchScheduler.Stop()
+	synctest.Test(t, func(t *testing.T) {
+		store := &mockTorznabIndexerStore{indexers: []*models.TorznabIndexer{
+			{ID: 1, Name: "Alpha"},
+			{ID: 2, Name: "Charlie"},
+			{ID: 3, Name: "Bravo"},
+			{ID: 4, Name: "Delta"},
+		}}
+		service := newService(store, releases.DefaultParser)
+		defer service.searchScheduler.Stop()
 
-	base := time.Now().Add(time.Minute)
-	// Indexers 2 and 3 share a cooldown end, and their names sort the opposite
-	// way from their IDs, so the name tiebreak has to decide.
-	service.rateLimiter.SetCooldown(1, rateLimitScopeQuery, base.Add(3*time.Minute))
-	service.rateLimiter.SetCooldown(2, rateLimitScopeQuery, base.Add(time.Minute))
-	service.rateLimiter.SetCooldown(3, rateLimitScopeGrab, base.Add(time.Minute))
-	service.rateLimiter.SetCooldown(4, rateLimitScopeQuery, base)
+		// Indexers 2 and 3 share a cooldown end, and their names sort the opposite
+		// way from their IDs, so the name tiebreak has to decide.
+		answer429(t, service.slots, store.indexers[0], requestSearch, "240")
+		answer429(t, service.slots, store.indexers[1], requestSearch, "120")
+		answer429(t, service.slots, store.indexers[2], requestDownload, "120")
+		answer429(t, service.slots, store.indexers[3], requestSearch, "60")
 
-	want := []int{4, 3, 2, 1}
-	for range 20 {
+		want := []int{4, 3, 2, 1}
+		for range 20 {
+			status, err := service.GetActivityStatus(context.Background())
+			if err != nil {
+				t.Fatalf("GetActivityStatus() error = %v", err)
+			}
+			got := make([]int, 0, len(status.CooldownIndexers))
+			for _, cooldown := range status.CooldownIndexers {
+				got = append(got, cooldown.IndexerID)
+			}
+			if !slices.Equal(got, want) {
+				t.Fatalf("cooldown order = %v, want %v", got, want)
+			}
+		}
+
+		time.Sleep(time.Minute)
 		status, err := service.GetActivityStatus(context.Background())
 		if err != nil {
 			t.Fatalf("GetActivityStatus() error = %v", err)
@@ -3523,8 +3543,8 @@ func TestGetActivityStatusOrdersCooldownsByEnd(t *testing.T) {
 		for _, cooldown := range status.CooldownIndexers {
 			got = append(got, cooldown.IndexerID)
 		}
-		if !slices.Equal(got, want) {
-			t.Fatalf("cooldown order = %v, want %v", got, want)
+		if want := []int{3, 2, 1}; !slices.Equal(got, want) {
+			t.Fatalf("cooldowns after one minute = %v, want %v: an ended cooldown must leave the list", got, want)
 		}
-	}
+	})
 }

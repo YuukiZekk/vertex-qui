@@ -9,18 +9,9 @@ import (
 	"syscall"
 )
 
-// Sentinel errors returned by Backend implementations.
 var (
-	// ErrNoFilesystemAccess is returned by the NoopBackend for instances that
-	// have no filesystem access configured (neither local nor remote).
 	ErrNoFilesystemAccess = errors.New("filesystem access is not configured for this instance")
 
-	// ErrNotLocal is returned by Pool.LocalBackend for an instance that no
-	// longer has local filesystem access.
-	ErrNotLocal = errors.New("instance does not have local filesystem access")
-
-	// ErrNotCapable is returned by Pool.Require for an instance whose
-	// filesystem mode does not grant the capability asked for.
 	ErrNotCapable = errors.New("instance filesystem mode does not grant this capability")
 
 	// ErrRemoteBackendNotWired is returned by a Pool built without a remote

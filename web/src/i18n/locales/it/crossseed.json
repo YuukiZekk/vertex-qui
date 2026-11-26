@@ -120,18 +120,6 @@
     "skipIndividualEpisodesAutomationOff": "L'assemblaggio automatico dei pacchetti stagionali è disattivato. Questa esecuzione non cerca pacchetti stagionali.",
     "maxAddedAgeLabel": "Età massima del torrent (giorni)",
     "maxAddedAgeDescription": "Salta i torrent aggiunti più di questo numero di giorni fa. 0 disattiva il limite. Gli indexer che non hanno mai cercato un torrent vengono sempre inclusi.",
-    "categories": "Categorie",
-    "tags": "Tag",
-    "allCategoriesAll": "Tutte le categorie (lascia vuoto per tutte)",
-    "allTagsAll": "Tutti i tag (lascia vuoto per tutti)",
-    "selectInstanceToLoadCategories": "Seleziona un'istanza per caricare le categorie",
-    "selectInstanceToLoadTags": "Seleziona un'istanza per caricare i tag",
-    "categoriesLoadAfterInstance": "Le categorie si caricano dopo aver selezionato un'istanza; puoi comunque digitare il nome di una categoria.",
-    "allCategoriesIncluded": "Tutte le categorie verranno incluse nella scansione.",
-    "selectedCategoriesScanned": "Verranno scansionate solo {{count}} categorie selezionate.",
-    "tagsLoadAfterInstance": "I tag si caricano dopo aver selezionato un'istanza; puoi comunque digitare un tag.",
-    "allTagsIncluded": "Tutti i tag verranno inclusi nella scansione.",
-    "selectedTagsScanned": "Verranno scansionati solo {{count}} tag selezionati.",
     "sourceInstance": "Istanza di origine",
     "selectAnInstance": "Seleziona un'istanza",
     "addInstanceToSearch": "Aggiungi un'istanza per cercare i torrent che già distribuisci.",
@@ -196,6 +184,50 @@
     "cancelDialog": {
       "title": "Annullare la scansione della libreria?",
       "description": "Questo interrompe la scansione corrente della libreria. I cross-seed già aggiunti restano, ma non vengono cercati altri torrent."
+    },
+    "gazelleSummary": {
+      "line": "RED/OPS: {{sites}}",
+      "site": "{{name}}: {{asked}} interrogati, {{matched}} corrispondenze, {{failed}} non riusciti",
+      "siteWithNotAsked": "{{counts}}, {{notAsked}} non interrogati ({{reasons}})",
+      "reasonCount": "{{count}} {{reason}}",
+      "reasons": {
+        "disabled": "disattivato",
+        "noApiKey": "nessuna chiave API",
+        "cooldown": "cercato di recente",
+        "sourceSite": "dal sito",
+        "alreadySeeded": "già condiviso",
+        "notMusic": "non è musica",
+        "other": "altro"
+      }
+    },
+    "schedule": {
+      "enableLabel": "Esegui secondo una pianificazione",
+      "enableHelp": "qui avvia un'esecuzione pianificata ogni poche ore con le impostazioni salvate di questa scheda. Un'esecuzione pianificata cerca solo i torrent aggiunti di recente, dal più nuovo, e si ferma al limite di ricerche. Un indexer che ha fallito resta da cercare, così la prossima esecuzione pianificata lo interroga di nuovo. \"Esegui la pianificazione ora\" avvia subito un'esecuzione pianificata e fa ripartire l'orologio.",
+      "intervalLabel": "Esegui ogni (ore)",
+      "intervalHelp": "Il tempo dall'avvio di un'esecuzione pianificata all'avvio della successiva. qui conserva questo tempo anche dopo un riavvio.",
+      "maxSearchesLabel": "Ricerche max. per esecuzione",
+      "maxSearchesHelp": "Un'esecuzione pianificata si ferma dopo che questo numero di torrent ha inviato una ricerca. Un torrent che l'attesa o i filtri saltano non conta. I torrent rimasti aspettano la prossima esecuzione.",
+      "maxAgeLabel": "Solo torrent aggiunti negli ultimi (giorni)",
+      "maxAgeHelp": "Un'esecuzione pianificata salta ogni torrent aggiunto più di questo numero di giorni fa, anche per un indexer che non l'ha mai cercato. \"Avvia esecuzione\" non usa questo limite.",
+      "runNow": "Esegui la pianificazione ora",
+      "runStarted": "Esecuzione pianificata avviata",
+      "runAlreadyActive": "Una scansione della libreria è già in corso.",
+      "nextRun": "Prossima esecuzione pianificata: {{time}}",
+      "dueNow": "Esecuzione pianificata da avviare ora",
+      "dueAfterCurrentRun": "L'esecuzione pianificata parte dopo quella in corso",
+      "scheduledRunActive": "È in corso un'esecuzione pianificata."
+    },
+    "runKind": {
+      "scheduled": "Pianificata",
+      "manual": "Manuale"
+    },
+    "stoppedAtLimit_one": "Fermata al limite di {{limit}} ricerche. {{count}} torrent aspetta la prossima esecuzione.",
+    "stoppedAtLimit_other": "Fermata al limite di {{limit}} ricerche. {{count}} torrent aspettano la prossima esecuzione.",
+    "runFilters": {
+      "include": "Includi: {{filters}}",
+      "exclude": "Escludi: {{filters}}",
+      "categories": "categorie {{list}}",
+      "tags": "tag {{list}}"
     }
   },
   "rules": {
@@ -204,7 +236,7 @@
     "hardlinkDescription": "Crea alberi di file in hardlink o reflink (copy-on-write) per i cross-seed. Ogni istanza può essere configurata in modo indipendente. La directory di base deve trovarsi sullo stesso filesystem dei percorsi di download dell'istanza.",
     "reflinkNote": " La modalità Reflink consente un cross-seeding sicuro dei torrent con file aggiuntivi/mancanti. Quando sono presenti file aggiuntivi, qui avvia una riverifica; se al di sotto della soglia, il torrent resta in pausa per la revisione manuale.",
     "crossSeedMode": "Modalità cross-seed",
-    "enableLocalFilesystem": "Abilita \"Accesso al filesystem locale\" nelle Impostazioni dell'istanza per usare le modalità hardlink o reflink.",
+    "enableLocalFilesystem": "La modalità hardlink richiede l'accesso in scrittura al filesystem: abilita \"Accesso al filesystem locale\" o configura l'accesso SSH nelle impostazioni dell'istanza. La modalità reflink richiede \"Accesso al filesystem locale\".",
     "regular": "Normale",
     "regularDescription": "Riutilizza i file esistenti sul posto. Veloce, nessuno spazio su disco aggiuntivo.",
     "hardlink": "Hardlink",
@@ -221,7 +253,7 @@
     "fallbackToRegular": "Ripiega sulla modalità normale in caso di errore",
     "fallbackDescription": "Se {{mode}} fallisce (es. filesystem diversi), ripiega sulla modalità normale utilizzando i file esistenti.",
     "saveChanges": "Salva le modifiche",
-    "noLocalAccess": "Nessun accesso locale",
+    "noLocalAccess": "Nessun accesso in scrittura al filesystem",
     "seasonPack": {
       "title": "Pacchetti stagionali",
       "description": "Quando autobrr preleva un pacchetto stagionale, qui verifica se hai già abbastanza dati locali per iniettarlo, poi lascia che qBittorrent scarichi quanto ancora manca.",
@@ -422,7 +454,7 @@
     "settingsSaved": "Impostazioni salvate",
     "failedToSaveSettings": "Salvataggio delle impostazioni non riuscito",
     "cannotEnableMode": "Impossibile abilitare la modalità {{mode}}",
-    "noLocalFilesystemAccess": "L'istanza \"{{name}}\" non ha l'accesso al filesystem locale abilitato.",
+    "noLocalFilesystemAccess": "L'istanza \"{{name}}\" non può usare questa modalità. La modalità hardlink richiede l'accesso in scrittura al filesystem, locale o via SSH; la modalità reflink richiede \"Accesso al filesystem locale\".",
     "baseDirRequired": "È necessario impostare prima la directory di base.",
     "unknownError": "Errore sconosciuto",
     "noIndexersConfigured": "Nessun indexer Torznab configurato",
@@ -472,6 +504,7 @@
       "applyFailed": "{{completedPrefix}}{{failed}} non riusciti - controlla i risultati per i dettagli",
       "applyCompletedUnavailable": "Richiesta di cross-seed completata (dettagli non disponibili)",
       "applyNoChanges": "Nessun cross-seed è stato aggiunto",
+      "applyAlreadyInClient": "Già nel client",
       "applyCompletedPart": ", {{count}} completati",
       "applyCompletedPrefix": "{{count}} completati, "
     }
@@ -479,7 +512,8 @@
   "validation": {
     "minInterval": "Deve essere almeno {{min}} minuti",
     "minIntervalSeconds": "Deve essere almeno {{min}} secondi",
-    "minCooldown": "Deve essere almeno {{min}} minuti"
+    "minCooldown": "Deve essere almeno {{min}} minuti",
+    "atLeast": "Deve essere almeno {{min}}"
   },
   "blocklist": {
     "title": "Blocklist Cross-Seed",
@@ -527,7 +561,7 @@
     "settings": "Impostazioni",
     "enabled": "Abilitato",
     "disabled": "Disabilitato",
-    "noLocalAccessWarning": "Nessuna istanza qBittorrent ha l'accesso al filesystem locale abilitato. Abilitalo nelle impostazioni dell'istanza per usare lo Scanner di directory.",
+    "noLocalAccessWarning": "Nessuna istanza qBittorrent ha accesso al filesystem. Abilita \"Accesso al filesystem locale\" o configura l'accesso SSH nelle impostazioni dell'istanza per usare lo Scanner di directory.",
     "scanDirectories": "Directory da analizzare",
     "scanDirectoriesDescription": "Configura le directory da analizzare per individuare contenuti idonei al cross-seed.",
     "addDirectory": "Aggiungi directory",
@@ -635,7 +669,7 @@
       "defaultCategory": "Categoria predefinita",
       "defaultCategoryHelp": "Categoria per i torrent iniettati quando la directory di scansione non la sovrascrive.",
       "tags": "Tag",
-      "noLocalInstances": "Nessuna istanza qBittorrent con accesso locale",
+      "noLocalInstances": "Nessuna istanza qBittorrent con accesso al filesystem",
       "typeToAddCategory": "Digita per aggiungere una categoria",
       "noCategory": "Nessuna categoria",
       "typeToAddTags": "Digita per aggiungere tag",
@@ -656,6 +690,7 @@
       "enabledLabel": "Abilitato",
       "instanceLabel": "Istanza qBittorrent di destinazione",
       "selectInstance": "Seleziona un'istanza",
+      "remoteNoIdentityNote": "L'applicazione non può sapere quali file sono già in seeding su questa istanza remota, quindi li cerca una volta ciascuno.",
       "intervalLabel": "Intervallo di scansione (minuti)",
       "intervalHelp": "Minimo: 60 minuti (1 ora). Predefinito: 1440 minuti (24 ore).",
       "skipIndividualEpisodesLabel": "Salta episodi singoli",
@@ -670,7 +705,7 @@
       "typeToAddTags": "Digita per aggiungere tag",
       "tagsLoadError": "Impossibile caricare i tag da qBittorrent. Puoi comunque digitare valori personalizzati.",
       "regularModeTitle": "La modalità normale è abilitata per questa istanza",
-      "regularModeHelp": "Seleziona <hardlink>Hardlink</hardlink> o <reflink>Reflink</reflink> in Cross-Seed > Dopo l'iniezione > Modalità Hardlink / Reflink per evitare questo rischio. Prima abilita \"Accesso al filesystem locale\" nelle Impostazioni dell'istanza.",
+      "regularModeHelp": "Seleziona <hardlink>hardlink</hardlink> o <reflink>reflink</reflink> in Cross-Seed > Dopo l'iniezione > Modalità Hardlink / Reflink per evitare questo rischio. La modalità hardlink richiede l'accesso in scrittura al filesystem: abilita \"Accesso al filesystem locale\" o configura l'accesso SSH nelle impostazioni dell'istanza. La modalità reflink richiede \"Accesso al filesystem locale\".",
       "regularModeAcknowledge": "Comprendo i rischi dell'uso della modalità normale con le directory multimediali",
       "cancel": "Annulla",
       "addButton": "Aggiungi directory",

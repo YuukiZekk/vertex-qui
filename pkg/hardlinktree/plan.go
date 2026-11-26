@@ -1,47 +1,42 @@
 // Copyright (c) 2025-2026, s0up and the autobrr contributors.
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Package hardlinktree provides utilities for creating hardlink trees
-// that mirror torrent file layouts for cross-seeding.
 package hardlinktree
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/autobrr/qui/pkg/pathutil"
 )
 
-// TorrentFile represents a file in a torrent.
 type TorrentFile struct {
-	Path string // Relative path within the torrent (e.g., "Folder/file.mkv")
-	Size int64  // File size in bytes
+	Path string
+	Size int64
 }
 
-// ExistingFile represents a file that already exists on disk.
 type ExistingFile struct {
-	AbsPath string // Absolute path on disk
-	RelPath string // Relative path within the torrent structure
-	Size    int64  // File size in bytes
+	AbsPath string
+	RelPath string
+	Size    int64
 }
 
-// FilePlan describes a single hardlink to create.
 type FilePlan struct {
-	SourcePath string // Absolute path to existing file on disk
-	TargetPath string // Absolute path where hardlink should be created
+	SourcePath string
+	TargetPath string
 }
 
-// TreePlan describes the complete hardlink tree to create.
 type TreePlan struct {
-	RootDir string     // Root directory for the hardlink tree
-	Files   []FilePlan // Files to hardlink
+	RootDir string
+	Files   []FilePlan
 }
 
-// LinkPlanErrorKind identifies a file-matching failure when building a plan.
 type LinkPlanErrorKind string
 
 const (
@@ -50,7 +45,6 @@ const (
 	LinkPlanErrorCouldNotMatch   LinkPlanErrorKind = "could_not_match"
 )
 
-// LinkPlanError describes a file-specific plan-building failure.
 type LinkPlanError struct {
 	Kind LinkPlanErrorKind
 	File string
@@ -83,7 +77,6 @@ var (
 	ErrNoAvailableFile = &LinkPlanError{Kind: LinkPlanErrorNoAvailableFile}
 	ErrCouldNotMatch   = &LinkPlanError{Kind: LinkPlanErrorCouldNotMatch}
 
-	// ErrUnstorableName marks a path the destination dialect cannot store as a file name.
 	ErrUnstorableName = errors.New("destination cannot store torrent path")
 )
 
@@ -96,13 +89,12 @@ type PathDialect interface {
 	Separator() string
 }
 
-// ContentLayout describes how qBittorrent organizes torrent content.
 type ContentLayout string
 
 const (
-	LayoutOriginal    ContentLayout = "Original"    // Files placed as-is from torrent
-	LayoutSubfolder   ContentLayout = "Subfolder"   // All files wrapped in a folder named after torrent
-	LayoutNoSubfolder ContentLayout = "NoSubfolder" // Top-level folder stripped from multi-file torrent
+	LayoutOriginal    ContentLayout = "Original"
+	LayoutSubfolder   ContentLayout = "Subfolder"
+	LayoutNoSubfolder ContentLayout = "NoSubfolder"
 )
 
 // BuildPlan creates a hardlink tree plan that maps existing files to the incoming torrent's layout.
@@ -134,14 +126,47 @@ func BuildPlan(
 		return nil, errors.New("destination directory is required")
 	}
 
-	// Validate candidate file paths for path traversal attacks
 	for _, cf := range candidateFiles {
 		if err := validateCandidatePath(d, cf.Path); err != nil {
 			return nil, err
 		}
 	}
 
-	// Build index of existing files by size
+	matched, err := MatchFiles(candidateFiles, existingFiles)
+	if err != nil {
+		return nil, err
+	}
+
+	plan := &TreePlan{
+		RootDir: destDir,
+		Files:   make([]FilePlan, 0, len(matched)),
+	}
+	for _, m := range matched {
+		targetPath := computeTargetPath(d, m.RelPath, layout, torrentName, destDir)
+
+		if err := validateTargetInsideBase(d, targetPath, destDir); err != nil {
+			return nil, err
+		}
+
+		plan.Files = append(plan.Files, FilePlan{
+			SourcePath: m.AbsPath,
+			TargetPath: targetPath,
+		})
+	}
+
+	sort.Slice(plan.Files, func(i, j int) bool {
+		return plan.Files[i].TargetPath < plan.Files[j].TargetPath
+	})
+
+	return plan, nil
+}
+
+// MatchFiles finds the existing file that each candidate file links to. A
+// match has the size of the candidate and, in this order, its path, its base
+// name, its name without punctuation, or is the only file of that size left.
+// Each result holds the AbsPath of the existing file and the path of the
+// candidate as RelPath, in the order of candidateFiles. It does no I/O.
+func MatchFiles(candidateFiles []TorrentFile, existingFiles []ExistingFile) ([]ExistingFile, error) {
 	existingBySize := make(map[int64][]*existingEntry)
 	for i := range existingFiles {
 		ef := &existingFiles[i]
@@ -153,12 +178,7 @@ func BuildPlan(
 		existingBySize[ef.Size] = append(existingBySize[ef.Size], entry)
 	}
 
-	plan := &TreePlan{
-		RootDir: destDir,
-		Files:   make([]FilePlan, 0, len(candidateFiles)),
-	}
-
-	// Match each candidate file to an existing file
+	matched := make([]ExistingFile, 0, len(candidateFiles))
 	for _, cf := range candidateFiles {
 		bucket := existingBySize[cf.Size]
 		if len(bucket) == 0 {
@@ -181,7 +201,6 @@ func BuildPlan(
 
 		var match *existingEntry
 
-		// Strategy 1: Exact relative path match
 		for _, entry := range available {
 			if entry.file.RelPath == cf.Path {
 				match = entry
@@ -189,7 +208,6 @@ func BuildPlan(
 			}
 		}
 
-		// Strategy 2: Identical base name
 		if match == nil {
 			var candidates []*existingEntry
 			for _, entry := range available {
@@ -202,7 +220,6 @@ func BuildPlan(
 			}
 		}
 
-		// Strategy 3: Normalized key comparison (ignores punctuation)
 		if match == nil {
 			var candidates []*existingEntry
 			for _, entry := range available {
@@ -215,7 +232,6 @@ func BuildPlan(
 			}
 		}
 
-		// Strategy 4: Single remaining candidate for this size
 		if match == nil && len(available) == 1 {
 			match = available[0]
 		}
@@ -225,33 +241,11 @@ func BuildPlan(
 		}
 
 		match.used = true
-
-		// Compute target path based on layout
-		targetPath := computeTargetPath(d, cf.Path, layout, torrentName, destDir)
-
-		// Validate that target path is inside destDir (defense in depth)
-		if err := validateTargetInsideBase(d, targetPath, destDir); err != nil {
-			return nil, err
-		}
-
-		plan.Files = append(plan.Files, FilePlan{
-			SourcePath: match.file.AbsPath,
-			TargetPath: targetPath,
-		})
+		matched = append(matched, ExistingFile{AbsPath: match.file.AbsPath, RelPath: cf.Path, Size: cf.Size})
 	}
-
-	// Sort for deterministic ordering
-	sort.Slice(plan.Files, func(i, j int) bool {
-		return plan.Files[i].TargetPath < plan.Files[j].TargetPath
-	})
-
-	return plan, nil
+	return matched, nil
 }
 
-// BuildSingleFilePlan creates an exact-path plan for one already-paired torrent
-// file. It rejects unsafe or non-canonical slash paths and names the destination
-// cannot store, performs no I/O, and never performs fuzzy matching or conflict
-// renaming.
 func BuildSingleFilePlan(d PathDialect, rootDir, relativePath, sourcePath string) (*TreePlan, error) {
 	if rootDir == "" {
 		return nil, errors.New("destination directory is required")
@@ -259,11 +253,8 @@ func BuildSingleFilePlan(d PathDialect, rootDir, relativePath, sourcePath string
 	if sourcePath == "" {
 		return nil, errors.New("source path is required")
 	}
-	if err := validateCandidatePath(d, relativePath); err != nil {
+	if err := ValidateRelativePath(d, relativePath); err != nil {
 		return nil, err
-	}
-	if path.Clean(relativePath) != relativePath {
-		return nil, errors.New("non-canonical torrent path: " + relativePath)
 	}
 
 	targetPath := d.Join(rootDir, d.FromSlash(relativePath))
@@ -277,6 +268,37 @@ func BuildSingleFilePlan(d PathDialect, rootDir, relativePath, sourcePath string
 			TargetPath: targetPath,
 		}},
 	}, nil
+}
+
+func BuildLinkPlan(d PathDialect, rootDir string, files []ExistingFile) (*TreePlan, error) {
+	if rootDir == "" {
+		return nil, errors.New("destination directory is required")
+	}
+	if len(files) == 0 {
+		return nil, errors.New("no files to link")
+	}
+	plan := &TreePlan{RootDir: rootDir, Files: make([]FilePlan, 0, len(files))}
+	for _, f := range files {
+		if f.AbsPath == "" {
+			return nil, errors.New("source path is required for: " + f.RelPath)
+		}
+		if err := validateCandidatePath(d, f.RelPath); err != nil {
+			return nil, err
+		}
+		targetPath := computeTargetPath(d, f.RelPath, LayoutOriginal, "", rootDir)
+		if err := validateTargetInsideBase(d, targetPath, rootDir); err != nil {
+			return nil, err
+		}
+		plan.Files = append(plan.Files, FilePlan{SourcePath: f.AbsPath, TargetPath: targetPath})
+	}
+	slices.SortFunc(plan.Files, func(a, b FilePlan) int {
+		return cmp.Compare(a.TargetPath, b.TargetPath)
+	})
+	return plan, nil
+}
+
+func ValidateTorrentPath(d PathDialect, name string) error {
+	return validateCandidatePath(d, name)
 }
 
 type existingEntry struct {
@@ -295,7 +317,6 @@ func computeTargetPath(d PathDialect, candidatePath string, layout ContentLayout
 		// For single-file torrents, qBittorrent strips the extension from folder name
 		folderName := torrentName
 		if !strings.Contains(candidatePath, "/") {
-			// Single file - strip extension for folder name
 			if ext := filepath.Ext(torrentName); ext != "" {
 				folderName = strings.TrimSuffix(torrentName, ext)
 			}
@@ -306,16 +327,25 @@ func computeTargetPath(d PathDialect, candidatePath string, layout ContentLayout
 		return d.Join(d.Join(destDir, folderName), d.FromSlash(candidatePath))
 
 	case LayoutNoSubfolder:
-		// Strip the first directory component if present
 		parts := strings.SplitN(candidatePath, "/", 2)
 		if len(parts) == 2 {
 			return d.Join(destDir, d.FromSlash(parts[1]))
 		}
 		return d.Join(destDir, d.FromSlash(candidatePath))
 
-	default: // LayoutOriginal
+	default:
 		return d.Join(destDir, d.FromSlash(candidatePath))
 	}
+}
+
+func ValidateRelativePath(d PathDialect, name string) error {
+	if err := validateCandidatePath(d, name); err != nil {
+		return err
+	}
+	if path.Clean(name) != name {
+		return errors.New("non-canonical torrent path: " + name)
+	}
+	return nil
 }
 
 // validateCandidatePath checks if a torrent file path is safe (no path traversal)
@@ -370,40 +400,18 @@ func windowsNameError(component string) error {
 	if strings.HasSuffix(component, ".") || strings.HasSuffix(component, " ") {
 		return fmt.Errorf("file name %q ends in a dot or space, which Windows cannot store", component)
 	}
-	// Windows ignores an extension and trailing spaces when matching a device name.
-	base, _, _ := strings.Cut(component, ".")
-	if isWindowsDeviceName(strings.TrimRight(base, " ")) {
+	if pathutil.IsWindowsDeviceName(component) {
 		return fmt.Errorf("file name %q is a reserved Windows device name", component)
 	}
 	return nil
 }
 
-// isWindowsDeviceName follows Go's internal/filepathlite rule, where COM and LPT are reserved only with 1-9 or a superscript digit.
-func isWindowsDeviceName(base string) bool {
-	for _, name := range []string{"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"} {
-		if strings.EqualFold(base, name) {
-			return true
-		}
-	}
-	if len(base) < 4 || (!strings.EqualFold(base[:3], "COM") && !strings.EqualFold(base[:3], "LPT")) {
-		return false
-	}
-	switch n := base[3:]; n {
-	case "\u00b9", "\u00b2", "\u00b3":
-		return true
-	default:
-		return len(n) == 1 && n[0] >= '1' && n[0] <= '9'
-	}
-}
-
-// validateTargetInsideBase ensures the target path is inside the base directory.
 func validateTargetInsideBase(d PathDialect, targetPath, baseDir string) error {
 	rel, err := d.Rel(baseDir, targetPath)
 	if err != nil {
 		return errors.New("failed to compute relative path: " + err.Error())
 	}
 
-	// If the relative path starts with "..", target is outside base
 	if strings.HasPrefix(rel, ".."+d.Separator()) || rel == ".." {
 		return errors.New("target path escapes base directory: " + targetPath)
 	}
@@ -411,14 +419,11 @@ func validateTargetInsideBase(d PathDialect, targetPath, baseDir string) error {
 	return nil
 }
 
-// fileBaseName extracts the base name from a path (last component).
 func fileBaseName(path string) string {
 	path = filepath.FromSlash(path)
 	return filepath.Base(path)
 }
 
-// normalizeFileKey creates a normalized key for fuzzy file matching.
-// Strips punctuation and handles double extensions (e.g., .mkv.nfo).
 func normalizeFileKey(path string) string {
 	base := fileBaseName(path)
 	if base == "" {
@@ -431,8 +436,6 @@ func normalizeFileKey(path string) string {
 		base = base[:dot]
 	}
 
-	// For sidecar files, ignore intermediate video extension
-	// e.g., "Name.mkv.nfo" and "Name.nfo" should match
 	sidecarExts := map[string]bool{
 		"nfo": true, "srt": true, "sub": true, "idx": true, "sfv": true, "txt": true,
 	}
@@ -449,7 +452,6 @@ func normalizeFileKey(path string) string {
 		}
 	}
 
-	// Normalize: lowercase, strip non-alphanumeric
 	var sb strings.Builder
 	for _, r := range strings.ToLower(base) {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
@@ -465,14 +467,6 @@ func normalizeFileKey(path string) string {
 	return sb.String()
 }
 
-// HasCommonRootFolder checks if all files in the torrent share a common
-// top-level directory. Returns true if a single root folder exists.
-//
-// Examples:
-//   - ["Movie/video.mkv", "Movie/subs.srt"] → true (common root "Movie")
-//   - ["video.mkv", "subs.srt"] → false (files at root, no folder)
-//   - ["Movie/video.mkv", "Other/subs.srt"] → false (different root folders)
-//   - ["video.mkv"] → false (single file at root)
 func HasCommonRootFolder(files []TorrentFile) bool {
 	if len(files) == 0 {
 		return false
@@ -483,9 +477,7 @@ func HasCommonRootFolder(files []TorrentFile) bool {
 		path := filepath.FromSlash(f.Path)
 		parts := strings.SplitN(path, string(filepath.Separator), 2)
 
-		// Check if file has a directory component
 		if len(parts) < 2 {
-			// File at root level, no folder structure
 			return false
 		}
 
@@ -493,7 +485,6 @@ func HasCommonRootFolder(files []TorrentFile) bool {
 		if i == 0 {
 			commonRoot = root
 		} else if root != commonRoot {
-			// Different root folders
 			return false
 		}
 	}

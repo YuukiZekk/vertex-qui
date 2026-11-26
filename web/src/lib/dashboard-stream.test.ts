@@ -6,18 +6,16 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  DASHBOARD_STATS_FALLBACK_ORDER,
-  DASHBOARD_STATS_FALLBACK_SORT,
-  createDashboardStatsFallbackQueryKey,
   hasDashboardStatsPayload,
   mergeDashboardInstanceMeta,
   mergeDashboardStatsSnapshot,
   resolveDashboardDataStatusKind,
+  resolveDashboardSizes,
   resolveDashboardStreamError,
   resolveDashboardTorrentCounts,
   shouldUseDashboardStatsFallback
 } from "@/lib/dashboard-stream"
-import type { InstanceResponse, TorrentCounts } from "@/types"
+import type { InstanceResponse, TorrentCounts, TorrentStats } from "@/types"
 
 function makeCounts(overrides: Partial<TorrentCounts> = {}): TorrentCounts {
   return {
@@ -25,16 +23,6 @@ function makeCounts(overrides: Partial<TorrentCounts> = {}): TorrentCounts {
     categories: {},
     tags: {},
     trackers: { "tracker.example": 1 },
-    trackerTransfers: {
-      "tracker.example": {
-        uploaded: 10,
-        downloaded: 20,
-        uploadedSession: 5,
-        downloadedSession: 7,
-        totalSize: 30,
-        count: 1,
-      },
-    },
     total: 1,
     ...overrides,
   }
@@ -95,7 +83,7 @@ describe("resolveDashboardTorrentCounts", () => {
 
   it("uses incoming counts when the stream includes them", () => {
     const currentCounts = makeCounts()
-    const incomingCounts = makeCounts({ status: { all: 0 }, trackers: {}, trackerTransfers: {}, total: 0 })
+    const incomingCounts = makeCounts({ status: { all: 0 }, trackers: {}, total: 0 })
 
     expect(resolveDashboardTorrentCounts(incomingCounts, currentCounts)).toBe(incomingCounts)
   })
@@ -103,15 +91,6 @@ describe("resolveDashboardTorrentCounts", () => {
 
 describe("shouldUseDashboardStatsFallback", () => {
   it("keeps fallback active when the stream is connected but has no fresh stream stats yet", () => {
-    expect(shouldUseDashboardStatsFallback(true, false)).toBe(true)
-  })
-
-  it("keeps fallback active after reconnect even when cached stats exist", () => {
-    const cachedData = {
-      stats: { totalDownloadSpeed: 1 },
-    }
-
-    expect(hasDashboardStatsPayload(cachedData)).toBe(true)
     expect(shouldUseDashboardStatsFallback(true, false)).toBe(true)
   })
 
@@ -218,17 +197,6 @@ describe("mergeDashboardInstanceMeta", () => {
   })
 })
 
-describe("createDashboardStatsFallbackQueryKey", () => {
-  it("uses the same lightweight scope for stream snapshots and fallback probes", () => {
-    expect(createDashboardStatsFallbackQueryKey(7)).toEqual([
-      "dashboard-stats-fallback",
-      7,
-      DASHBOARD_STATS_FALLBACK_SORT,
-      DASHBOARD_STATS_FALLBACK_ORDER,
-    ])
-  })
-})
-
 describe("mergeDashboardStatsSnapshot", () => {
   it("preserves cached tracker counts when an incoming lightweight snapshot omits counts", () => {
     const cachedCounts = makeCounts()
@@ -258,5 +226,30 @@ describe("mergeDashboardStatsSnapshot", () => {
 
     expect(merged.counts).toBe(cachedCounts)
     expect(merged.stats?.totalDownloadSpeed).toBe(1)
+  })
+})
+
+describe("resolveDashboardSizes", () => {
+  const stats = (overrides: Partial<TorrentStats>): TorrentStats => ({
+    total: 1, downloading: 0, seeding: 1, paused: 0, error: 0, totalSize: 100, totalSeedingSize: 80, ...overrides,
+  })
+
+  it("adds the Unique sizes of instances whose first build ended", () => {
+    expect(resolveDashboardSizes([
+      stats({ uniqueSize: 60, uniqueSeedingSize: 50 }),
+      stats({ uniqueSize: 30, uniqueSeedingSize: 20 }),
+    ])).toEqual({ totalSize: 90, seedingSize: 70, calculating: false })
+  })
+
+  it("adds the old size of an instance before its first build and marks the total", () => {
+    expect(resolveDashboardSizes([
+      stats({ uniqueSize: 60, uniqueSeedingSize: 50 }),
+      stats({}),
+    ])).toEqual({ totalSize: 160, seedingSize: 130, calculating: true })
+  })
+
+  it("leaves out an instance with no stats", () => {
+    expect(resolveDashboardSizes([null, stats({ uniqueSize: 60, uniqueSeedingSize: 50 })]))
+      .toEqual({ totalSize: 60, seedingSize: 50, calculating: false })
   })
 })
