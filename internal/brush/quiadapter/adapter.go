@@ -125,13 +125,12 @@ func (a *Adapter) Reannounce(ctx context.Context, instanceID int, hashes []strin
 	return a.sync.BulkAction(ctx, instanceID, hashes, "reannounce")
 }
 
+// deleteActor names brush in qui's delete history.
+var deleteActor = qbittorrent.DeleteActor{Kind: qbittorrent.DeleteActorAutomation, RuleName: "刷流"}
+
 // DeleteTorrent removes a torrent, with its files or keeping them.
 func (a *Adapter) DeleteTorrent(ctx context.Context, instanceID int, hash string, withFiles bool) error {
-	action := "delete"
-	if withFiles {
-		action = "deleteWithFiles"
-	}
-	return a.sync.BulkAction(ctx, instanceID, []string{hash}, action)
+	return a.sync.DeleteTorrents(ctx, instanceID, []string{hash}, withFiles, deleteActor)
 }
 
 // Pause stops the torrents, so a download stops writing to the disk at once.
